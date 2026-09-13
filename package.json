@@ -1,0 +1,15 @@
+{
+  "name": "murmur",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Murmur — menu-bar status companion for AI coding agents.",
+  "scripts": {
+    "dev": "cd apps/desktop && hutch run dev",
+    "dev:hmr": "cd apps/desktop && hutch run dev:hmr",
+    "build": "cd apps/desktop && hutch run build",
+    "test": "bun test packages/core",
+    "typecheck": "cd packages/core && bunx tsc --noEmit",
+    "typecheck:desktop": "cd apps/desktop && bunx vue-tsc --noEmit"
+  }
+}

@@ -1,0 +1,30 @@
+<!--
+  Murmur dock icon 母版（1024）。
+  设计语言：深炭 squircle + 一根细枝 + 抽象 murmuration 波浪点群（低语声波双关），
+  峰点琥珀 =「轮到你了」。无具象鸟。改完用 icons/render.ts 重出 iconset。
+-->
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#14161B"/>
+      <stop offset="1" stop-color="#0C0E12"/>
+    </linearGradient>
+  </defs>
+
+  <!-- squircle 底板 -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
+
+  <!-- murmuration：大小起伏的波浪点群，峰点琥珀；末端一颗掉队小点 -->
+  <g>
+    <circle cx="245" cy="505" r="15" fill="#E8E6E1"/>
+    <circle cx="335" cy="445" r="21" fill="#E8E6E1"/>
+    <circle cx="448" cy="398" r="29" fill="#E8E6E1"/>
+    <circle cx="572" cy="382" r="37" fill="#F0A63C"/>
+    <circle cx="688" cy="428" r="24" fill="#E8E6E1"/>
+    <circle cx="778" cy="492" r="15" fill="#E8E6E1"/>
+    <circle cx="658" cy="318" r="9" fill="#C9CDD4"/>
+  </g>
+
+  <!-- 栖枝 -->
+  <line x1="225" y1="668" x2="799" y2="668" stroke="#E8E6E1" stroke-width="20" stroke-linecap="round"/>
+</svg>

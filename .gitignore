@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.hutch/
+*.lock
+!bun.lock
+.DS_Store
+*.log
+# 各 agent 工具的本机产物（会话计划/权限配置），不进库
+.zcode/
+*.local.json

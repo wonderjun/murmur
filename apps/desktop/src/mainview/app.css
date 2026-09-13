@@ -1,0 +1,232 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/*
+ * Murmur 视觉唯一真源：暖纸·编辑室。
+ * 表面三层 background → raised → card 递进，阴影取 ink 暖调低透明度；
+ * 彩色只有两种语义：accent（赤陶=品牌，谁）与 status（什么状态）。
+ * waiting 琥珀与 murmur-mark 峰点同族：峰点琥珀 = 轮到你了。
+ */
+
+:root {
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-raised: var(--raised);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-hairline: var(--hairline);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-faint: var(--faint);
+  --color-accent: var(--accent);
+  --color-working: var(--status-working);
+  --color-waiting: var(--status-waiting);
+  --color-idle: var(--status-idle);
+  --color-stale: var(--status-stale);
+  --color-ended: var(--status-ended);
+  --color-agent-kimi: var(--agent-kimi);
+  --color-agent-zcode: var(--agent-zcode);
+  --color-agent-opencode: var(--agent-opencode);
+  --color-agent-codex: var(--agent-codex);
+  --color-agent-cursor: var(--agent-cursor);
+  --radius-panel: 14px;
+  --radius-item: 10px;
+  --font-display: "Lora Variable", "Lora", "PingFang SC", Georgia, serif;
+  --font-mono: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
+  --shadow-raised: 0 1px 2px rgb(46 41 37 / 0.05), 0 0 0 0.5px rgb(46 41 37 / 0.03);
+  --shadow-overlay: 0 10px 28px rgb(46 41 37 / 0.11), 0 2px 6px rgb(46 41 37 / 0.05);
+  --transition-duration-fast: 120ms;
+  --transition-duration-normal: 200ms;
+  --animate-breathe: breathe 2.6s ease-in-out infinite;
+  --animate-attention: attention 1.8s ease-out infinite;
+  --animate-tip-in: tip-in 120ms ease-out both;
+
+  @keyframes tip-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 0.55; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.16); }
+  }
+
+  @keyframes attention {
+    0% { box-shadow: 0 0 0 0 var(--status-waiting-glow); }
+    70% { box-shadow: 0 0 0 6px transparent; }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+}
+
+:root {
+  --background: #f2ede3;
+  --raised: #faf7ef;
+  --card: #fffdf9;
+  --muted: #eae4d7;
+  --hairline: rgba(49, 43, 37, 0.14);
+  --foreground: #2b2622;
+  --muted-foreground: #746c63;
+  --faint: #a79d90;
+  --accent: #c66b4b;
+  --status-working: #2f7f6e;
+  --status-waiting: #b57f1e;
+  --status-waiting-glow: rgba(181, 127, 30, 0.26);
+  --status-idle: #9a9189;
+  --status-stale: #b9504a;
+  --status-ended: #b3aba2;
+  --agent-kimi: #9569cf;
+  --agent-zcode: #5365d3;
+  --agent-opencode: #359b7d;
+  --agent-codex: #302c29;
+  --agent-cursor: #b68447;
+  --chart-1: #2f7f6e;
+  --chart-2: #5365d3;
+  --chart-3: #9569cf;
+  --chart-4: #c66b4b;
+  --chart-5: #359b7d;
+  --chart-6: #b68447;
+  --chart-7: #8f857c;
+  /* skill 契约的动效时长：组件用 duration-fast / duration-normal（由 @theme 生成） */
+  --motion-fast: 120ms;
+  --motion-normal: 200ms;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+/* 窗口是不透明的标准窗口（Titled + FullSizeContentView，系统负责圆角+阴影），
+   body 保持透明只为避免 webview 自带白底在任何透明场景下露直角 */
+html,
+body {
+  background: transparent;
+}
+
+body {
+  color: var(--foreground);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  overflow: hidden;
+}
+
+button,
+a {
+  -webkit-app-region: no-drag;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--status-working);
+  outline-offset: 2px;
+}
+
+/* 圆角与阴影由系统对标准窗口（Titled + FullSizeContentView）裁切，webview 铺满即可 */
+#app {
+  position: relative;
+  border: 1px solid var(--hairline);
+  background: var(--background);
+}
+
+/* 纸感颗粒：极淡的灰度噪点 multiply 叠在整面上（含文字），模拟纸面纤维。
+   opacity 压到 0.04 以下只留触感、不伤可读性。 */
+#app::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+  opacity: 0.035;
+}
+
+::selection {
+  background: var(--muted);
+}
+
+@utility text-accent {
+  color: var(--accent);
+}
+
+@utility bg-accent-soft {
+  background: color-mix(in oklab, var(--accent) 14%, transparent);
+}
+
+@utility bg-accent-softer {
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
+@utility border-accent {
+  border-color: color-mix(in oklab, var(--accent) 34%, transparent);
+}
+
+@utility icon-accent {
+  color: var(--accent);
+}
+
+@utility accent-solid {
+  background: var(--accent);
+  color: var(--card);
+}
+
+.mark-shell {
+  background: var(--foreground);
+  color: var(--card);
+}
+
+.setup-row {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-item);
+  background: var(--card);
+  box-shadow: var(--shadow-raised);
+  padding: 13px 14px;
+}
+
+.quota-strip {
+  display: flex;
+  gap: 18px;
+  border-top: 1px solid var(--hairline);
+  padding-top: 10px;
+}
+
+.quota-window {
+  min-width: 0;
+  flex: 1;
+}
+
+.eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.setup-intro {
+  border-bottom: 1px solid var(--hairline);
+  padding-bottom: 12px;
+}
+
+
+[data-agent="kimi"] { --accent: var(--agent-kimi); }
+[data-agent="zcode"] { --accent: var(--agent-zcode); }
+[data-agent="opencode"] { --accent: var(--agent-opencode); }
+[data-agent="codex"] { --accent: var(--agent-codex); }
+[data-agent="cursor"] { --accent: var(--agent-cursor); }
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
