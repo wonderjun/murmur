@@ -1,0 +1,45 @@
+name: Bug Report / 缺陷报告
+description: 报告 Murmur 的异常行为
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 感谢报告。安全相关的问题请走 [Private vulnerability reporting](https://github.com/chen-wang-jun/murmur/security/advisories/new)，不要在公开 issue 里描述。
+  - type: textarea
+    id: what
+    attributes:
+      label: 发生了什么
+      description: 期望行为 vs 实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 复现步骤
+      placeholder: 1. …
+  - type: dropdown
+    id: agent
+    attributes:
+      label: 涉及的 agent（如有）
+      multiple: true
+      options:
+        - Kimi CLI
+        - Z Code
+        - OpenCode
+        - Codex
+        - Cursor
+        - Devin
+        - Qoder
+        - 面板/系统层面（与具体 agent 无关）
+  - type: textarea
+    id: env
+    attributes:
+      label: 环境
+      description: macOS 版本、Murmur 版本、相关 agent 版本
+      placeholder: "macOS 26 / Murmur 0.1.1 / codex-cli 0.x"
+  - type: textarea
+    id: logs
+    attributes:
+      label: 相关线索（可选）
+      description: "~/.murmur/murmur.db 的 events 表、hook 脚本输出、截图等——注意打码凭据"
+      render: text

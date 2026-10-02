@@ -1,0 +1,32 @@
+name: Feature Request / 功能建议
+description: 提议新能力或改进
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: Murmur 的定位是**纯观察者**——只读本地数据、无遥测、不碰用户数据、不干预 agent 决策链。建议请尽量贴合这个边界。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决什么问题
+      description: 描述场景与痛点，而不是先给方案
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的形态（可选）
+      description: 交互/入口/默认行为的想法
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及范围
+      multiple: true
+      options:
+        - 新 agent adapter
+        - 状态/通知
+        - 用量与额度
+        - 会话文件管理
+        - 面板 UI/外观
+        - 设置与开关
+        - 其他
