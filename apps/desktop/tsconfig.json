@@ -1,5 +1,4 @@
 {
-  "extends": "./.hutch/devkit/tsconfig.json",
   "compilerOptions": {
     "target": "ESNext",
     "useDefineForClassFields": true,
@@ -15,7 +14,6 @@
     "noFallthroughCasesInSwitch": true,
     "moduleResolution": "bundler",
     "jsx": "react-jsx",
-    "baseUrl": ".",
     "paths": {
       "electrobun": [
         "./.hutch/devkit/api/sdks/main/index.ts"
