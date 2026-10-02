@@ -20,7 +20,7 @@ cd apps/desktop && hutch install && hutch electrobun sync
 bun run dev            # 构建并启动（watch 模式）
 bun run dev:hmr        # vite HMR 开发模式（vite@5173 + app 本体）
 bun run build          # 出稳定 .app 包
-bun run test           # core 引擎测试（bun test packages/core）
+bun run test           # core 引擎测试（cd packages/core && bun test，bunfig preload 沙箱生效）
 bun run typecheck      # core 类型检查
 bun run typecheck:desktop  # 桌面端类型检查
 ```

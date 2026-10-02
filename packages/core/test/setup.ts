@@ -18,3 +18,8 @@ process.env.MURMUR_CODEX_HOME = join(root, 'codex');
 process.env.MURMUR_CURSOR_HOME = join(root, 'cursor');
 process.env.MURMUR_OPENCODE_DATA = join(root, 'oc-data');
 process.env.MURMUR_OPENCODE_CONFIG = join(root, 'oc-config');
+// devin/qoder 的路径同样 env 可覆盖（agentPaths 函数体内读取）：不钉的话，
+// 未自查的测试构造 devin/qoder adapter 会读到真机 ~/.local/share/devin 与 ~/.qoder。
+process.env.MURMUR_DEVIN_DATA = join(root, 'devin');
+process.env.MURMUR_DEVIN_CONFIG = join(root, 'devin-config');
+process.env.MURMUR_QODER_HOME = join(root, 'qoder');
