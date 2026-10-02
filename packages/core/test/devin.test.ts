@@ -17,7 +17,7 @@ process.env.MURMUR_HOME = HOME;
 process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
 process.env.MURMUR_DEVIN_CONFIG = DEVIN_CONFIG;
 
-const { translateDevinHook, createDevinAdapter } = await import('../src/agents/devin');
+const { translateDevinHook, createDevinAdapter, devinMetricKey } = await import('../src/agents/devin');
 const { fetchDevinQuota, readDevinCredentials, sniffDevinOrgId } = await import('../src/quota/devin');
 const { mergeDevinHooksConfig, writeHookScript, removeHookScript } = await import('../src/hooks/install');
 const { Ledger } = await import('../src/ledger/db');
@@ -200,6 +200,18 @@ describe('devin quota', () => {
   });
 });
 
+describe('devin 计量去重签名', () => {
+  test('旧裸拼接跨字段相撞（sid/mid 边界丢失），devinMetricKey 结构化编码不撞且同参稳定', () => {
+    const legacyKey = (sid: string, mid: string, i: number, o: number, cr: number, cw: number) => `${sid}${mid}${i}|${o}|${cr}|${cw}`;
+    // 旧写法：s1+2x 与 s12+x 不可区分——一行的真实推理会被判成另一行的 fork 复制。
+    expect(legacyKey('s1', '2x', 10, 1, 0, 0)).toBe(legacyKey('s12', 'x', 10, 1, 0, 0));
+    expect(devinMetricKey('s1', '2x', 10, 1, 0, 0)).not.toBe(devinMetricKey('s12', 'x', 10, 1, 0, 0));
+    // 同参数稳定同键（去重的前提），字段含分隔符也不串位。
+    expect(devinMetricKey('s1', 'm', 1, 2, 3, 4)).toBe(devinMetricKey('s1', 'm', 1, 2, 3, 4));
+    expect(devinMetricKey('a|b', 'c', 0, 0, 0, 0)).not.toBe(devinMetricKey('a', 'b|c', 0, 0, 0, 0));
+  });
+});
+
 describe('devin watch：message_nodes 台账', () => {
   test('请求级 metrics 增量记台账；fork 复制行去重、死档跳过、游标持久化', async () => {
     const { Database } = await import('bun:sqlite');
@@ -221,13 +233,81 @@ describe('devin watch：message_nodes 台账', () => {
     db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',3,?,?)", [msg('m-b', 200, 20), now - 40]);
     db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',4,?,?)", [msg('m-c', 999, 9), now - 80 * 86400]);
 
-    const ledger = new Ledger();
+    // Ledger 钉本文件沙箱：MURMUR_HOME 冻结值取决于哪个测试文件先加载
+    // paths.ts，裸 new Ledger() 可能开到真机库（游标污染全量测试）。
+    const ledger = new Ledger(HOME);
     const events: Array<Record<string, unknown>> = [];
     const unwatch = await createDevinAdapter().watch!((e) => events.push(e as unknown as Record<string, unknown>), ledger);
     const usage = events.filter((e) => e.kind === 'usage');
     expect(usage).toHaveLength(2); // a + c；b 复制去重、d 死档跳过
     expect(usage.map((e) => (e.tokens as Record<string, number>).input)).toEqual([100, 200]);
     expect(ledger.getCursor('devin:mn_rowid')).toBe('3');
+
+    unwatch();
+    ledger.close();
+    db.close();
+    process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
+  });
+
+  test('跨会话同指标不因字段拼接相撞：旧编码会把 s1/2x 与 s12/x 判成同键（回归）', async () => {
+    const { Database } = await import('bun:sqlite');
+    const dir = join(HOME, 'devin-db-collision');
+    mkdirSync(join(dir, 'cli'), { recursive: true });
+    process.env.MURMUR_DEVIN_DATA = dir;
+    const db = new Database(join(dir, 'cli', 'sessions.db'));
+    db.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY, working_directory TEXT, model TEXT,
+               created_at INTEGER, last_activity_at INTEGER, title TEXT, hidden INTEGER DEFAULT 0);
+             CREATE TABLE message_nodes(row_id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
+               node_id INTEGER, parent_node_id INTEGER, chat_message TEXT, created_at INTEGER, metadata TEXT)`);
+    const now = Math.floor(Date.now() / 1000);
+    const msg = (mid: string, i: number, o: number) =>
+      JSON.stringify({ message_id: mid, role: 'assistant', metadata: { metrics: { input_tokens: i, output_tokens: o } } });
+    // s1/2x 与 s12/x 在旧裸拼接下同键：游标后那行会被误判成复制行丢台账。
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',1,?,?)", [msg('2x', 10, 1), now - 50]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s12',2,?,?)", [msg('x', 10, 1), now - 40]);
+
+    const ledger = new Ledger(join(dir, 'ledger'));
+    ledger.setCursor('devin:mn_rowid', '1'); // 第一行已入账（播种），第二行走增量。
+    const events: Array<Record<string, unknown>> = [];
+    const unwatch = await createDevinAdapter().watch!((e) => events.push(e as unknown as Record<string, unknown>), ledger);
+    const usage = events.filter((e) => e.kind === 'usage');
+    expect(usage).toHaveLength(1); // 旧编码此处为 0——键相撞被去重吞掉
+    expect(usage[0]).toMatchObject({ agent: 'devin', sessionId: 's12' });
+    expect(ledger.getCursor('devin:mn_rowid')).toBe('2');
+
+    unwatch();
+    ledger.close();
+    db.close();
+    process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
+  });
+
+  test('去重集 LRU 有界：超限淘汰最旧签名，被淘汰键的迟到复制行照计（宁可罕见双计）', async () => {
+    const { Database } = await import('bun:sqlite');
+    const dir = join(HOME, 'devin-db-lru');
+    mkdirSync(join(dir, 'cli'), { recursive: true });
+    process.env.MURMUR_DEVIN_DATA = dir;
+    const db = new Database(join(dir, 'cli', 'sessions.db'));
+    db.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY, working_directory TEXT, model TEXT,
+               created_at INTEGER, last_activity_at INTEGER, title TEXT, hidden INTEGER DEFAULT 0);
+             CREATE TABLE message_nodes(row_id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
+               node_id INTEGER, parent_node_id INTEGER, chat_message TEXT, created_at INTEGER, metadata TEXT)`);
+    const now = Math.floor(Date.now() / 1000);
+    const msg = (mid: string, i: number, o: number) =>
+      JSON.stringify({ message_id: mid, role: 'assistant', metadata: { metrics: { input_tokens: i, output_tokens: o } } });
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('sa',1,?,?)", [msg('m1', 10, 1), now - 50]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('sa',2,?,?)", [msg('m2', 20, 2), now - 49]);
+    // 增量段（容量 2，播种已占满）：m3 新签名入集→淘汰 m1；m1 复制行照计→再淘汰 m2；
+    // m2 复制行也照计（级联淘汰）——LRU 只保最近窗口，被淘汰键的迟到复制宁双计不漏计。
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('sa',3,?,?)", [msg('m3', 30, 3), now - 40]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('sa',4,?,?)", [msg('m1', 10, 1), now - 39]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('sa',5,?,?)", [msg('m2', 20, 2), now - 38]);
+
+    const ledger = new Ledger(join(dir, 'ledger'));
+    ledger.setCursor('devin:mn_rowid', '2'); // 前两行播种，容量 2 全占满。
+    const events: Array<Record<string, unknown>> = [];
+    const unwatch = await createDevinAdapter({ metricSeenCap: 2 }).watch!((e) => events.push(e as unknown as Record<string, unknown>), ledger);
+    const usage = events.filter((e) => e.kind === 'usage');
+    expect(usage.map((e) => (e.tokens as Record<string, number>).input)).toEqual([30, 10, 20]);
 
     unwatch();
     ledger.close();

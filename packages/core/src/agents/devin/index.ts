@@ -51,6 +51,24 @@ const DEVIN_HOOK_EVENTS = [
   'SessionEnd',
 ];
 
+/** 去重集默认容量（条数）：约数周请求量，LRU 淘汰最旧签名。 */
+export const DEVIN_METRIC_SEEN_CAP = 50_000;
+
+/**
+ * message_nodes 计量去重签名：(session_id, message_id, 指标四元组) 的无碰撞编码。
+ * 字段边界必须显式——裸拼接会跨字段相撞（sid='s1',mid='2x' ≡ sid='s12',mid='x'），
+ * 把别个会话的真实推理误判成 fork 复制行丢台账。
+ */
+export function devinMetricKey(sid: string, mid: string, i: number, o: number, cr: number, cw: number): string {
+  return JSON.stringify([sid, mid, i, o, cr, cw]);
+}
+
+/** adapter 工厂选项：metricSeenCap 供测试注入小容量验证 LRU 淘汰。 */
+export interface DevinAdapterOptions {
+  /** 去重集容量上限（缺省 DEVIN_METRIC_SEEN_CAP）。 */
+  metricSeenCap?: number;
+}
+
 /** hook stdin payload（Claude 兼容）→ 归一化事件。 */
 export function translateDevinHook(payload: unknown): AgentEvent[] {
   const p = (payload ?? {}) as Record<string, unknown>;
@@ -104,7 +122,7 @@ function cloudEvent(status: string, detail: string): Pick<AgentEvent, 'kind' | '
   return { kind: 'status', status: 'idle' };
 }
 
-export function createDevinAdapter(): AgentAdapter {
+export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter {
   const paths = agentPaths('devin');
   const dbPath = join(paths.sessions ?? '', 'sessions.db');
   const transcriptsDir = join(paths.sessions ?? '', 'transcripts');
@@ -162,11 +180,25 @@ export function createDevinAdapter(): AgentAdapter {
        * fork/revert 会把同一逻辑消息复制成新 node（同 message_id 同指标，
        * 实测 ~69% 明细行是复制）——去重域 (session_id,message_id,指标签名)；
        * 签名不同说明同 id 发生了重推理（真实新消耗，照计）。
+       * LRU 有界：Set 迭代序即插入序，命中删了重插续期、超限淘汰队首。
+       * 防长跑进程无界膨胀——淘汰只可能漏掉「远早于窗口的 fork 复制」
+       * 这一罕见场景（游标前的行不会被重扫），罕见双计好过无界内存。
        */
-      const metricSeen = new Map<string, string>();
+      const metricSeenCap = Math.max(1, opts.metricSeenCap ?? DEVIN_METRIC_SEEN_CAP);
+      const metricSeen = new Set<string>();
+      const metricSeenHas = (key: string): boolean => {
+        if (!metricSeen.delete(key)) return false;
+        metricSeen.add(key); // 命中续期：移到队尾。
+        return true;
+      };
+      const rememberMetric = (key: string) => {
+        metricSeen.add(key);
+        if (metricSeen.size > metricSeenCap) {
+          const oldest = metricSeen.values().next();
+          if (!oldest.done) metricSeen.delete(oldest.value);
+        }
+      };
       let metricSeeded = false;
-      const metricKey = (sid: string, mid: string, i: number, o: number, cr: number, cw: number) =>
-        `${sid}${mid}${i}|${o}|${cr}|${cw}`;
 
       const pollSessions = () => {
         if (!db) return;
@@ -246,9 +278,8 @@ export function createDevinAdapter(): AgentAdapter {
                  FROM message_nodes WHERE row_id <= ? AND chat_message LIKE '%input_tokens%'`,
               )
               .all(mnRowid) as Array<{ session_id: string; mid: string | null; i: number | null; o: number | null; cr: number | null; cw: number | null }>) {
-              metricSeen.set(
-                metricKey(r.session_id, r.mid ?? '', Number(r.i) || 0, Number(r.o) || 0, Number(r.cr) || 0, Number(r.cw) || 0),
-                '1',
+              rememberMetric(
+                devinMetricKey(r.session_id, r.mid ?? '', Number(r.i) || 0, Number(r.o) || 0, Number(r.cr) || 0, Number(r.cw) || 0),
               );
             }
           }
@@ -285,9 +316,9 @@ export function createDevinAdapter(): AgentAdapter {
             const cacheRead = Number(row.cacheRead) || 0;
             const cacheWrite = Number(row.cacheWrite) || 0;
             if (input + output + cacheRead + cacheWrite <= 0) continue;
-            const key = metricKey(row.session_id, row.mid ?? '', input, output, cacheRead, cacheWrite);
-            if (metricSeen.has(key)) continue;
-            metricSeen.set(key, '1');
+            const key = devinMetricKey(row.session_id, row.mid ?? '', input, output, cacheRead, cacheWrite);
+            if (metricSeenHas(key)) continue;
+            rememberMetric(key);
             const tokens: TokenUsage = {
               input,
               output,
