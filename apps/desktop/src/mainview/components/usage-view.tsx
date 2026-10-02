@@ -2,6 +2,8 @@
  * 用量视图：display hero（今日令牌数字当家）→ 01 热力图（foreground 单色阶，
  * GitHub 式）→ 02 近 7 天按 agent 堆积柱 + 明细图例 → 03 近 7 天按模型折线。
  * 彩色纪律：热力图走中性色阶；agent 色只出现在「谁」语义的柱段与图例点。
+ * 键盘/读屏：热力图格子与柱段 tabIndex+role=img 可聚焦，focus 与 hover 同出 ChartTip；
+ * 折线的文本明细由 model-line-chart 内置 sr-only 兜底。
  * 卡片语法：三个图表区块是 flat 地面栏目（编号头 + 上 hairline），不占卡片壳——
  * 卡片只留给「可交互实体」（动态页会话组、工具页 agent 行）。
  */
@@ -12,13 +14,14 @@ import AnimatedNumber from "@/components/animated-number";
 import ChartTip from "@/components/chart-tip";
 import ModelLineChart from "@/components/model-line-chart";
 import Murmuration from "@/components/murmuration";
+import { Button } from "@/components/ui/button";
 import { AGENT_META } from "@/lib/agent-meta";
 import { anchorTop } from "@/lib/chart-tip";
 import { fmtTokens } from "@/lib/format";
 import { useMurmurStore } from "@/store/murmur";
 
 import type { ChartTipState } from "@/lib/chart-tip";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import type { SyntheticEvent as ReactSyntheticEvent } from "react";
 import type { UsageDailyRow } from "../../shared/rpc";
 
 const HEAT_DAYS = 70;
@@ -52,12 +55,26 @@ const MODEL_COLORS = [
   "var(--chart-7)",
 ];
 
+/* 折线系列 dash 双编码：灰阶只拉明度，细线交叉处靠线型兜底区分；
+   rank0 略粗做头部层级，「其他」通常落 rank6 最虚。 */
+const MODEL_LINE_STYLES: { dash?: string; width: number }[] = [
+  { width: 1.75 },
+  { width: 1.5 },
+  { dash: "6 3", width: 1.5 },
+  { dash: "2.5 2.5", width: 1.5 },
+  { dash: "8 3 2.5 3", width: 1.5 },
+  { dash: "1 2", width: 1.5 },
+  { dash: "10 4", width: 1.5 },
+];
+
 const AGENT_COLORS: Record<string, string> = {
   kimi: "var(--agent-kimi)",
   zcode: "var(--agent-zcode)",
   opencode: "var(--agent-opencode)",
   codex: "var(--agent-codex)",
   cursor: "var(--agent-cursor)",
+  devin: "var(--agent-devin)",
+  qoder: "var(--agent-qoder)",
 };
 const agentColor = (a: string) => AGENT_COLORS[a] ?? "var(--faint)";
 
@@ -76,14 +93,27 @@ interface BarSegment {
 export default function UsageView() {
   const usageDaily = useMurmurStore((s) => s.usageDaily);
   const [rows, setRows] = useState<UsageDailyRow[]>([]);
+  // 三态：loading（首次拉取，骨架与图表区同高）/ error（读取失败 + 重试）/ ready（含空态）。
+  const [status, setStatus] = useState<"loading" | "error" | "ready">("loading");
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let alive = true;
+    setStatus("loading");
     usageDaily(HEAT_DAYS)
-      .then(setRows)
+      .then((data) => {
+        if (!alive) return;
+        setRows(data);
+        setStatus("ready");
+      })
       .catch(() => {
-        // RPC 未就绪/失败时保持空态。
+        // RPC 未就绪/失败：显式错误态，不再让空态冒充「无数据」。
+        if (alive) setStatus("error");
       });
-  }, [usageDaily]);
+    return () => {
+      alive = false;
+    };
+  }, [usageDaily, attempt]);
 
   const hasData = rows.some((r) => r.tokens > 0);
   const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
@@ -122,7 +152,8 @@ export default function UsageView() {
   const [heatTip, setHeatTip] = useState<ChartTipState | null>(null);
   const [heatCell, setHeatCell] = useState<HeatCell | null>(null);
 
-  function onHeatEnter(event: ReactMouseEvent<HTMLElement>, cell: HeatCell) {
+  /* 焦点事件无坐标，anchorTop 只读 currentTarget 几何——focus 与 hover 共用同一锚点逻辑。 */
+  function onHeatEnter(event: ReactSyntheticEvent<HTMLElement>, cell: HeatCell) {
     if (!heatBox.current) return;
     setHeatCell(cell);
     setHeatTip(anchorTop(event, heatBox.current));
@@ -182,7 +213,7 @@ export default function UsageView() {
   const [barTip, setBarTip] = useState<ChartTipState | null>(null);
   const [barSeg, setBarSeg] = useState<BarSegment | null>(null);
 
-  function onBarEnter(event: ReactMouseEvent<HTMLElement>, seg: BarSegment) {
+  function onBarEnter(event: ReactSyntheticEvent<HTMLElement>, seg: BarSegment) {
     if (!barBox.current) return;
     setBarSeg(seg);
     setBarTip(anchorTop(event, barBox.current));
@@ -193,17 +224,28 @@ export default function UsageView() {
 
   const lineSeries = useMemo(() => {
     const dayKeys = lineDays.map((d) => d.day);
-    const byModel = new Map<string, Map<string, number>>();
+    /* 模型名大小写不敏感归并（glm-5.3-flash / GLM-5.3-Flash 是同一模型）：
+       key 取小写，展示名取组内累计量最大的原始变体。 */
+    const byModel = new Map<string, { variants: Map<string, number>; days: Map<string, number> }>();
     for (const r of rows) {
       if (!dayKeys.includes(r.day)) continue;
-      const name = (r.model ?? "unknown").split("/").pop()!;
-      if (!byModel.has(name)) byModel.set(name, new Map());
-      const m = byModel.get(name)!;
-      m.set(r.day, (m.get(r.day) ?? 0) + r.tokens);
+      const raw = (r.model ?? "unknown").split("/").pop()!;
+      const key = raw.toLowerCase();
+      let g = byModel.get(key);
+      if (!g) {
+        g = { variants: new Map(), days: new Map() };
+        byModel.set(key, g);
+      }
+      g.variants.set(raw, (g.variants.get(raw) ?? 0) + r.tokens);
+      g.days.set(r.day, (g.days.get(r.day) ?? 0) + r.tokens);
     }
     // top6 + 其他
-    const ranked = [...byModel.entries()]
-      .map(([name, m]) => ({ name, m, total: [...m.values()].reduce((a, b) => a + b, 0) }))
+    const ranked = [...byModel.values()]
+      .map((g) => ({
+        name: [...g.variants.entries()].sort((a, b) => b[1] - a[1])[0][0],
+        m: g.days,
+        total: [...g.days.values()].reduce((a, b) => a + b, 0),
+      }))
       .sort((a, b) => b.total - a.total);
     const top = ranked.slice(0, 6);
     const rest = ranked.slice(6);
@@ -216,6 +258,7 @@ export default function UsageView() {
       name: t.name,
       total: t.total,
       color: MODEL_COLORS[i % MODEL_COLORS.length],
+      ...MODEL_LINE_STYLES[i % MODEL_LINE_STYLES.length],
       values: dayKeys.map((d) => t.m.get(d) ?? 0),
     }));
   }, [rows, lineDays]);
@@ -226,7 +269,22 @@ export default function UsageView() {
 
   return (
     <div className="flex flex-col gap-4">
-      {hasData ? (
+      {status === "error" ? (
+        <div className="px-4 py-14 text-center" role="alert">
+          <p className="text-body font-medium">用量读取失败</p>
+          <p className="mt-1.5 text-meta text-muted-foreground">本地台账暂时读不出来，稍候可重试。</p>
+          <Button size="sm" className="mt-4" onClick={() => setAttempt((a) => a + 1)}>
+            重试
+          </Button>
+        </div>
+      ) : status === "loading" ? (
+        <div className="space-y-3" aria-live="polite" aria-busy="true">
+          {/* 骨架与图表区同高：概览 hero + 热力图 + 柱/线两段 */}
+          <div className="h-16 animate-pulse rounded-item bg-raised" />
+          <div className="h-40 animate-pulse rounded-item bg-raised" />
+          <div className="h-28 animate-pulse rounded-item bg-raised" />
+        </div>
+      ) : hasData ? (
         <>
           {/* ── 概览 hero：今日令牌数字当家（display 档），右列次级尺度陪跑。
               上边线由玻璃刊头的底边线兼任，只保留下规线 ── */}
@@ -298,10 +356,15 @@ export default function UsageView() {
                     {week.cells.map((cell) => (
                       <span
                         key={cell.day}
-                        className="h-[11px] w-full rounded-[2.5px] transition-shadow duration-fast hover:ring-1 hover:ring-foreground/25"
+                        role="img"
+                        aria-label={`${cell.day} ${fmtTokens(cell.tokens)} 令牌`}
+                        tabIndex={0}
+                        className="h-[11px] w-full rounded-[2.5px] transition-shadow duration-fast hover:ring-1 hover:ring-foreground/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
                         style={{ background: cell.color }}
                         onMouseEnter={(e) => onHeatEnter(e, cell)}
                         onMouseLeave={() => setHeatTip(null)}
+                        onFocus={(e) => onHeatEnter(e, cell)}
+                        onBlur={() => setHeatTip(null)}
                       />
                     ))}
                   </div>
@@ -336,10 +399,15 @@ export default function UsageView() {
                       {d.segments.map((seg) => (
                         <div
                           key={seg.agent}
-                          className="w-full rounded-[2px] transition-opacity duration-fast hover:opacity-80"
+                          role="img"
+                          aria-label={`${segName(seg.agent)} ${fmtTokens(seg.tokens)} 令牌`}
+                          tabIndex={0}
+                          className="w-full rounded-[2px] transition-opacity duration-fast hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
                           style={{ height: `${seg.h}px`, background: agentColor(seg.agent) }}
                           onMouseEnter={(e) => onBarEnter(e, seg)}
                           onMouseLeave={() => setBarTip(null)}
+                          onFocus={(e) => onBarEnter(e, seg)}
+                          onBlur={() => setBarTip(null)}
                         />
                       ))}
                     </div>
@@ -382,7 +450,19 @@ export default function UsageView() {
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
               {lineSeries.map((m) => (
                 <span key={m.name} className="flex items-center gap-1 text-micro text-muted-foreground">
-                  <span className="inline-block h-[6px] w-[6px] rounded-full" style={{ background: m.color }} />
+                  {/* 线样图例：dash 双编码在图例里同样可读，圆点表达不了线型 */}
+                  <svg width="14" height="4" className="shrink-0" aria-hidden="true">
+                    <line
+                      x1="1"
+                      y1="2"
+                      x2="13"
+                      y2="2"
+                      stroke={m.color}
+                      strokeWidth={m.width}
+                      strokeDasharray={m.dash}
+                      strokeLinecap="round"
+                    />
+                  </svg>
                   {m.name}
                   <span className="font-mono tabular-nums text-faint">{fmtTokens(m.total)}</span>
                 </span>

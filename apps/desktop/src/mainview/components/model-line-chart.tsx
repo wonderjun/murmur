@@ -1,5 +1,6 @@
 /** 模型用量折线：水平虚线格 + 竖直准星 + 悬浮明细卡（日期 + 当日各模型降序值）。
- *  交互契约：mousemove 取最近日，hover 点放大为空心环，明细卡瞬时跟随，右半区自动左翻。 */
+ *  交互契约：mousemove 取最近日，hover 点放大为空心环，明细卡瞬时跟随，右半区自动左翻。
+ *  键盘/读屏：SVG 不做键盘交互，另出一组 sr-only 文本明细（每系列名称 + 7 日合计）。 */
 
 import { useMemo, useRef, useState } from "react";
 
@@ -16,6 +17,10 @@ interface ModelLineDay {
 interface ModelLineSeries {
   name: string;
   color: string;
+  /** SVG strokeDasharray——明度梯度之外的系列双编码（细线中灰相邻色阶交叉难辨）。 */
+  dash?: string;
+  /** 线宽，缺省 1.5；头部系列可略粗做编辑层级。 */
+  width?: number;
   values: number[];
 }
 
@@ -116,7 +121,7 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
             x={x(i)}
             y={H - 3}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="10"
             fill="var(--faint)"
             style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
           >
@@ -130,7 +135,7 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
             x={Math.min(Math.max(peak.x, PAD_X + 14), W - PAD_X - 14)}
             y={Math.max(peak.y - 7, 9)}
             textAnchor="middle"
-            fontSize="9"
+            fontSize="10"
             fill="var(--muted-foreground)"
             style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
           >
@@ -157,7 +162,8 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
             points={s.points}
             fill="none"
             stroke={s.color}
-            strokeWidth="1.5"
+            strokeWidth={s.width ?? 1.5}
+            strokeDasharray={s.dash}
             strokeLinejoin="round"
             strokeLinecap="round"
           />
@@ -176,6 +182,13 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
           )),
         )}
       </svg>
+
+      {/* 读屏兜底：每系列名称 + 7 日合计（SVG 交互不便键盘遍历，文本通道补齐） */}
+      <div className="sr-only">
+        {series.map((s) => (
+          <p key={s.name}>{`${s.name} 近 7 日合计 ${fmt(s.values.reduce((a, b) => a + b, 0))} 令牌`}</p>
+        ))}
+      </div>
 
       <ChartTip tip={tipState}>
         {hoverIndex !== null && (

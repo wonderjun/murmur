@@ -5,7 +5,9 @@
  * Murmur 视觉唯一真源：Vercel 式单色基调，暗/亮双主题（<html data-theme> 切换，
  * 缺省回落深色）。表面三层 background → raised → card 递进，hairline 分层。
  * UI chrome 全中性：--accent 在 root 等于 --foreground，交互只走灰阶反相；
- * 彩色只有两种语义——status（什么状态）与 agent accent（谁，仅图表/图例消费）。
+ * 彩色只有三种语义——status（什么状态）、agent accent（谁）与 heat（用量密度）；
+ * 图表系列位 --chart-1..7 是 --heat 暖橙 ramp（用量密度语义的延伸：折线画的就是用量），
+ * 与热力图同族；系列区分靠色阶 + dash 双编码（dash 映射在 usage-view）。
  * waiting 琥珀与 murmur-mark 峰点同族：峰点琥珀 = 轮到你了。
  */
 
@@ -162,13 +164,15 @@
   --agent-qoder: #9ccc65;
   /* 热力图密度色：暖橙单色相 ramp（用量密度语义，非「谁」非状态） */
   --heat: #f0763f;
-  --chart-1: #ededed;
-  --chart-2: #4cc38a;
-  --chart-3: #a78bfa;
-  --chart-4: #d9a55f;
-  --chart-5: #4ea7fc;
-  --chart-6: #e5484d;
-  --chart-7: #6e6e6e;
+  /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
+     浅档透明度低，系列区分另有 dash 双编码兜底 */
+  --chart-1: var(--heat);
+  --chart-2: color-mix(in oklab, var(--heat) 72%, transparent);
+  --chart-3: color-mix(in oklab, var(--heat) 52%, transparent);
+  --chart-4: color-mix(in oklab, var(--heat) 38%, transparent);
+  --chart-5: color-mix(in oklab, var(--heat) 28%, transparent);
+  --chart-6: color-mix(in oklab, var(--heat) 21%, transparent);
+  --chart-7: color-mix(in oklab, var(--heat) 16%, transparent);
 }
 
 /* ── 浅色：近白底 + 灰阶递进；状态/agent 色加深保证对比度 ── */
@@ -200,13 +204,15 @@
   --agent-devin: #d4553d;
   --agent-qoder: #558b2f;
   --heat: #e8542a;
-  --chart-1: #171717;
-  --chart-2: #30a46c;
-  --chart-3: #7c3aed;
-  --chart-4: #b07d2b;
-  --chart-5: #0a7ea4;
-  --chart-6: #d93036;
-  --chart-7: #a1a1a1;
+  /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
+     浅档透明度低，系列区分另有 dash 双编码兜底 */
+  --chart-1: var(--heat);
+  --chart-2: color-mix(in oklab, var(--heat) 72%, transparent);
+  --chart-3: color-mix(in oklab, var(--heat) 52%, transparent);
+  --chart-4: color-mix(in oklab, var(--heat) 38%, transparent);
+  --chart-5: color-mix(in oklab, var(--heat) 28%, transparent);
+  --chart-6: color-mix(in oklab, var(--heat) 21%, transparent);
+  --chart-7: color-mix(in oklab, var(--heat) 16%, transparent);
   --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
   --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
 }

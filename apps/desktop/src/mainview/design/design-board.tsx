@@ -22,6 +22,7 @@ import type { AgentId, AgentSnapshot, AgentStatus } from "@core/types";
 const STATUSES: AgentStatus[] = ["working", "waiting", "idle", "stale", "ended"];
 const AGENTS = Object.keys(AGENT_META) as AgentId[];
 const SURFACES = ["--background", "--raised", "--card", "--muted", "--hairline", "--foreground", "--muted-foreground"];
+const CHART_TOKENS = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6", "--chart-7"];
 
 const DEMO_TIP_ROWS = [
   { name: "grok-4.6", value: "7.9M", color: "var(--chart-2)" },
@@ -36,10 +37,13 @@ const DEMO_DAYS = Array.from({ length: 7 }, (_, i) => {
 });
 
 const DEMO_SERIES = [
-  { name: "kimi-for-coding", color: "var(--chart-1)", values: [12, 30, 8, 42, 20, 95, 40].map((v) => v * 1.4e6) },
-  { name: "gpt-5.6-terra", color: "var(--chart-2)", values: [60, 52, 40, 6, 4, 70, 18].map((v) => v * 1e6) },
-  { name: "k3-256k", color: "var(--chart-3)", values: [30, 36, 20, 4, 2, 60, 10].map((v) => v * 1e6) },
+  { name: "kimi-for-coding", color: "var(--chart-1)", width: 1.75, values: [12, 30, 8, 42, 20, 95, 40].map((v) => v * 1.4e6) },
+  { name: "gpt-5.6-terra", color: "var(--chart-2)", width: 1.5, values: [60, 52, 40, 6, 4, 70, 18].map((v) => v * 1e6) },
+  { name: "k3-256k", color: "var(--chart-3)", width: 1.5, dash: "6 3", values: [30, 36, 20, 4, 2, 60, 10].map((v) => v * 1e6) },
 ];
+
+/* 与 usage-view 的 MODEL_LINE_STYLES 同序（真源在业务页），仅供图表系列展件演示线型。 */
+const CHART_DASHES: (string | undefined)[] = [undefined, undefined, "6 3", "2.5 2.5", "8 3 2.5 3", "1 2", "10 4"];
 
 const NAV_DEMO = ["动态", "用量", "工具", "设置"];
 
@@ -251,6 +255,32 @@ export default function DesignBoard() {
               style={{ background: `var(${t})` }}
             >
               <span className="font-mono text-micro text-foreground/70">{t}</span>
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <BoardHead>图表系列（--chart-1..7 · heat 暖橙 ramp + dash 双编码，用量密度语义与热力图同族）</BoardHead>
+        <div className="flex flex-wrap gap-2">
+          {CHART_TOKENS.map((t, i) => (
+            <span
+              key={t}
+              className="flex h-12 w-[92px] flex-col justify-between rounded-lg border border-hairline p-1.5"
+            >
+              <svg width="100%" height="6" aria-hidden="true">
+                <line
+                  x1="2"
+                  y1="3"
+                  x2="76"
+                  y2="3"
+                  stroke={`var(${t})`}
+                  strokeWidth={i === 0 ? 1.75 : 1.5}
+                  strokeDasharray={CHART_DASHES[i]}
+                  strokeLinecap="round"
+                />
+              </svg>
+              <span className="font-mono text-micro text-faint">{t}</span>
             </span>
           ))}
         </div>
