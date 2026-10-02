@@ -4,6 +4,7 @@
  * 过滤按工具/项目；排序默认修改时间倒序（表头可切大小/创建/修改）；
  * 勾选批量删除——文件/目录进废纸篓（可恢复），「库内」行是数据库记录
  * 永久删（标 needsVacuum 时提示文件体积需压实才回收）。活跃会话禁删。
+ * 行可 Tab 聚焦（role=checkbox，空格/回车勾选），Finder 按钮随行聚焦显形。
  */
 
 import { ArrowDown, ArrowUp, FolderSearch, RefreshCw, Trash2 } from "lucide-react";
@@ -252,6 +253,7 @@ export default function SessionsView() {
           options={[{ value: "all" as const, label: "全部" }, ...agents.map((a) => ({ value: a, label: AGENT_META[a].name }))]}
           value={agentFilter}
           onChange={(v) => setAgentFilter(v)}
+          label="按工具过滤"
         />
         <Select value={projectFilter} onValueChange={setProjectFilter}>
           <SelectTrigger className="ml-auto w-55" aria-label="按项目过滤">
@@ -306,13 +308,23 @@ export default function SessionsView() {
               return (
                 <div
                   key={k}
+                  role="checkbox"
+                  aria-checked={checked}
+                  aria-disabled={i.active || undefined}
+                  tabIndex={i.active ? -1 : 0}
                   className={cn(
                     GRID,
-                    "group cursor-pointer border-b border-hairline/40 px-4 py-2 transition-colors duration-fast",
-                    checked ? "bg-raised" : "hover:bg-raised/60",
+                    "group cursor-pointer border-b border-hairline/40 px-4 py-2 transition-colors duration-fast focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground/45",
+                    checked ? "bg-raised" : "hover:bg-raised/60 focus-visible:bg-raised/60",
                     i.active && "opacity-60",
                   )}
                   onClick={() => toggleOne(i)}
+                  onKeyDown={(e) => {
+                    if (e.key === " " || e.key === "Enter") {
+                      e.preventDefault();
+                      toggleOne(i);
+                    }
+                  }}
                 >
                   <Checkbox
                     checked={checked}
@@ -322,7 +334,7 @@ export default function SessionsView() {
                   />
                   <AgentIcon agent={i.agent} size={16} />
                   <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="truncate text-detail text-foreground" title={i.title ?? i.id}>
+                    <span className="select-text truncate text-detail text-foreground" title={i.title ?? i.id}>
                       {i.title || i.id}
                     </span>
                     {i.kind === "db" && (
@@ -332,7 +344,7 @@ export default function SessionsView() {
                       <span className="shrink-0 font-mono text-micro text-faint">活跃</span>
                     )}
                   </div>
-                  <span className="truncate text-meta text-muted-foreground" title={i.project}>
+                  <span className="select-text truncate text-meta text-muted-foreground" title={i.project}>
                     {projectName(i.project)}
                   </span>
                   <span className="text-right font-mono text-micro tabular-nums text-muted-foreground">
@@ -344,7 +356,7 @@ export default function SessionsView() {
                     variant="ghost"
                     size="icon"
                     title="在 Finder 中显示"
-                    className="opacity-0 transition-opacity duration-fast group-hover:opacity-100"
+                    className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
                     onClick={(e) => {
                       e.stopPropagation();
                       void revealSession(i.agent, i.id);

@@ -146,16 +146,18 @@ function health(agent: AgentSnapshot) {
     return { label: "需检查", tone: "text-stale", dot: "bg-stale" };
   if (agent.sessions.length || agent.install.hookInstalled)
     return { label: "已连接", tone: "text-working", dot: "bg-working" };
-  return { label: "等待数据", tone: "text-waiting", dot: "bg-waiting" };
+  return { label: "等待数据", tone: "text-faint", dot: "bg-faint" };
 }
 
+/* 阈值语义：≥70% 前景加重（字重升级，不动琥珀）、≥90% 才红色警示；
+   琥珀只属于「轮到你了」，不进额度通道。 */
 function quotaTone(usedPct: number) {
-  return usedPct >= 90 ? "text-stale" : usedPct >= 70 ? "text-waiting" : "text-foreground";
+  return usedPct >= 90 ? "text-stale" : usedPct >= 70 ? "text-foreground font-semibold" : "text-foreground";
 }
 
-/* 正常态中性灰——彩色只留给阈值语义（≥70% 琥珀 / ≥90% 红）。 */
+/* 进度条灰阶与 quota-pill 同规：正常态前景 50%、≥70% 前景实色、≥90% 红。 */
 function quotaBar(usedPct: number) {
-  return usedPct >= 90 ? "bg-stale" : usedPct >= 70 ? "bg-waiting" : "bg-foreground/50";
+  return usedPct >= 90 ? "bg-stale" : usedPct >= 70 ? "bg-foreground" : "bg-foreground/50";
 }
 
 function quotaAmount(window: QuotaWindow) {

@@ -8,6 +8,7 @@ import { useMemo, useState } from "react";
 import AnimatedNumber from "@/components/animated-number";
 import MurmurMark from "@/components/murmur-mark";
 import PerchStrip from "@/components/perch-strip";
+import { AGENT_ORDER } from "@/lib/agent-meta";
 import { waitingCount, workingCount } from "@/lib/selectors";
 import { useMurmurStore } from "@/store/murmur";
 
@@ -24,10 +25,11 @@ export default function MurmurHeader() {
   const agents = snapshot?.agents ?? [];
   const connected = agents.filter((a) => a.install.installed && !a.disabled).length;
 
-  /* 面板失焦即关，日期取挂载时刻即可（不随时间刷新），计数跟随快照。 */
+  /* 面板失焦即关，日期取挂载时刻即可（不随时间刷新），计数跟随快照。
+     分母是 agent 全集（快照未到时也按 7 口径），不写死字面量。 */
   const folio = useMemo(() => {
     const d = new Date();
-    return `${WEEKDAYS[d.getDay()]} ${d.getMonth() + 1}月${d.getDate()}日 · 已接入 ${connected}/${agents.length || 5}`;
+    return `${WEEKDAYS[d.getDay()]} ${d.getMonth() + 1}月${d.getDate()}日 · 已接入 ${connected}/${agents.length || AGENT_ORDER.length}`;
   }, [connected, agents.length]);
 
   async function onRefresh() {

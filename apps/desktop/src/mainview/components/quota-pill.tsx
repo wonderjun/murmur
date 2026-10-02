@@ -1,4 +1,6 @@
-/** 额度窗口胶囊：标签 + 用量百分比 + 迷你进度槽 + 重置倒计时。 */
+/** 额度窗口胶囊：标签 + 用量百分比 + 迷你进度槽 + 重置倒计时。
+ *  阈值语义与 setup-view 的额度条同规：≥70% 前景加重、≥90% 红；
+ *  琥珀只属于「轮到你了」，正常态进度底色一律前景 50%（idle 是状态色，不做进度条）。 */
 
 import { cn } from "@/lib/utils";
 
@@ -32,7 +34,7 @@ export default function QuotaPill({ window: w }: { window: QuotaWindow }) {
     <span
       className={cn(
         "inline-flex items-center gap-1.5 rounded-full border border-hairline bg-raised px-2.5 py-1 font-mono text-micro leading-none",
-        danger ? "text-stale" : warn ? "text-waiting" : "text-muted-foreground",
+        danger ? "text-stale" : warn ? "text-foreground" : "text-muted-foreground",
       )}
       title={title}
     >
@@ -40,7 +42,7 @@ export default function QuotaPill({ window: w }: { window: QuotaWindow }) {
       <span className="tabular-nums">{w.usedPct}%</span>
       <span className="relative h-[3px] w-7 overflow-hidden rounded-full bg-foreground/10">
         <span
-          className={cn("absolute inset-y-0 left-0 rounded-full", danger ? "bg-stale" : warn ? "bg-waiting" : "bg-idle")}
+          className={cn("absolute inset-y-0 left-0 rounded-full", danger ? "bg-stale" : warn ? "bg-foreground" : "bg-foreground/50")}
           style={{ width: `${w.usedPct}%` }}
         />
       </span>

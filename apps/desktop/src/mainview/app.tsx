@@ -31,6 +31,11 @@ const NAV_ITEMS: { id: ViewId; label: string; icon: ComponentType<{ size?: numbe
   { id: "settings", label: "设置", icon: Settings },
 ];
 
+const VIEW_LABEL: Record<ViewId, string> = Object.fromEntries(NAV_ITEMS.map((i) => [i.id, i.label])) as Record<
+  ViewId,
+  string
+>;
+
 export default function App() {
   const isDesign = location.hash.startsWith("#/design");
   // 独立窗口内容：会话文件管理页（views://…#/files 由第二 BrowserWindow 加载）。
@@ -63,6 +68,8 @@ export default function App() {
       <ScrollArea className="h-full overflow-hidden">
         <main
           key={view}
+          aria-live="polite"
+          aria-label={`当前视图：${VIEW_LABEL[view]}`}
           className="px-4 pb-4"
           style={{
             paddingTop: "calc(var(--chrome-top) + 8px)",
@@ -97,12 +104,19 @@ export default function App() {
                       ? "border-hairline bg-raised text-foreground"
                       : "border-transparent text-muted-foreground hover:text-foreground",
                   )}
+                  aria-current={active ? "page" : undefined}
                   onClick={() => setView(item.id)}
                 >
                   <Icon size={12} strokeWidth={1.8} />
                   {item.label}
                   {item.id === "live" && waiting > 0 && (
-                    <span className="font-mono text-micro tabular-nums text-waiting">{waiting}</span>
+                    <span
+                      role="status"
+                      aria-label={`${waiting} 个会话待处理`}
+                      className="font-mono text-micro tabular-nums text-waiting"
+                    >
+                      {waiting}
+                    </span>
                   )}
                 </button>
               );

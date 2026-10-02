@@ -1,4 +1,4 @@
-/** 栖枝：一根两端渐隐的细枝承起 5 只「鸟」（agent 状态点），签名元素。
+/** 栖枝：一根两端渐隐的细枝承起 7 只「鸟」（agent 状态点），签名元素。
  *  珠宝化规格：9px 点（比会话行大）+ 渐变枝（不再与普通 hairline 同规格）
  *  + 状态切换时 hop 鸟跳（key remount，入场按序错峰 55ms）。 */
 
@@ -37,6 +37,7 @@ export default function PerchStrip({ className }: { className?: string }) {
         <span
           key={bird.agent}
           data-agent={bird.agent}
+          aria-hidden="true"
           className="relative flex items-center justify-center rounded-full bg-background p-[3px]"
         >
           {/* 状态切换即 remount 播 hop；首次入场按栖位错峰，群鸟依次落枝 */}
