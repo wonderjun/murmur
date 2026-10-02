@@ -185,6 +185,20 @@ export class StatusEngine {
       .sort((a, b) => b.lastEventAt - a.lastEventAt);
   }
 
+  /**
+   * grace 期内刚结束的会话（只读副本，按结束时间倒序截 limit）——「最近结束」
+   * 折叠组数据源。endedAt≈changedAt（状态迁移时刻）；sweep 清走后自然消失。
+   * 与 snapshot() 分工：活跃面不含 ended，这里只出 ended，互不影响聚合态。
+   */
+  recentlyEnded(limit: number): SessionSnapshot[] {
+    const now = Date.now();
+    return [...this.sessions.values()]
+      .filter((s) => s.status === 'ended' && now - s.changedAt <= ENDED_GRACE_MS)
+      .sort((a, b) => b.changedAt - a.changedAt)
+      .slice(0, limit)
+      .map((s) => ({ ...s, endedAt: s.changedAt }));
+  }
+
   /** 聚合态：working > waiting > stale > idle > ended。allowed 给定时只统计其中的 agent。 */
   overall(allowed?: ReadonlySet<string>): AgentStatus {
     let result: AgentStatus = 'ended';

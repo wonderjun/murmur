@@ -1,15 +1,20 @@
 /** agent 行：折叠头（徽标 + 摘要 + 聚合态旗标）+ 展开会话明细 + 额度窗格。
  *  自身不带卡片壳——分组容器（monitor-view / 设计板）提供 border/bg/分隔。
- *  展开走 grid-template-rows 0fr↔1fr 过渡（无测量）+ ease-spring 弹性。 */
+ *  展开走 grid-template-rows 0fr↔1fr 过渡（无测量）+ ease-spring 弹性；
+ *  外部经 expandSignal 请求展开（waiting hero 点击定位），DOM 锚
+ *  data-agent-row / data-session 供滚动定位，不引入路由。
+ *  定位行走 revealSession（查主进程 lastSessionScan 缓存，miss 返回 false
+ *  时行内提示，不静默）与 writeClipboard 复制 cwd。 */
 
 import { ChevronDown } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import StatusDot from "@/components/status-dot";
 import { AGENT_META } from "@/lib/agent-meta";
 import { fmtTokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useMurmurStore } from "@/store/murmur";
 
 import type { AgentSnapshot, AgentStatus, SessionSnapshot } from "@core/types";
 
@@ -31,8 +36,47 @@ const STATUS_TONE: Record<AgentStatus, string> = {
   ended: "bg-muted text-faint",
 };
 
-export default function AgentRow({ agent }: { agent: AgentSnapshot }) {
+/** 行内提示：定位 miss（未找到磁盘产物）或复制成功，3 秒自动淡出。 */
+interface RowHint {
+  sessionId: string;
+  kind: "miss" | "copied";
+}
+
+export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot; expandSignal?: number }) {
   const [expanded, setExpanded] = useState(true);
+  const [hint, setHint] = useState<RowHint | null>(null);
+  const revealSession = useMurmurStore((s) => s.revealSession);
+  const writeClipboard = useMurmurStore((s) => s.writeClipboard);
+
+  // waiting hero 点击定位：外部信号递增即展开（已展开则保持）。
+  useEffect(() => {
+    if (expandSignal) setExpanded(true);
+  }, [expandSignal]);
+
+  // 提示行 3 秒淡出；同会话再次操作会以新引用重置计时。
+  useEffect(() => {
+    if (!hint) return;
+    const t = setTimeout(() => setHint(null), 3000);
+    return () => clearTimeout(t);
+  }, [hint]);
+
+  async function reveal(session: SessionSnapshot) {
+    try {
+      const ok = await revealSession(agent.agent, session.sessionId);
+      setHint(ok ? null : { sessionId: session.sessionId, kind: "miss" });
+    } catch {
+      // 离线预览无桥必 reject；真桥下也按 miss 提示，不静默。
+      setHint({ sessionId: session.sessionId, kind: "miss" });
+    }
+  }
+
+  function copyCwd(session: SessionSnapshot) {
+    if (!session.cwd) return;
+    // 真桥 clipboardWriteText 无失败通路；离线预览无桥必 reject，静默即可。
+    writeClipboard(session.cwd)
+      .then(() => setHint({ sessionId: session.sessionId, kind: "copied" }))
+      .catch(() => {});
+  }
 
   const name = AGENT_META[agent.agent].name;
   const sessions = useMemo(() => [...agent.sessions].sort((a, b) => b.lastEventAt - a.lastEventAt), [agent.sessions]);
@@ -47,7 +91,7 @@ export default function AgentRow({ agent }: { agent: AgentSnapshot }) {
     : `${s.title || compactPath(s.cwd)} · ${statusText(s.status)}`;
 
   return (
-    <article data-agent={agent.agent}>
+    <article data-agent={agent.agent} data-agent-row={agent.agent}>
       <button
         type="button"
         className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-fast hover:bg-foreground/[0.03]"
@@ -70,7 +114,7 @@ export default function AgentRow({ agent }: { agent: AgentSnapshot }) {
             STATUS_TONE[primaryStatus],
           )}
         >
-          <StatusDot status={primaryStatus} size={6} />
+          <StatusDot status={primaryStatus} size={6} hasSrText={false} />
           {STATUS_LABEL[primaryStatus]}
         </span>
         <ChevronDown
@@ -89,7 +133,11 @@ export default function AgentRow({ agent }: { agent: AgentSnapshot }) {
         <div className="min-h-0 overflow-hidden">
           <div className="border-t border-hairline/60">
             {sessions.map((session) => (
-              <div key={session.sessionId} className="border-b border-hairline/60 px-3.5 py-2.5 last:border-b-0">
+              <div
+                key={session.sessionId}
+                data-session={session.sessionId}
+                className="select-text border-b border-hairline/60 px-3.5 py-2.5 last:border-b-0"
+              >
                 <div className="flex items-start gap-2.5">
                   <StatusDot status={session.status} size={7} className="mt-[5px]" />
                   <div className="min-w-0 flex-1">
@@ -99,7 +147,36 @@ export default function AgentRow({ agent }: { agent: AgentSnapshot }) {
                         {elapsed(session.startedAt)}
                       </span>
                     </div>
-                    <p className="mt-1 truncate font-mono text-micro text-faint">{compactPath(session.cwd)}</p>
+                    {/* 定位行：cwd（悬浮全路径）+ 复制 + Finder 定位 */}
+                    <div className="mt-1 flex items-center gap-2">
+                      <span
+                        className="min-w-0 truncate font-mono text-micro text-faint"
+                        title={session.cwd ?? undefined}
+                      >
+                        {compactPath(session.cwd)}
+                      </span>
+                      {session.cwd && (
+                        <button
+                          type="button"
+                          className="shrink-0 text-micro text-faint transition-colors duration-fast hover:text-foreground"
+                          onClick={() => copyCwd(session)}
+                        >
+                          复制路径
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="ml-auto shrink-0 text-micro text-faint transition-colors duration-fast hover:text-foreground"
+                        onClick={() => void reveal(session)}
+                      >
+                        在 Finder 显示
+                      </button>
+                    </div>
+                    {hint?.sessionId === session.sessionId && (
+                      <p className="mt-0.5 text-micro text-faint">
+                        {hint.kind === "miss" ? "未找到磁盘产物" : "路径已复制"}
+                      </p>
+                    )}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
                       <span>{modelName(session.model)}</span>
                       <span>{statusDetail(session)}</span>

@@ -8,6 +8,7 @@ import AgentIcon from "@/components/agent-icon";
 import ByokRow from "@/components/byok-row";
 import Segmented from "@/components/segmented";
 import SwitchRow from "@/components/switch-row";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AGENT_META, AGENT_ORDER, HOOK_IMPACT, OBSERVE_IMPACT } from "@/lib/agent-meta";
 import { isFontAvailable } from "@/lib/appearance";
@@ -33,9 +34,16 @@ function SectionHead({ index, title }: { index: string; title: string }) {
   );
 }
 
+/** 长操作的一行结果反馈：成功「已完成」/失败带 error.message，3 秒淡出。 */
+interface OpResult {
+  ok: boolean;
+  message: string;
+}
+
 export default function SettingsView() {
   const snapshot = useMurmurStore((s) => s.snapshot);
   const snap = useMurmurStore((s) => s.settingsSnap);
+  const settingsError = useMurmurStore((s) => s.settingsError);
   const loadSettings = useMurmurStore((s) => s.loadSettings);
   const updateSettings = useMurmurStore((s) => s.updateSettings);
   const setAgentHook = useMurmurStore((s) => s.setAgentHook);
@@ -55,6 +63,25 @@ export default function SettingsView() {
 
   const [rebuildArmed, setRebuildArmed] = useState(false);
   const rebuildTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // 危险/长操作反馈：进行中禁用按钮 + 文案；结束出一行结果，3 秒淡出。
+  const [reinstallPending, setReinstallPending] = useState(false);
+  const [rebuildPending, setRebuildPending] = useState(false);
+  const [reinstallResult, setReinstallResult] = useState<OpResult | null>(null);
+  const [rebuildResult, setRebuildResult] = useState<OpResult | null>(null);
+
+  useEffect(() => {
+    if (!reinstallResult && !rebuildResult) return;
+    const t = setTimeout(() => {
+      setReinstallResult(null);
+      setRebuildResult(null);
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [reinstallResult, rebuildResult]);
+
+  function errText(e: unknown) {
+    return e instanceof Error ? e.message : String(e);
+  }
 
   /* 字体输入草稿：null=未编辑跟随设置；防抖 500ms 落盘，落盘回读一致后清草稿。 */
   const [fontDraft, setFontDraft] = useState<string | null>(null);
@@ -113,8 +140,18 @@ export default function SettingsView() {
       : `未检测到「${fontValue}」，已回退系统字体`;
 
   async function reinstallAll() {
-    await installHooks();
-    await loadSettings();
+    setReinstallResult(null);
+    setRebuildResult(null);
+    setReinstallPending(true);
+    try {
+      await installHooks();
+      await loadSettings();
+      setReinstallResult({ ok: true, message: "已完成" });
+    } catch (e) {
+      setReinstallResult({ ok: false, message: errText(e) });
+    } finally {
+      setReinstallPending(false);
+    }
   }
 
   async function rebuild() {
@@ -125,7 +162,17 @@ export default function SettingsView() {
     }
     if (rebuildTimer.current) clearTimeout(rebuildTimer.current);
     setRebuildArmed(false);
-    await rebuildLedger();
+    setReinstallResult(null);
+    setRebuildResult(null);
+    setRebuildPending(true);
+    try {
+      await rebuildLedger();
+      setRebuildResult({ ok: true, message: "已完成" });
+    } catch (e) {
+      setRebuildResult({ ok: false, message: errText(e) });
+    } finally {
+      setRebuildPending(false);
+    }
   }
 
   return (
@@ -143,7 +190,17 @@ export default function SettingsView() {
       </section>
 
       {!snap ? (
-        <div className="text-meta text-faint">设置读取中…</div>
+        settingsError ? (
+          <div className="px-4 py-10 text-center" role="alert">
+            <p className="text-body font-medium">设置不可用</p>
+            <p className="mt-1.5 text-meta text-muted-foreground">设置读取失败，稍候可重试。</p>
+            <Button size="sm" className="mt-4" onClick={() => void loadSettings()}>
+              重试
+            </Button>
+          </div>
+        ) : (
+          <div className="text-meta text-faint">设置读取中…</div>
+        )
       ) : (
         <>
           {/* 01 通用 */}
@@ -185,14 +242,19 @@ export default function SettingsView() {
                   options={THEME_OPTIONS}
                   value={snap.settings.theme}
                   onChange={(v) => void save({ theme: v })}
+                  label="主题"
                 />
               </div>
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0 flex-1">
-                  <p className="text-detail font-medium text-foreground">界面字体</p>
+                  <label htmlFor="setting-font" className="text-detail font-medium text-foreground">
+                    界面字体
+                  </label>
                   <p className="mt-0.5 text-meta leading-relaxed text-muted-foreground">{fontHint}</p>
                 </div>
                 <input
+                  id="setting-font"
+                  aria-label="界面字体名"
                   value={fontDraft ?? snap.settings.font}
                   onChange={(e) => onFontInput(e.target.value)}
                   placeholder="SF / 苹方"
@@ -210,12 +272,18 @@ export default function SettingsView() {
               <SectionHead index="03" title="监听" />
               <button
                 type="button"
-                className="text-meta font-medium text-foreground underline decoration-foreground/25 underline-offset-[3px] transition-colors duration-fast hover:decoration-foreground/60"
+                disabled={reinstallPending}
+                className="text-meta font-medium text-foreground underline decoration-foreground/25 underline-offset-[3px] transition-colors duration-fast hover:decoration-foreground/60 disabled:pointer-events-none disabled:opacity-50"
                 onClick={reinstallAll}
               >
-                全部重新接入
+                {reinstallPending ? "接入中…" : "全部重新接入"}
               </button>
             </div>
+            {reinstallResult && (
+              <p className={cn("mt-1 text-meta", reinstallResult.ok ? "text-muted-foreground" : "text-destructive")}>
+                {reinstallResult.ok ? "已完成" : `接入失败：${reinstallResult.message}`}
+              </p>
+            )}
             <div className="mt-3">
               <SwitchRow
                 label="启动时自动接入 hook"
@@ -283,17 +351,23 @@ export default function SettingsView() {
                 </div>
                 <button
                   type="button"
+                  disabled={rebuildPending}
                   className={cn(
-                    "shrink-0 rounded-md border px-2.5 py-1 text-meta font-medium transition-colors duration-fast",
+                    "shrink-0 rounded-md border px-2.5 py-1 text-meta font-medium transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50",
                     rebuildArmed
                       ? "border-foreground/40 bg-foreground/10 text-foreground"
                       : "border-hairline bg-raised text-muted-foreground hover:text-foreground",
                   )}
                   onClick={rebuild}
                 >
-                  {rebuildArmed ? "再点一次确认" : "重建"}
+                  {rebuildPending ? "重建中…" : rebuildArmed ? "再点一次确认" : "重建"}
                 </button>
               </div>
+              {rebuildResult && (
+                <p className={cn("-mt-1 text-meta", rebuildResult.ok ? "text-muted-foreground" : "text-destructive")}>
+                  {rebuildResult.ok ? "已完成" : `重建失败：${rebuildResult.message}`}
+                </p>
+              )}
               <button
                 type="button"
                 className="flex items-center justify-between gap-3 text-left"
@@ -325,13 +399,13 @@ export default function SettingsView() {
             <div className="mt-3 flex flex-col gap-1.5">
               <div className="flex items-center justify-between text-meta">
                 <span className="text-muted-foreground">版本</span>
-                <span className="font-mono tabular-nums text-faint">
+                <span className="select-text font-mono tabular-nums text-faint">
                   {snap.runtime.version} · {snap.runtime.channel}
                 </span>
               </div>
               <div className="flex items-center justify-between text-meta">
                 <span className="text-muted-foreground">上报端点</span>
-                <span className="font-mono tabular-nums text-faint">{snap.runtime.ingestEndpoint}</span>
+                <span className="select-text font-mono tabular-nums text-faint">{snap.runtime.ingestEndpoint}</span>
               </div>
             </div>
           </section>

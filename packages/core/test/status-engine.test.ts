@@ -128,4 +128,33 @@ describe('StatusEngine', () => {
     e.sweep();
     expect(e.overall()).toBe('waiting'); // fresh 仍是 waiting
   });
+
+  test('recentlyEnded：grace 期 ended 按结束时间倒序，带 endedAt；活跃面仍不含 ended', () => {
+    const e = new StatusEngine();
+    const now = Date.now();
+    e.apply({ ...ev('turn.start', now - 2000, 'done1') });
+    e.apply({ ...ev('session.end', now - 1000, 'done1') });
+    e.apply({ ...ev('turn.start', now - 400, 'done2') });
+    e.apply({ ...ev('session.end', now - 100, 'done2') });
+
+    const ended = e.recentlyEnded(10);
+    expect(ended.map((s) => s.sessionId)).toEqual(['done2', 'done1']); // 后结束的在前
+    expect(ended[0].status).toBe('ended');
+    expect(ended[0].endedAt).toBe(now - 100); // endedAt = 状态迁移时刻
+    // limit 截断：只留最新一条。
+    expect(e.recentlyEnded(1).map((s) => s.sessionId)).toEqual(['done2']);
+    // 活跃快照仍不出 ended（两清单分工）。
+    expect(e.snapshot().find((s) => s.status === 'ended')).toBeUndefined();
+
+    // grace 期过后 sweep 清走，清单随之消失。
+    e.sweep(now + 61_000);
+    expect(e.recentlyEnded(10)).toEqual([]);
+  });
+
+  test('recentlyEnded：非 ended 会话与 waiting 不入清单', () => {
+    const e = new StatusEngine();
+    e.apply(ev('session.start'));
+    e.apply(ev('turn.end'));
+    expect(e.recentlyEnded(10)).toEqual([]);
+  });
 });

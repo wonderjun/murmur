@@ -72,6 +72,8 @@ export interface SessionSnapshot {
   model?: string;
   lastEventAt: number;
   startedAt: number;
+  /** 结束时刻（ms epoch，≈状态迁移时刻）；仅 recentlyEnded 清单携带，活跃会话不出。 */
+  endedAt?: number;
   /** 累计 token 与估算成本（USD）。 */
   tokens: TokenUsage;
   costUsd: number;
@@ -174,4 +176,9 @@ export interface AppSnapshot {
   /** 聚合态：任何会话 working→working，无 working 但有 waiting→waiting，依次退化。 */
   overall: AgentStatus;
   generatedAt: number;
+  /**
+   * grace 期内的最近结束会话（endedAt≈状态迁移时刻，副本只读）——「最近结束」
+   * 折叠组数据源。可选字段：只增不改，既有消费者（mainview）typecheck 兜底。
+   */
+  recentlyEnded?: SessionSnapshot[];
 }

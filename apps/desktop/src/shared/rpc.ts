@@ -60,6 +60,8 @@ export type MurmurRPC = {
       };
       /** webview 输入框粘贴兜底：无 Edit 菜单时 ⌘/⌃V 到不了 WKWebView，JS 侧改走主进程读剪贴板。 */
       readClipboard: { params: {}; response: { text: string | null } };
+      /** webview 复制通道：写系统剪贴板（cwd/路径复制）。与 readClipboard 成对。 */
+      writeClipboard: { params: { text: string }; response: { ok: true } };
       /** 清空台账与游标，pull watcher 下轮全量重扫。 */
       rebuildLedger: { params: {}; response: { ok: true } };
       /** 打开会话文件管理窗口（已开则聚焦）。 */

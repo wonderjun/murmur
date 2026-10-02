@@ -18,8 +18,13 @@ import type { AgentId, AppSnapshot, SessionDeleteResult, StoredSession } from "@
 
 interface MurmurStore {
   snapshot: AppSnapshot | null;
+  /** 首次快照尚未返回（骨架屏语义；之后推送/刷新不再置回 true）。 */
   loading: boolean;
+  /** 最近一次 refresh 失败（桥未就绪/主进程失联）；拿到快照即复位。 */
+  snapshotError: boolean;
   settingsSnap: SettingsSnapshot | null;
+  /** 最近一次 loadSettings 失败；读到设置即复位。 */
+  settingsError: boolean;
   refresh(): Promise<void>;
   installHooks(): Promise<void>;
   refreshQuotas(): Promise<void>;
@@ -33,6 +38,8 @@ interface MurmurStore {
   setAgentKey(agent: AgentId, apiKey: string | null, baseUrl?: string): Promise<void>;
   /** 输入框粘贴兜底（菜单栏伴侣缺 Edit 菜单时 ⌘/⌃V 到不了 webview）。 */
   readClipboard(): Promise<string | null>;
+  /** 复制通道：写系统剪贴板（cwd/路径复制）。 */
+  writeClipboard(text: string): Promise<void>;
   rebuildLedger(): Promise<void>;
   /** 打开会话文件管理窗（独立窗口，幂等聚焦）。 */
   openSessions(): Promise<void>;
@@ -51,9 +58,10 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
 
   async function refresh() {
     try {
-      set({ snapshot: await rpc.rpc!.request.getSnapshot({}) });
+      set({ snapshot: await rpc.rpc!.request.getSnapshot({}), snapshotError: false });
     } catch {
-      // 无桥预览/桥未就绪时保持空态，下次推送或手动刷新再补齐。
+      // 无桥预览/桥未就绪：保留旧快照（若有），置错标记供动态页出重试态。
+      set({ snapshotError: true });
     }
     set({ loading: false });
   }
@@ -74,9 +82,10 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
 
   async function loadSettings() {
     try {
-      set({ settingsSnap: await rpc.rpc!.request.getSettings({}) });
+      set({ settingsSnap: await rpc.rpc!.request.getSettings({}), settingsError: false });
     } catch {
-      // 离线预览：保持 null，设置页显示不可用态。
+      // 离线预览/主进程失联：保持 null，设置页按 settingsError 区分「读取中」与「不可用」。
+      set({ settingsError: true });
     }
   }
 
@@ -102,6 +111,10 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
   async function readClipboard() {
     const r = await rpc.rpc!.request.readClipboard({});
     return r.text;
+  }
+
+  async function writeClipboard(text: string) {
+    await rpc.rpc!.request.writeClipboard({ text });
   }
 
   async function rebuildLedger() {
@@ -138,7 +151,9 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
   return {
     snapshot: null,
     loading: true,
+    snapshotError: false,
     settingsSnap: null,
+    settingsError: false,
     refresh,
     installHooks,
     refreshQuotas,
@@ -149,6 +164,7 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     setAgentObserved,
     setAgentKey,
     readClipboard,
+    writeClipboard,
     rebuildLedger,
     openSessions,
     scanSessions,
