@@ -18,6 +18,7 @@ import { setApplicationMenu } from "electrobun/main/app-menu";
 
 import { AgentRegistry, migrateLegacyHome, MURMUR_HOME } from "../../../../packages/core/src/index";
 
+import type { AppSnapshot } from "../../../../packages/core/src/index";
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
 import {
   appBundlePath,
@@ -129,6 +130,10 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
         return settingsSnapshot();
       },
       readClipboard: () => ({ text: Utils.clipboardReadText() }),
+      writeClipboard: ({ text }) => {
+        Utils.clipboardWriteText(text);
+        return { ok: true as const };
+      },
       rebuildLedger: () => {
         registry.rebuildLedger();
         return { ok: true as const };
@@ -250,8 +255,8 @@ const tray = new Tray({
   height: 22,
 });
 
-function updateTrayTitle() {
-  const snap = registry.snapshot();
+/** 托盘标题聚合态：快照已由调用方聚合好，这里只做字形映射。 */
+function updateTrayTitle(snap: AppSnapshot) {
   const waiting = snap.agents.flatMap((a) => a.sessions).filter((s) => s.status === "waiting").length;
   const working = snap.agents.flatMap((a) => a.sessions).filter((s) => s.status === "working").length;
   // 聚合态字形只能用默认文本渲染的几何符号（●/◆）：emoji（如 ⏰）在菜单栏走
@@ -266,13 +271,14 @@ const AGENT_NAMES: Record<string, string> = {
   opencode: "OpenCode",
   codex: "Codex",
   cursor: "Cursor",
+  devin: "Devin",
+  qoder: "Qoder",
 };
 
 // 「轮到你了」通知：waiting 集合只增才发。首个快照作基线——回填建档的旧 waiting
 // 是历史残态不是新事件，不该在启动时轰炸通知中心。
 let prevWaiting: Set<string> | null = null;
-function maybeNotifyWaiting() {
-  const snap = registry.snapshot();
+function maybeNotifyWaiting(snap: AppSnapshot) {
   const waiting = new Map(
     snap.agents.flatMap((a) => a.sessions.filter((s) => s.status === "waiting").map((s) => [`${a.agent}:${s.sessionId}`, a.agent])),
   );
@@ -341,10 +347,12 @@ function togglePanel() {
 tray.on("tray-clicked", () => togglePanel());
 
 registry.onChange(() => {
-  updateTrayTitle();
-  maybeNotifyWaiting();
+  // 一个通知周期只聚合一次快照：托盘/通知/推送共用（registry 侧另有周期内缓存兜底）。
+  const snap = registry.snapshot();
+  updateTrayTitle(snap);
+  maybeNotifyWaiting(snap);
   try {
-    panel.webview.rpc?.send.snapshot(registry.snapshot());
+    panel.webview.rpc?.send.snapshot(snap);
   } catch {
     // 面板尚未加载完成时忽略推送失败。
   }
@@ -354,6 +362,6 @@ registry.onChange(() => {
 applyDockIcon(registry.getSettings().showDockIcon);
 
 await registry.start();
-updateTrayTitle();
+updateTrayTitle(registry.snapshot());
 if (appBundlePath()) console.log("[murmur] bundle:", appBundlePath());
 console.log("[murmur] started — ingest endpoint:", registry.ingestEndpoint());

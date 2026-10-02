@@ -11,6 +11,7 @@ import { startIngestServer, type IngestServer } from '../ingest/server';
 import { drainSpool } from '../ingest/spool';
 import { BACKFILL_EPOCH, BACKFILL_WINDOW_MS, Ledger } from '../ledger/db';
 import { estimateCostUsd } from '../ledger/pricing';
+import { MURMUR_HOME } from '../paths';
 import { flagEnabled, loadSettings, saveSettings, type MurmurSettings } from '../settings';
 import type { AgentAdapter } from '../agents/base';
 import { createCodexAdapter } from '../agents/codex';
@@ -27,13 +28,27 @@ import { STALE_AFTER_MS, StatusEngine } from './status-engine';
 const QUOTA_INTERVAL_MS = 10 * 60_000;
 /** watchdog 扫描周期。 */
 const SWEEP_INTERVAL_MS = 15_000;
+/** 快照携带的最近结束会话条数上限（「最近结束」折叠组）。 */
+const RECENTLY_ENDED_LIMIT = 8;
 /** 台账保留清扫周期（events/quota/cursors 只进不出，每日压实一次）。 */
 const PRUNE_INTERVAL_MS = 24 * 3600_000;
 
+/** AgentRegistry 组装选项：全部可省，缺省即生产形态（7 家真 adapter + MURMUR_HOME 数据面 + ingest 服务）。 */
+export interface RegistryOptions {
+  /** 测试注入：替换默认 adapter 集（fake 边界，不探测真机目录）。 */
+  adapters?: AgentAdapter[];
+  /** settings/credentials/台账的落盘根（缺省 MURMUR_HOME；测试钉沙箱目录）。 */
+  dataDir?: string;
+  /** 不起 ingest 服务、不做 spool 补投（测试不绑真实端口、不写 endpoint）。 */
+  skipIngest?: boolean;
+}
+
 export class AgentRegistry {
   private engine = new StatusEngine();
-  private ledger = new Ledger();
-  private adapters: AgentAdapter[] = [];
+  private ledger: Ledger;
+  private adapters: AgentAdapter[];
+  private readonly dataDir: string;
+  private readonly skipIngest: boolean;
   private installs = new Map<AgentId, InstallInfo>();
   private quotas = new Map<AgentId, QuotaSnapshot>();
   private ingest: IngestServer | null = null;
@@ -41,12 +56,20 @@ export class AgentRegistry {
   private timers: ReturnType<typeof setInterval>[] = [];
   private listeners = new Set<() => void>();
   private unsubEngine: (() => void) | null = null;
-  private settings: MurmurSettings = loadSettings();
+  private settings: MurmurSettings;
   /** BYOK 凭据（~/.murmur/credentials.json）：用户自填 key，永不进 settings/RPC 明文。 */
-  private byok: ByokStore = loadCredentials();
+  private byok: ByokStore;
+  /**
+   * 快照缓存：同一变更周期内只聚合一次（两次 SQL 用量聚合 × 每次广播被
+   * 托盘/通知/RPC 推送共用）。失效契约——任何改变快照内容的写入路径必须
+   * 同步走到 notify() 或 engine.onChange；snapshot() 返回的对象调用方只读。
+   */
+  private snapshotCache: AppSnapshot | null = null;
 
-  constructor() {
-    this.adapters = [
+  constructor(opts: RegistryOptions = {}) {
+    this.dataDir = opts.dataDir ?? MURMUR_HOME;
+    this.skipIngest = opts.skipIngest ?? false;
+    this.adapters = opts.adapters ?? [
       createKimiAdapter(),
       createZcodeAdapter(),
       createOpencodeAdapter(),
@@ -55,6 +78,9 @@ export class AgentRegistry {
       createDevinAdapter(),
       createQoderAdapter(),
     ];
+    this.settings = loadSettings(this.dataDir);
+    this.byok = loadCredentials(this.dataDir);
+    this.ledger = new Ledger(this.dataDir);
   }
 
   /** 订阅快照变化。 */
@@ -65,8 +91,9 @@ export class AgentRegistry {
 
   private notifyTimer: ReturnType<typeof setTimeout> | null = null;
 
-  /** 去抖广播：拉取/回放风暴时合并成 ~80ms 一批。 */
+  /** 去抖广播：拉取/回放风暴时合并成 ~80ms 一批。调用即失效快照缓存（变更已发生）。 */
   private notify() {
+    this.snapshotCache = null;
     if (this.notifyTimer) return;
     this.notifyTimer = setTimeout(() => {
       this.notifyTimer = null;
@@ -95,13 +122,18 @@ export class AgentRegistry {
       const cost = e.kind === 'usage' ? estimateCostUsd(e.model, e.tokens ?? { input: 0, output: 0 }) : 0;
       try {
         this.ledger.record(e, cost);
-      } catch {}
+      } catch {
+        // 台账写失败（DB 锁/磁盘）不阻断状态机——台账是审计面，会话态在内存引擎。
+      }
     }
     this.engine.apply(e);
   }
 
-  /** hook payload → 对应 adapter 翻译 → 事件。 */
-  private translateHook = (agent: AgentId, payload: unknown) => {
+  /**
+   * hook payload → 对应 adapter 翻译 → 事件。push 平面的唯一入口：
+   * ingest 服务与 spool 补投共用，测试也经它驱动「监听关闭后的 push 残留」。
+   */
+  translateHook = (agent: AgentId, payload: unknown) => {
     const adapter = this.adapters.find((a) => a.id === agent);
     // spool 落盘格式 {_spooledAt:秒, p:原 payload}：补投时把 at 钳回落盘时刻——
     // 宕机积压的旧事件按真实时间回放（回填语义），不冒充当下。存量裸 payload 直通。
@@ -134,8 +166,10 @@ export class AgentRegistry {
       }
     }
 
-    this.ingest = startIngestServer({ translate: this.translateHook });
-    drainSpool(this.translateHook);
+    if (!this.skipIngest) {
+      this.ingest = startIngestServer({ translate: this.translateHook });
+      drainSpool(this.translateHook);
+    }
 
     // 回填语义版本不一致（含首次启动/台账被清空）→ 清库清游标，watcher 全量重扫。
     // epoch 机制同时治愈旧版本污染数据（如历史事件被打上错误时间戳）。
@@ -162,9 +196,13 @@ export class AgentRegistry {
       await this.startWatch(a);
     }
 
-    this.unsubEngine = this.engine.onChange(() => this.notify());
+    this.unsubEngine = this.engine.onChange(() => {
+      // 状态机变更同步失效缓存：去抖广播落地前的 snapshot() 也不能回旧账。
+      this.snapshotCache = null;
+      this.notify();
+    });
     this.timers.push(setInterval(() => this.engine.sweep(), SWEEP_INTERVAL_MS));
-    this.timers.push(setInterval(() => drainSpool(this.translateHook), 60_000));
+    if (!this.skipIngest) this.timers.push(setInterval(() => drainSpool(this.translateHook), 60_000));
     this.timers.push(setInterval(() => void this.refreshQuotas(), QUOTA_INTERVAL_MS));
     this.timers.push(setInterval(() => this.pruneLedger(), PRUNE_INTERVAL_MS));
     this.pruneLedger();
@@ -227,6 +265,7 @@ export class AgentRegistry {
    * 重扫耗时不可控 → 后台跑，结果经 notify 流式上屏。
    */
   rebuildLedger() {
+    this.snapshotCache = null; // 台账清空即用量聚合变脸，缓存立刻作废。
     this.ledger.resetForRebuild();
     for (const a of this.adapters) {
       if (!this.isObserved(a.id) || !this.installs.get(a.id)?.installed) continue;
@@ -312,7 +351,9 @@ export class AgentRegistry {
   private pruneLedger() {
     try {
       this.ledger.prune();
-    } catch {}
+    } catch {
+      // 清扫失败不致命：只影响磁盘占用，下轮 24h 再来。
+    }
   }
 
   /** 当前设置（RPC/主进程读；写一律走 updateSettings/setAgentHook/setAgentObserved）。 */
@@ -324,7 +365,7 @@ export class AgentRegistry {
   async updateSettings(patch: Partial<MurmurSettings>): Promise<MurmurSettings> {
     const prev = this.settings;
     this.settings = { ...prev, ...patch, agents: { ...prev.agents, ...patch.agents }, hooks: { ...prev.hooks, ...patch.hooks } };
-    saveSettings(this.settings);
+    saveSettings(this.settings, this.dataDir);
     // agents/hooks 两张表的增删通过专用入口（setAgentObserved/setAgentHook）走副作用；
     // 这里仅兜底：被改成 false 的 agent 立即停观察，改成 true 的恢复观察。
     for (const a of this.adapters) {
@@ -382,7 +423,7 @@ export class AgentRegistry {
     const a = this.adapters.find((x) => x.id === agent);
     if (!a) return this.settings;
     this.settings = { ...this.settings, hooks: { ...this.settings.hooks, [agent]: enabled } };
-    saveSettings(this.settings);
+    saveSettings(this.settings, this.dataDir);
     try {
       if (enabled && this.isObserved(agent) && this.installs.get(agent)?.installed) await a.installHooks();
       else if (!enabled) await a.uninstallHooks?.();
@@ -409,7 +450,7 @@ export class AgentRegistry {
       this.quotas.delete(agent);
     }
     try {
-      saveCredentials(this.byok);
+      saveCredentials(this.byok, this.dataDir);
     } catch {
       // 写盘失败不阻塞：内存态已生效，下轮 refreshQuotas 照常用。
     }
@@ -434,8 +475,12 @@ export class AgentRegistry {
     return out;
   }
 
-  /** 全量快照。被停用监听的 agent 保留在 agents 列表（disabled:true）供设置页显示，但不带会话/额度/用量。 */
+  /**
+   * 全量快照（同一变更周期复用同一实例，调用方只读、不得改写缓存对象）。
+   * 被停用监听的 agent 保留在 agents 列表（disabled:true）供设置页显示，但不带会话/额度/用量。
+   */
   snapshot(): AppSnapshot {
+    if (this.snapshotCache) return this.snapshotCache;
     const sessions = this.engine.snapshot();
     const observed = new Set(this.adapters.filter((a) => this.isObserved(a.id)).map((a) => a.id));
     // 今日 + 近 7 日台账：本地零点起算的 token 合计（quota 之外始终可用的用量面）。
@@ -479,7 +524,15 @@ export class AgentRegistry {
         week: disabled ? undefined : weekByAgent.get(a.id),
       };
     });
-    return { agents, overall: this.engine.overall(observed), generatedAt: Date.now() };
+    const snap: AppSnapshot = {
+      agents,
+      overall: this.engine.overall(observed),
+      generatedAt: Date.now(),
+      // 停监听 agent 的 ended 残留照 sessions 同规过滤——隐藏会话却不藏它的尸体对不上。
+      recentlyEnded: this.engine.recentlyEnded(RECENTLY_ENDED_LIMIT).filter((s) => observed.has(s.agent)),
+    };
+    this.snapshotCache = snap;
+    return snap;
   }
 
   async stop() {
