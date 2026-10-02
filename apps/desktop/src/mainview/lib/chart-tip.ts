@@ -11,8 +11,9 @@ export interface ChartTipState {
   place: ChartTipPlace;
 }
 
-/** 由 hover 事件与容器 ref 计算顶部锚点：距左右缘不足 64px 时改用贴边落位防溢出。 */
-export function anchorTop(event: MouseEvent, host: HTMLElement): ChartTipState {
+/** 由 hover 事件与容器 ref 计算顶部锚点：距左右缘不足 64px 时改用贴边落位防溢出。
+    形参收敛为 {currentTarget} 结构——DOM MouseEvent 与 React 合成事件都满足。 */
+export function anchorTop(event: { currentTarget: EventTarget | null }, host: HTMLElement): ChartTipState {
   const box = host.getBoundingClientRect();
   const el = (event.currentTarget as HTMLElement).getBoundingClientRect();
   const cx = el.left - box.left + el.width / 2;

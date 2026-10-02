@@ -2,21 +2,19 @@
 @import "tw-animate-css";
 
 /*
- * Murmur 视觉唯一真源：暖纸·编辑室。
- * 表面三层 background → raised → card 递进，阴影取 ink 暖调低透明度；
- * 彩色只有两种语义：accent（赤陶=品牌，谁）与 status（什么状态）。
+ * Murmur 视觉唯一真源：Vercel 式单色基调，暗/亮双主题（<html data-theme> 切换，
+ * 缺省回落深色）。表面三层 background → raised → card 递进，hairline 分层。
+ * UI chrome 全中性：--accent 在 root 等于 --foreground，交互只走灰阶反相；
+ * 彩色只有两种语义——status（什么状态）与 agent accent（谁，仅图表/图例消费）。
  * waiting 琥珀与 murmur-mark 峰点同族：峰点琥珀 = 轮到你了。
  */
-
-:root {
-  color-scheme: light;
-}
 
 @theme inline {
   --color-background: var(--background);
   --color-raised: var(--raised);
   --color-card: var(--card);
   --color-muted: var(--muted);
+  --color-overlay: var(--overlay);
   --color-hairline: var(--hairline);
   --color-foreground: var(--foreground);
   --color-muted-foreground: var(--muted-foreground);
@@ -27,22 +25,45 @@
   --color-idle: var(--status-idle);
   --color-stale: var(--status-stale);
   --color-ended: var(--status-ended);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-agent-kimi: var(--agent-kimi);
   --color-agent-zcode: var(--agent-zcode);
   --color-agent-opencode: var(--agent-opencode);
   --color-agent-codex: var(--agent-codex);
   --color-agent-cursor: var(--agent-cursor);
-  --radius-panel: 14px;
-  --radius-item: 10px;
-  --font-display: "Lora Variable", "Lora", "PingFang SC", Georgia, serif;
-  --font-mono: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
-  --shadow-raised: 0 1px 2px rgb(46 41 37 / 0.05), 0 0 0 0.5px rgb(46 41 37 / 0.03);
-  --shadow-overlay: 0 10px 28px rgb(46 41 37 / 0.11), 0 2px 6px rgb(46 41 37 / 0.05);
+  --color-agent-devin: var(--agent-devin);
+  --color-agent-qoder: var(--agent-qoder);
+  --color-heat: var(--heat);
+  --radius-item: 8px;
+  --font-sans: var(--font-sans-stack);
+  --font-mono: var(--font-mono-stack);
+  /* 字阶六档（焕新定案）：消灭 0.5px 微差，层级靠落差不靠灰度。
+     micro 计数/轴/胶囊 · meta 副信息 · detail 次级行标题 · body 正文/主行
+     · title 版题/刊头头条 · display hero 数字（一律 mono + tabular-nums） */
+  --text-micro: 10px;
+  --text-meta: 11px;
+  --text-detail: 12px;
+  --text-body: 13px;
+  --text-title: 15px;
+  --text-title--line-height: 1.3;
+  --text-title--letter-spacing: -0.01em;
+  --text-display: 22px;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.02em;
+  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.32);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.3);
   --transition-duration-fast: 120ms;
   --transition-duration-normal: 200ms;
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --animate-breathe: breathe 2.6s ease-in-out infinite;
   --animate-attention: attention 1.8s ease-out infinite;
   --animate-tip-in: tip-in 120ms ease-out both;
+  --animate-enter: enter 200ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-hop: hop 420ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  --animate-num-in: num-in 160ms ease-out both;
+  --animate-drift: drift var(--drift-dur, 8s) ease-in-out var(--drift-delay, 0s) infinite;
+  --animate-hero-breathe: hero-breathe 4.5s ease-in-out infinite;
 
   @keyframes tip-in {
     from { opacity: 0; }
@@ -59,39 +80,135 @@
     70% { box-shadow: 0 0 0 6px transparent; }
     100% { box-shadow: 0 0 0 0 transparent; }
   }
+
+  /* 版块入场：上浮 6px 淡入，父级按序 inline animation-delay 错峰 */
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 栖枝鸟跳：状态切换瞬间的短促起落（key remount 驱动） */
+  @keyframes hop {
+    0% { transform: translateY(0); }
+    30% { transform: translateY(-3px); }
+    55% { transform: translateY(0.6px); }
+    100% { transform: translateY(0); }
+  }
+
+  /* 数字转轮：新值从下方滑入，容器 overflow-hidden 裁出机芯感 */
+  @keyframes num-in {
+    from { opacity: 0; transform: translateY(45%); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 椋鸟群游动：每点 --dx/--dy/--drift-* 变量错峰漂移 */
+  @keyframes drift {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(var(--dx, 0px), var(--dy, 0px)); }
+  }
+
+  /* waiting 头条的琥珀环境光：4.5s 慢呼吸，静水深流 */
+  @keyframes hero-breathe {
+    0%, 100% { opacity: 0.45; }
+    50% { opacity: 1; }
+  }
 }
 
+/* 主题无关的基础变量：字体栈可被设置页自定义字体覆盖（appearance.ts 写
+   --font-sans-stack / --font-mono-stack，prepend 到系统栈前，缺失自然回退）。 */
 :root {
-  --background: #f2ede3;
-  --raised: #faf7ef;
-  --card: #fffdf9;
-  --muted: #eae4d7;
-  --hairline: rgba(49, 43, 37, 0.14);
-  --foreground: #2b2622;
-  --muted-foreground: #746c63;
-  --faint: #a79d90;
-  --accent: #c66b4b;
-  --status-working: #2f7f6e;
-  --status-waiting: #b57f1e;
-  --status-waiting-glow: rgba(181, 127, 30, 0.26);
-  --status-idle: #9a9189;
-  --status-stale: #b9504a;
-  --status-ended: #b3aba2;
-  --agent-kimi: #9569cf;
-  --agent-zcode: #5365d3;
-  --agent-opencode: #359b7d;
-  --agent-codex: #302c29;
-  --agent-cursor: #b68447;
-  --chart-1: #2f7f6e;
-  --chart-2: #5365d3;
-  --chart-3: #9569cf;
-  --chart-4: #c66b4b;
-  --chart-5: #359b7d;
-  --chart-6: #b68447;
-  --chart-7: #8f857c;
+  --font-sans-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+  --font-mono-stack: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
   /* skill 契约的动效时长：组件用 duration-fast / duration-normal（由 @theme 生成） */
   --motion-fast: 120ms;
   --motion-normal: 200ms;
+  /* 玻璃 chrome 覆盖层高度：刊头/底栏 absolute 浮于滚动区之上，
+     main 用 padding 让位——改动刊头内容后同步校此值 */
+  --chrome-top: 114px;
+  --chrome-bottom: 46px;
+}
+
+/* ── 深色：近黑底 + 灰阶递进，accent=前景色（单色交互） ── */
+:root,
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0a0a;
+  --raised: #141414;
+  --card: #1a1a1a;
+  --muted: #242424;
+  --overlay: #242428;
+  --hairline: rgba(255, 255, 255, 0.1);
+  --foreground: #ededed;
+  --muted-foreground: #a1a1a1;
+  --faint: #6e6e6e;
+  --accent: var(--foreground);
+  --status-working: #4cc38a;
+  --status-waiting: #f5a524;
+  --status-waiting-glow: rgba(245, 165, 36, 0.3);
+  --status-idle: #525252;
+  --status-stale: #e5484d;
+  --status-ended: #404040;
+  /* 破坏性操作色：与 status 红同色相，语义独立（删除确认态专用，不进状态色）。 */
+  --destructive: var(--status-stale);
+  --destructive-foreground: #fff;
+  --agent-kimi: #a78bfa;
+  --agent-zcode: #6e8cfb;
+  --agent-opencode: #3fa97f;
+  --agent-codex: #c9cdd6;
+  --agent-cursor: #d9a55f;
+  /* devin：珊瑚朱——Cognition/Devin 品牌暖色，与 cursor 琥珀/zcode 蓝拉开色相。 */
+  --agent-devin: #f0765c;
+  /* qoder：芽绿——Qoder 品牌绿，比 opencode 的翡翠绿更偏黄提亮度。 */
+  --agent-qoder: #9ccc65;
+  /* 热力图密度色：暖橙单色相 ramp（用量密度语义，非「谁」非状态） */
+  --heat: #f0763f;
+  --chart-1: #ededed;
+  --chart-2: #4cc38a;
+  --chart-3: #a78bfa;
+  --chart-4: #d9a55f;
+  --chart-5: #4ea7fc;
+  --chart-6: #e5484d;
+  --chart-7: #6e6e6e;
+}
+
+/* ── 浅色：近白底 + 灰阶递进；状态/agent 色加深保证对比度 ── */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #fafafa;
+  --raised: #f2f2f2;
+  --card: #ffffff;
+  --muted: #ebebeb;
+  --overlay: #ffffff;
+  --hairline: rgba(0, 0, 0, 0.08);
+  --foreground: #171717;
+  --muted-foreground: #666666;
+  --faint: #a1a1a1;
+  --accent: var(--foreground);
+  --status-working: #30a46c;
+  --status-waiting: #ad5700;
+  --status-waiting-glow: rgba(173, 87, 0, 0.25);
+  --status-idle: #9c9c9c;
+  --status-stale: #d93036;
+  --status-ended: #b8b8b8;
+  --destructive: var(--status-stale);
+  --destructive-foreground: #fff;
+  --agent-kimi: #7c3aed;
+  --agent-zcode: #2563eb;
+  --agent-opencode: #1f8a5f;
+  --agent-codex: #525252;
+  --agent-cursor: #b07d2b;
+  --agent-devin: #d4553d;
+  --agent-qoder: #558b2f;
+  --heat: #e8542a;
+  --chart-1: #171717;
+  --chart-2: #30a46c;
+  --chart-3: #7c3aed;
+  --chart-4: #b07d2b;
+  --chart-5: #0a7ea4;
+  --chart-6: #d93036;
+  --chart-7: #a1a1a1;
+  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
 }
 
 html,
@@ -108,9 +225,15 @@ body {
   background: transparent;
 }
 
+/* WKWebView 的文档级滚动看 documentElement：html 一并封死，顺带禁掉橡皮筋回弹 */
+html {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   color: var(--foreground);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
+  font-family: var(--font-sans);
   font-size: 13px;
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -124,7 +247,7 @@ a {
 
 button:focus-visible,
 a:focus-visible {
-  outline: 2px solid var(--status-working);
+  outline: 2px solid color-mix(in oklab, var(--foreground) 45%, transparent);
   outline-offset: 2px;
 }
 
@@ -135,21 +258,8 @@ a:focus-visible {
   background: var(--background);
 }
 
-/* 纸感颗粒：极淡的灰度噪点 multiply 叠在整面上（含文字），模拟纸面纤维。
-   opacity 压到 0.04 以下只留触感、不伤可读性。 */
-#app::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 60;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  mix-blend-mode: multiply;
-  opacity: 0.035;
-}
-
 ::selection {
-  background: var(--muted);
+  background: color-mix(in oklab, var(--foreground) 20%, transparent);
 }
 
 @utility text-accent {
@@ -177,9 +287,18 @@ a:focus-visible {
   color: var(--card);
 }
 
-.mark-shell {
-  background: var(--foreground);
-  color: var(--card);
+/* 浮层专属玻璃：chrome 级（吸顶刊头/底栏）与 overlay 级（浮卡）两档。
+   混合比本身已够暗——backdrop-filter 失效时仍可读，天然优雅降级。 */
+@utility glass-chrome {
+  background: color-mix(in oklab, var(--background) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.7);
+  backdrop-filter: blur(16px) saturate(1.7);
+}
+
+@utility glass-overlay {
+  background: color-mix(in oklab, var(--overlay) 80%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.5);
+  backdrop-filter: blur(10px) saturate(1.5);
 }
 
 .setup-row {
@@ -202,10 +321,12 @@ a:focus-visible {
   flex: 1;
 }
 
+/* 中文栏目头：uppercase/宽 tracking 是西文词汇，对汉字只是「小灰字」——
+   层级交给字重(600)+灰度+间距，tracking 收敛到 0.05em 仅松行气。 */
 .eyebrow {
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
 }
 
 .setup-intro {
@@ -219,6 +340,8 @@ a:focus-visible {
 [data-agent="opencode"] { --accent: var(--agent-opencode); }
 [data-agent="codex"] { --accent: var(--agent-codex); }
 [data-agent="cursor"] { --accent: var(--agent-cursor); }
+[data-agent="devin"] { --accent: var(--agent-devin); }
+[data-agent="qoder"] { --accent: var(--agent-qoder); }
 
 @media (prefers-reduced-motion: reduce) {
   *,

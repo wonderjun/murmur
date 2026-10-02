@@ -10,6 +10,6 @@
     "build": "cd apps/desktop && hutch run build",
     "test": "bun test packages/core",
     "typecheck": "cd packages/core && bunx tsc --noEmit",
-    "typecheck:desktop": "cd apps/desktop && bunx vue-tsc --noEmit"
+    "typecheck:desktop": "cd apps/desktop && bunx tsc --noEmit"
   }
 }

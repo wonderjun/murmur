@@ -4,8 +4,7 @@
 
 import type { RPCSchema } from "electrobun/main";
 
-import type { AppSnapshot } from "@core/types";
-import type { AgentId } from "@core/types";
+import type { AgentId, AppSnapshot, SessionDeleteResult, StoredSession } from "@core/types";
 import type { MurmurSettings } from "@core/settings";
 
 /** usageDaily 行（天 × agent × model 聚合明细）。 */
@@ -54,8 +53,26 @@ export type MurmurRPC = {
       setAgentHook: { params: { agent: AgentId; enabled: boolean }; response: SettingsSnapshot };
       /** 设置页：单个 agent 的监听总开关（关=停 watch + 卸 hook + 面板隐藏）。 */
       setAgentObserved: { params: { agent: AgentId; enabled: boolean }; response: SettingsSnapshot };
+      /** 设置页 BYOK：写/清某 agent 的自填 API Key（apiKey 空即清除）。key 只进 credentials.json，不回传明文。 */
+      setAgentKey: {
+        params: { agent: AgentId; apiKey: string | null; baseUrl?: string };
+        response: SettingsSnapshot;
+      };
+      /** webview 输入框粘贴兜底：无 Edit 菜单时 ⌘/⌃V 到不了 WKWebView，JS 侧改走主进程读剪贴板。 */
+      readClipboard: { params: {}; response: { text: string | null } };
       /** 清空台账与游标，pull watcher 下轮全量重扫。 */
       rebuildLedger: { params: {}; response: { ok: true } };
+      /** 打开会话文件管理窗口（已开则聚焦）。 */
+      openSessions: { params: {}; response: { ok: true } };
+      /** 盘点全部 agent 的磁盘会话产物。 */
+      scanSessions: { params: {}; response: { items: StoredSession[]; scannedAt: number } };
+      /** 批量删除：fs 产物进废纸篓、库内行永久删；per-item 回报。 */
+      deleteSessions: {
+        params: { items: { agent: AgentId; id: string }[] };
+        response: { results: SessionDeleteResult[] };
+      };
+      /** 在 Finder 中定位会话的首个磁盘产物。 */
+      revealSession: { params: { agent: AgentId; id: string }; response: { ok: boolean } };
       /** Finder 打开 ~/.murmur 数据目录。 */
       openDataDir: { params: {}; response: { ok: true } };
       quitApp: { params: {}; response: { ok: true } };

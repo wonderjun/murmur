@@ -5,18 +5,18 @@
  * （ingest 服务 + 各 agent watcher + 状态机），通过 RPC 向 webview
  * 推送快照。单进程、无守护、退出即全停。
  *
- * 坐标系注意（实测）：tray.getBounds() 返回 AppKit 左下原点坐标，
- * 而 BrowserWindow.setPosition 用左上原点逻辑坐标——面板锚定要经
- * mainScreenFrame() 换算：y_tl = screenH - bounds.y + gap。
+ * 坐标系注意（实测）：tray.getBounds() 返回 AppKit 主屏左下原点坐标，
+ * 而 BrowserWindow.setPosition / Screen.* 用左上原点逻辑坐标——面板锚定
+ * 换算：y_tl = primaryH - bounds.y + gap，x 直接可用；多屏以光标屏钳位。
  *
  * 设置副作用：Dock 显隐与 LaunchAgent 自启在 system.ts；waiting 通知
  * 在 onChange 里按 sessionId 集合 diff，首个快照作基线防回填轰炸。
  */
 
-import { BrowserView, BrowserWindow, Tray, Updater, Utils } from "electrobun/main";
+import { BrowserView, BrowserWindow, Screen, Tray, Updater, Utils } from "electrobun/main";
+import { setApplicationMenu } from "electrobun/main/app-menu";
 
 import { AgentRegistry, migrateLegacyHome, MURMUR_HOME } from "../../../../packages/core/src/index";
-import { mainScreenFrame } from "../../../../packages/core/src/notch/screen";
 
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
 import {
@@ -124,9 +124,28 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
         await registry.setAgentObserved(agent, enabled);
         return settingsSnapshot();
       },
+      setAgentKey: async ({ agent, apiKey, baseUrl }) => {
+        await registry.setAgentKey(agent, apiKey, baseUrl);
+        return settingsSnapshot();
+      },
+      readClipboard: () => ({ text: Utils.clipboardReadText() }),
       rebuildLedger: () => {
         registry.rebuildLedger();
         return { ok: true as const };
+      },
+      openSessions: () => {
+        openSessionsWindow();
+        return { ok: true as const };
+      },
+      scanSessions: async () => ({ items: await registry.scanSessions(), scannedAt: Date.now() }),
+      deleteSessions: async ({ items }) => ({
+        // 文件类产物一律进废纸篓（可恢复）；库内行由 adapter 自行事务删。
+        results: await registry.deleteSessions(items, (p) => Utils.moveToTrash(p)),
+      }),
+      revealSession: async ({ agent, id }) => {
+        const [p] = await registry.sessionPaths(agent, id);
+        if (p) Utils.showItemInFolder(p);
+        return { ok: Boolean(p) };
       },
       openDataDir: () => {
         Utils.showItemInFolder(MURMUR_HOME);
@@ -142,6 +161,32 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
 });
 
 const url = await resolveMainViewUrl();
+
+/** 会话文件页与面板同 bundle：#/files hash 分流（dev server 需补 / 前缀）。 */
+function sessionsViewUrl(): string {
+  return url.startsWith("http") ? `${url}/#/files` : `${url}#/files`;
+}
+
+/** 会话文件管理窗：独立页面容器（popover 失焦即收起的语义不适用于管理操作）。 */
+let sessionsWin: BrowserWindow<typeof rpc> | null = null;
+function openSessionsWindow() {
+  if (sessionsWin) {
+    sessionsWin.show();
+    return;
+  }
+  sessionsWin = new BrowserWindow<typeof rpc>({
+    title: "Murmur 会话文件",
+    url: sessionsViewUrl(),
+    rpc,
+    titleBarStyle: "hiddenInset",
+    styleMask: { Closable: true, Miniaturizable: true, Resizable: true },
+    // 缺省 x/y → 系统居中。
+    frame: { width: 780, height: 560 },
+  });
+  sessionsWin.on("close", () => {
+    sessionsWin = null;
+  });
+}
 
 const panel = new BrowserWindow<typeof rpc>({
   // 标题必须为空：Titled 窗口的标题文字会画在面板顶部（2026-09 实测）。
@@ -162,6 +207,33 @@ const panel = new BrowserWindow<typeof rpc>({
   },
   frame: { x: 0, y: 0, width: PANEL_WIDTH, height: PANEL_HEIGHT },
 });
+
+// 全屏 Space 就地弹出：canJoinAllSpaces 让窗口属于所有 Space（含其他应用的全屏
+// Space），show() 激活时 macOS 不再切屏；floating 层级压过全屏应用内容。
+// 对照 flow-desktop/electron 同款处理（setVisibleOnAllWorkspaces + alwaysOnTop）。
+panel.setVisibleOnAllWorkspaces(true);
+panel.setAlwaysOnTop(true);
+
+// macOS 的编辑快捷键（⌘V/⌘C/⌘A 等）由主菜单的 keyEquivalent 派发到第一响应者——
+// 菜单栏伴侣默认没有应用菜单，WKWebView 输入框里粘贴/全选全废（Electron 同款坑）。
+// role 项走原生 NSResponder selector（paste:/copy:…），webview 零 JS 介入；
+// 隐藏条目补 Ctrl+V → paste，兼容非 mac 习惯的按法。
+setApplicationMenu([
+  { label: "Murmur", submenu: [{ role: "quit", accelerator: "CommandOrControl+Q" }] },
+  {
+    label: "Edit",
+    submenu: [
+      { role: "undo", accelerator: "CommandOrControl+Z" },
+      { role: "redo", accelerator: "CommandOrControl+Shift+Z" },
+      { type: "divider" },
+      { role: "cut", accelerator: "CommandOrControl+X" },
+      { role: "copy", accelerator: "CommandOrControl+C" },
+      { role: "paste", accelerator: "CommandOrControl+V" },
+      { role: "selectAll", accelerator: "CommandOrControl+A" },
+      { role: "paste", accelerator: "Control+V", hidden: true },
+    ],
+  },
+]);
 
 // 失焦即收起（popover 语义）。记录收起时刻，供托盘点击判竞态。
 let hiddenAt = 0;
@@ -224,15 +296,26 @@ function maybeNotifyWaiting() {
 
 function showPanel() {
   const b = tray.getBounds();
-  const f = mainScreenFrame();
-  if (b && b.width > 0 && f) {
-    // bounds 是左下原点：面板顶缘贴菜单栏下缘 = screenH - bounds.y + gap。
-    // 托盘在屏右缘（最右图标/刘海旁）时居中会出屏，右缘也钳住。
+  // 定位以光标所在屏为准：多屏/全屏 Space 下 tray.getBounds() 可能返回另一块屏
+  // 的菜单栏坐标（flow-desktop 同款教训）；光标在点托盘时必处目标屏。
+  // AppKit bounds 是主屏左下原点全局坐标 → 左上原点逻辑坐标：x 同轴、
+  // y_tl = 主屏高 - b.y。
+  const primary = Screen.getPrimaryDisplay();
+  const cursor = Screen.getCursorScreenPoint();
+  const display =
+    Screen.getAllDisplays().find(
+      (d) =>
+        cursor.x >= d.bounds.x &&
+        cursor.x < d.bounds.x + d.bounds.width &&
+        cursor.y >= d.bounds.y &&
+        cursor.y < d.bounds.y + d.bounds.height,
+    ) ?? primary;
+  if (b && b.width > 0 && primary.bounds.height > 0 && display.bounds.width > 0) {
     const x = Math.min(
-      Math.max(8, Math.round(b.x + b.width / 2 - PANEL_WIDTH / 2)),
-      f.x + f.w - PANEL_WIDTH - 8,
+      Math.max(display.bounds.x + 8, Math.round(b.x + b.width / 2 - PANEL_WIDTH / 2)),
+      display.bounds.x + display.bounds.width - PANEL_WIDTH - 8,
     );
-    const y = Math.max(6, Math.round(f.h - b.y + 6));
+    const y = Math.max(display.bounds.y + 6, Math.round(primary.bounds.height - b.y + 6));
     panel.setPosition(x, y);
   }
   panel.show();
