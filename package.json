@@ -1,9 +1,24 @@
 {
   "name": "murmur",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Murmur — menu-bar status companion for AI coding agents.",
+  "license": "MIT",
+  "author": "wangjun <chen-wang-jun@foxmail.com> (https://github.com/chen-wang-jun)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chen-wang-jun/murmur.git"
+  },
+  "bugs": "https://github.com/chen-wang-jun/murmur/issues",
+  "homepage": "https://github.com/chen-wang-jun/murmur#readme",
+  "keywords": [
+    "menubar",
+    "ai-agents",
+    "macos",
+    "electrobun",
+    "status-monitor"
+  ],
   "scripts": {
     "dev": "cd apps/desktop && hutch run dev",
     "dev:hmr": "cd apps/desktop && hutch run dev:hmr",

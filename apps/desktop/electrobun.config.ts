@@ -4,7 +4,7 @@ export default {
   app: {
     name: "Murmur",
     identifier: "dev.murmur.app",
-    version: "0.1.0",
+    version: "0.1.1",
   },
   build: {
     mainProcess: "bun",
