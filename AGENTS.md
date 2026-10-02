@@ -5,8 +5,8 @@
 ## 技术栈
 
 - 桌面壳：Electrobun（`apps/desktop`），**Bun 主进程** + 系统 webview（无 Node 运行时、无 CEF）
-- UI：Vue 3 `<script setup>` + reka-ui + Tailwind CSS v4（`src/mainview`）
-- 引擎：`packages/core`（`@murmur/core`，纯 TS、零运行时依赖，禁止 import electrobun/vue/DOM；`bun test` 可独立跑）
+- UI：React 19 + shadcn/ui（radix-ui 底层）+ Zustand + Tailwind CSS v4（`src/mainview`）
+- 引擎：`packages/core`（`@murmur/core`，纯 TS、零运行时依赖，禁止 import electrobun/react/DOM；`bun test` 可独立跑）
 - 存储：`bun:sqlite`（`~/.murmur/murmur.db`，WAL）
 - 构建：`hutch`（`~/.hutch/bin` 需在 PATH）
 
@@ -21,7 +21,7 @@ bun run dev:hmr        # 带 vite HMR 的开发模式（vite@5173 + app 本体�
 bun run build          # 出稳定包
 bun run test           # core 引擎测试（bun test packages/core）
 bun run typecheck      # core 类型检查（tsc --noEmit）
-bun run typecheck:desktop  # 桌面端类型检查（vue-tsc，覆盖 webview + bun 主进程）
+bun run typecheck:desktop  # 桌面端类型检查（tsc --noEmit，覆盖 webview + bun 主进程）
 ```
 
 首次：`cd apps/desktop && hutch install && hutch electrobun sync && hutch run dev`。
@@ -32,20 +32,22 @@ bun run typecheck:desktop  # 桌面端类型检查（vue-tsc，覆盖 webview + 
 packages/core/src/
   types.ts          全链路类型契约：AgentId / AgentStatus / AgentEvent / AppSnapshot（改动需双端同步）
   paths.ts          各 agent 本机目录解析器（env 可覆盖，见「坑」）
-  agents/           5 个 adapter（kimi / zcode / opencode / codex / cursor），把各家私有格式翻译成 AgentEvent
+  agents/           7 个 adapter（kimi / zcode / opencode / codex / cursor / devin / qoder），把各家私有格式翻译成 AgentEvent；
+                    <id>/files.ts 会话产物盘点/删除（清理页数据源；trash 回调由主进程注入）
     base.ts         AgentAdapter 接口（detect/installHooks/watch/quota 能力面全可选）+ JsonlTailer + pick()
   engine/           registry.ts 组装根（定时器/快照/广播）+ status-engine.ts 会话状态机
   ingest/           server.ts（Bun.serve，token 鉴权）+ endpoint.ts（~/.murmur/endpoint）+ spool.ts（离线补投）
   ledger/           db.ts（bun:sqlite 台账、游标、聚合）+ pricing.ts（内置价表估成本）
   hooks/            script.ts（POSIX sh 上报脚本模板）+ install.ts（merge* 合并安装 / unmerge* 卸载，只认脚本路径判归属）
-  settings.ts       用户设置（~/.murmur/settings.json）：自启/Dock/通知 + agents[]/hooks[] 两级开关，缺省皆 true
+  settings.ts       用户设置（~/.murmur/settings.json）：自启/Dock/通知 + 外观（theme/font）+ agents[]/hooks[] 两级开关，缺省皆 true
+  credentials.ts    BYOK 凭据（~/.murmur/credentials.json，0600）：用户自填 API Key，永不进 settings/RPC（对外只有 maskKey 掩码）
   migrate.ts        perch→murmur 一次性迁移（家目录搬迁 + 旧制品清扫，幂等，主进程启动时调用）
-  quota/            kimi.ts / codex.ts（官方用量端点 client）+ common.ts（超时 fetch / 降级件）
+  quota/            kimi.ts / codex.ts / zcode.ts / cursor.ts / devin.ts（官方用量端点 client）+ common.ts（超时 fetch / 降级件）
 apps/desktop/
   src/bun/index.ts  主进程：tray + 透明面板 + registry 组装 + RPC 推送（唯一桌面 API 入口）
   src/bun/system.ts Dock 显隐（Utils.setDockIconVisible）+ 自启（~/Library/LaunchAgents plist）
   src/shared/rpc.ts 双端 RPC 契约 MurmurRPC
-  src/mainview/     Vue webview：store/murmur.ts（Pinia）+ components/ + app.css（design token 唯一真源）
+  src/mainview/     React webview：store/murmur.ts（Zustand）+ components/*.tsx + components/ui/（shadcn 生成件）+ lib/appearance.ts（主题/字体应用）+ app.css（design token 唯一真源，暗/亮双主题）
 .agent/skill/       code-style（代码风格）、ui-design（视觉契约）两份规范，写码前必读
 ```
 
@@ -58,14 +60,16 @@ apps/desktop/
   → adapter 翻译成归一化 AgentEvent（types.ts）
   → Ledger 落库 + StatusEngine 状态机
   → AgentRegistry 组装 AppSnapshot（80ms 去抖广播）
-  → RPC messages.snapshot → Pinia store → 组件渲染
+  → RPC messages.snapshot → Zustand store → 组件渲染
 ```
 
 ### 三平面采集
 
 - **Push**：hook 脚本（`hooks/script.ts` 生成，落 `~/.murmur/agent-hooks/<agent>.sh`）POST `http://127.0.0.1:<随机端口>/hook/<agent>`，`X-Murmur-Hook-Token` 鉴权。脚本铁约：stdout 只吐 `{}`（不干预 agent 决策链；**kimi 例外用 `stdoutAck:false` 完全不吐**——UserPromptSubmit 的 stdout 会被注进用户上下文）、stdin/argv 双兼容、失败追加 spool（`~/.murmur/spool/<agent>.jsonl`，单文件 5MiB 上限）、**任何分支都 exit 0**。spool 启动时 + 每 60s 补投。cursor 的 `hooks.json` 条目必须用**直挂** `{command,timeout}` 形状 + 顶层 `version:1`——嵌套 `{"hooks":[...]}` 组形状只有 IDE 跑，cursor-agent CLI 不触发（CLI 也只发 sessionStart/stop/postToolUse 等子集）。kimi 的 `[[hooks]]` 是 TOML 数组表（0.41 实测）：走 `mergeTomlHooks` 行扫合并、EOF 追加、只认脚本路径判归属；payload 恒带 `session_id`/`cwd` 但**无 usage**。codex 双通道：`hooks.json` 官方 12 生命周期事件（matcher-group 包 command handler，`mergeCodexHooks` 合并、handler 带 `async:true`；**非 managed hook 需用户 /hooks trust**，装好≠生效）+ `config.toml` legacy `notify`（免 trust、仅 agent-turn-complete）兜底；hook payload 的 sessionId 优先取 `transcript_path` 文件名尾段 uuid 与 pull 平面对齐。
-- **Pull**：kimi watch `wire.jsonl`（fs.watch + 5s 兜底重扫）——push 已接管状态面后，pull 专职 `usage.record` token 台账（hook payload 无 token，实测）、`state.json` title、回填与未装 hook 会话的兜底；zcode 轮询 `v2/tasks-index.sqlite` + tail `model-io-*.jsonl`（行 ~300KB 走 `tailRaw` + `json-span` 定向提取，不物化 request 全文）；opencode 按 rowid 游标轮询 `opencode.db` 的 `event` 表并独掌 usage 台账（push 插件在 translateHook 剥离 usage 防双通道重记）——`part` 无 model 字段，usage 经 `message` 表 join 补 modelID（message.updated 行顺路喂 cache）；`session.status` 载荷 v1.x 是 `{type}` 对象、旧版裸字符串，两形兼容；db 缺失的 pre-sqlite 旧版回退 `agents/opencode/legacy.ts` 扫 `storage/message` JSON 按 msgID 记 delta；插件只转白名单事件（流式 part chunk 不 POST）；codex tail `rollout-*.jsonl`；cursor tail `projects/*/agent-transcripts/**.jsonl`（行内无时间戳/token，at 取文件 mtime，subagents 归并父会话）+ 轮询 `chats/*/meta.json` 探 CLI 会话活性（updatedAtMs 启发式）。增量游标存台账 `cursors` 表（`jsonl:<path>` → 字节偏移）。JSONL 增量统一走 `JsonlTailer`（半行缓存、截断归零）。zcode 另有可选 push：合并 `cli/config.json` 的 `hooks.events` 七事件（command+async 旁路，`hooks.enabled` 显式 false 不抢），补 approval 与实时 turn.end——usage/session.end 仍只能 pull。
-- **Quota**：本地凭据调官方用量端点（kimi `/usages`、codex 优先 `codex app-server` 官方 JSON-RPC——`account/rateLimits/read` oneshot 即走、登录态由 codex 本体管，失败回落 wham/usage 直读 `auth.json`、cursor `cursor.com/api/usage-summary`——凭据是 IDE `state.vscdb` 里的 `cursorAuth/accessToken` JWT，拼 `WorkosCursorSessionToken` cookie 鉴权，CLI `auth.json` 兜底），8s 超时，10 分钟一轮 + UI 手动触发；失败静默降级 unavailable 并回退上次快照。**凭据严格只读、绝不代刷**（见禁区）。
+- **Push 补充——devin**：merge `~/.config/devin/config.json` 的 `hooks` 键（Claude Code 兼容 matcher-group：`{hooks:[{type:command,command,timeout:10}]}`，不带 async——schema 未文档化该字段），8 事件全挂；payload 带 `hook_event_name`/`session_id`/`prompt_id`。只覆盖**本地**会话：云端会话的 command hook 跑在云机上。
+- **Push 补充——qoder**：merge `~/.qoder/settings.json` 的 `hooks` 键（Claude 兼容 matcher-group，`mergeQoderHooks`；条目带 `async:true`），19 事件覆盖生命周期+工具+审批+Elicitation（等输入→waiting:question）；payload 带 `session_id`/`transcript_path`/`cwd`。settings.json 是共享配置（providers 含用户 key），只碰 hooks 子树。官方明示改配置即生效、无 trust 门槛；stdout `{}` 是合法 JSON 不被注入（仅 SessionStart/UserPromptSubmit 注入纯文本）。新 Qoder 桌面端（com.qoder.app）跑内嵌 qodercli runtime，与 CLI 共用 `~/.qoder` 数据根——同一份 sessionId 同时进 transcript 与 app 台账，CLI 会话自然搭车，不拆条目。
+- **Pull**：kimi watch `wire.jsonl`（fs.watch + 5s 兜底重扫）——push 已接管状态面后，pull 专职 `usage.record` token 台账（hook payload 无 token，实测）、`state.json` title、回填与未装 hook 会话的兜底；zcode 轮询 `v2/tasks-index.sqlite` + tail `model-io-*.jsonl`（行 ~300KB 走 `tailRaw` + `json-span` 定向提取，不物化 request 全文）；opencode 按 rowid 游标轮询 `opencode.db` 的 `event` 表并独掌 usage 台账（push 插件在 translateHook 剥离 usage 防双通道重记）——`part` 无 model 字段，usage 经 `message` 表 join 补 modelID（message.updated 行顺路喂 cache）；`session.status` 载荷 v1.x 是 `{type}` 对象、旧版裸字符串，两形兼容；db 缺失的 pre-sqlite 旧版回退 `agents/opencode/legacy.ts` 扫 `storage/message` JSON 按 msgID 记 delta；插件只转白名单事件（流式 part chunk 不 POST）；codex tail `rollout-*.jsonl`；cursor tail `projects/*/agent-transcripts/**.jsonl`（行内无时间戳/token，at 取文件 mtime，subagents 归并父会话）+ 轮询 `chats/*/meta.json` 探 CLI 会话活性（updatedAtMs 启发式）。增量游标存台账 `cursors` 表（`jsonl:<path>` → 字节偏移）。JSONL 增量统一走 `JsonlTailer`（半行缓存、截断归零）。zcode 另有可选 push：合并 `cli/config.json` 的 `hooks.events` 七事件（command+async 旁路，`hooks.enabled` 显式 false 不抢），补 approval 与实时 turn.end——usage/session.end 仍只能 pull。devin 轮询 `cli/sessions.db`（sessions 表 title/cwd/model/秒级 `last_activity_at`）做建档+活性启发式、`transcripts/*.json` 的 `final_metrics` 按 ledger 游标 delta 记 token 台账（覆盖不全仅辅助）；`session_locks/*.lock` 陈旧 PID 锁太多不作判据；BYOK `cog_` key 在场时每 60s 轮询 v3 sessions 补**云端**会话态（hook 够不到云机）。注意 hook payload 的 `session_id` 与 sessions.db 的 slug `id` 是否同口径未实测确认，不一致时同会话会并存两条目。qoder 双通道：tail `projects/**/*.jsonl`（Claude 兼容行，带 ISO timestamp + `message.usage` 全量 token + `ai-title`，是唯一计量源；user 行要滤 tool_result 回填块、isSidechain 只心跳）+ 只读轮询 app `main.sqlite`（`com.qoder.app.stable`）的 `chat_sessions` 注册表（title/cwd/model/`updated_at` 活性启发式，`deleted_at`→session.end 一次性）与 `chat_session_turn_states` 瞬态表（有行即 working）。
+- **Quota**：本地凭据调官方用量端点（kimi `/usages`、codex 优先 `codex app-server` 官方 JSON-RPC——`account/rateLimits/read` oneshot 即走、登录态由 codex 本体管，失败回落 wham/usage 直读 `auth.json`、cursor `cursor.com/api/usage-summary`——凭据是 IDE `state.vscdb` 里的 `cursorAuth/accessToken` JWT，拼 `WorkosCursorSessionToken` cookie 鉴权，CLI `auth.json` 兜底），8s 超时，10 分钟一轮 + UI 手动触发；失败静默降级 unavailable 并回退上次快照。**凭据严格只读、绝不代刷**（见禁区）。**BYOK**：本地凭据加密不可读的 agent（zcode 的 enc:v1）走用户自填 API Key——存 `credentials.json`（0600），`registry.setAgentKey` 写入并即拉；`quota?(byok)` 签名收凭据、实现方自定优先级；adapter `supportsByok` 让设置页出输入行。zcode 端点 `{base}/api/monitor/usage/quota/limit`（unit3→5h / unit6→每周、TIME_LIMIT unit5→MCP 月度，level=套餐档；type 双形：国际站 TOKENS_LIMIT、中国站实测 CREDIT_LIMIT，条目字段 usage=上限/currentValue=已用/remaining=剩余），base 解析序：手动 baseUrl → `coding-plan-cache.json` entitlement 嗅探（bigmodel→open.bigmodel.cn / zai→api.z.ai）→ api.z.ai。devin 双通道：本机 `credentials.toml` 的 `windsurf_api_key` 打 `server.codeium.com` Connect RPC `SeatManagementService/GetUserStatus`（JSON 媒体类型，metadata 需带 apiKey/ideName/requestId 等）→ 日/周 `*QuotaRemainingPercent`（剩余语义，换算 usedPct）+ reset 时间 + planName + `devinInfo.orgId`——该凭据打 api.devin.ai 实测 403，受众不同；BYOK `cog_`（PAT 或 service user key）→ `v3/organizations/{org}/consumption/daily`（org 嗅探序 config.json `devin.org_id`→user_status）补「最近一日/近30日 ACU」窗口——ACU 是计量计费无上限，limit 恒缺省；org 缺失回落 `/v3/enterprise/consumption/daily`（需企业套餐）。拉取门槛 `hasCredentials || byok 有 key`。qoder 暂无 quota：`.auth/user` 加密 blob 读不了，`/api/v2/quota/usage` 需 bearer——`QODER_PERSONAL_ACCESS_TOKEN` PAT 是官方 BYOK 通路候选（未实测）。
 
 ### 回填语义（pull 平面的灵魂）
 
@@ -86,15 +90,15 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 
 ### 主进程与通信
 
-`apps/desktop/src/bun/index.ts`：tray（标题 `◆n`（waiting）/ `●n`（working）聚合态，只能用默认文本渲染的几何字形，emoji 会在菜单栏变彩色、破坏单色体系；不放原生菜单，挂 menu 会接管左键点击）+ 392×600 面板（`titleBarStyle:"hiddenInset"` + 空标题 + 无按钮，标准窗口几何 + 全尺寸内容，系统圆角+阴影由系统裁——`titleBarStyle:"hidden"` 的无边框窗口在 macOS 26 露方形底板、`"default"` 会画出标题栏、`transparent:true` 关不掉方形原生阴影（2.0.1 无 hasShadow API），都不可用；失焦即 hide）+ RPC。bun 侧 requests：`getSnapshot / installHooks / hidePanel / refreshQuotas / usageDaily / getSettings / updateSettings / setAgentHook / setAgentObserved / rebuildLedger / openDataDir / quitApp`（quitApp 经 quitMurmur 保证 stop 失败也必 exit）；webview 侧 messages：`snapshot` 全量推送。UI 禁止直接摸 `window.electrobun`，一律走 `@/lib/rpc.ts` 的 `useRpc` 单例。四视图：live（动态）/ usage（用量）/ setup（接入）/ settings（设置）。
+`apps/desktop/src/bun/index.ts`：tray（标题 `◆n`（waiting）/ `●n`（working）聚合态，只能用默认文本渲染的几何字形，emoji 会在菜单栏变彩色、破坏单色体系；不放原生菜单，挂 menu 会接管左键点击）+ 392×600 面板（`titleBarStyle:"hiddenInset"` + 空标题 + 无按钮，标准窗口几何 + 全尺寸内容，系统圆角+阴影由系统裁——`titleBarStyle:"hidden"` 的无边框窗口在 macOS 26 露方形底板、`"default"` 会画出标题栏、`transparent:true` 关不掉方形原生阴影（2.0.1 无 hasShadow API），都不可用；失焦即 hide）+ RPC。bun 侧 requests：`getSnapshot / installHooks / hidePanel / refreshQuotas / usageDaily / getSettings / updateSettings / setAgentHook / setAgentObserved / setAgentKey / readClipboard / rebuildLedger / openSessions / scanSessions / deleteSessions / revealSession / openDataDir / quitApp`（quitApp 经 quitMurmur 保证 stop 失败也必 exit）；webview 侧 messages：`snapshot` 全量推送。另有一扇独立的会话文件管理窗（`#/files` hash 分流、780×560 可缩放，`openSessions` 幂等聚焦）：盘点各 CLI 磁盘会话产物、按工具/项目过滤、默认修改时间倒序、勾选批量删——文件/目录经 `Utils.moveToTrash` 进废纸篓，库内行（zcode/opencode/devin 的 sqlite）事务永久删并标 `needsVacuum`（删行不缩 .db，需对端压实才回收）；快照命中或 mtime 3min 内新鲜的会话标 `active` 禁删。UI 禁止直接摸 `window.electrobun`，一律走 `@/lib/rpc.ts` 的 `useRpc` 单例。四视图：live（动态）/ usage（用量）/ setup（接入）/ settings（设置）。
 
 ### 设置与开关（settings.ts + 设置页）
 
-`~/.murmur/settings.json` 是唯一真源（loadSettings/saveSettings 原子写、损坏回默认）。两级 per-agent 开关语义：**监听**（`agents[]`）是总闸——关闭即停 watcher、`ingest_` 丢事件、不拉额度、快照标 `disabled:true` 且不带会话/用量，并顺带卸载其 hook（用户 hooks 偏好保留，重开时回装）；**hook 上报**（`hooks[]`）只管 push 平面——关闭=unmerge* 真卸载我方条目（他人保留），观察退回 pull 轮询。两张表**缺省皆 true**（flagEnabled 约定），`autoInstallHooks`（默认开）让启动时自动装「监听中+已安装+hook 未关」的 agent。系统偏好：Dock 显隐经 `Utils.setDockIconVisible`（默认藏，accessory 策略）；自启写 `~/Library/LaunchAgents/<identifier>.plist`（`open -g <bundle>`），**只写不 bootstrap**——立即 load 会多起一个实例；dev channel 无 .app bundle，开关禁用。waiting 通知（默认关）按 sessionId 集合 diff，首快照作基线防回填轰炸，面板可见时静默。
+`~/.murmur/settings.json` 是唯一真源（loadSettings/saveSettings 原子写、损坏回默认）。两级 per-agent 开关语义：**监听**（`agents[]`）是总闸——关闭即停 watcher、`ingest_` 丢事件、不拉额度、快照标 `disabled:true` 且不带会话/用量，并顺带卸载其 hook（用户 hooks 偏好保留，重开时回装）；**hook 上报**（`hooks[]`）只管 push 平面——关闭=unmerge* 真卸载我方条目（他人保留），观察退回 pull 轮询。两张表**缺省皆 true**（flagEnabled 约定），`autoInstallHooks`（默认开）让启动时自动装「监听中+已安装+hook 未关」的 agent。系统偏好：Dock 显隐经 `Utils.setDockIconVisible`（默认藏，accessory 策略）；自启写 `~/Library/LaunchAgents/<identifier>.plist`（`open -g <bundle>`），**只写不 bootstrap**——立即 load 会多起一个实例；dev channel 无 .app bundle，开关禁用。waiting 通知（默认关）按 sessionId 集合 diff，首快照作基线防回填轰炸，面板可见时静默。外观：`theme`（system/dark/light，默认 system）与 `font`（自定义字体名，空=系统栈）只被 webview 消费——主进程不感知，`lib/appearance.ts` 把 theme 落到 `<html data-theme>`、font prepend 进 CSS 字体栈。
 
 ## 代码风格
 
-真源：`.agent/skill/code-style/SKILL.md`（写 TS/Vue 必读）、`.agent/skill/ui-design/SKILL.md`（动 UI 必读）。速查：
+真源：`.agent/skill/code-style/SKILL.md`（写 TS/TSX 必读）、`.agent/skill/ui-design/SKILL.md`（动 UI 必读）。速查：
 
 - 文件头：`/**` 块注释写「一句话职责 + 数据流/设计决策/实测事实」（如「v0.41 实测路径」）；导出符号一律单行中文 JSDoc；注释只写为什么与契约，不复述代码。
 - 命名：文件 kebab-case；类型 PascalCase 无 I 前缀；模块常量 UPPER_SNAKE_CASE；布尔 is/has/can/should 前缀；adapter 工厂 `createXxxAdapter()`、翻译函数 `translateXxx()`。
@@ -108,12 +112,13 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 |---|---|
 | 调用 agent 的凭据刷新端点、写 agent 凭据文件 | kimi 的 refresh token 是旋转式：代刷且不回写即作废 CLI 登录态（2026-09 实测事故）。token 过期就降级 unavailable，刷新永远属于 CLI 本体 |
 | 覆盖/重写用户 hook 配置文件 | 必须 `mergeJsonHooks` 合并 + `HOOK_MARKER` 幂等；本机可能有 orca/otty 等同类工具共存 |
-| `packages/core` import electrobun/vue/DOM API | core 纯 TS（bun test 可跑）；桌面能力只能在 `apps/desktop/src/bun` 用 |
+| `packages/core` import electrobun/react/DOM API | core 纯 TS（bun test 可跑）；桌面能力只能在 `apps/desktop/src/bun` 用 |
 | webview 摸 `window.electrobun` / 裸建 RPC | 经 `@/lib/rpc.ts` 的 `useRpc` 单例 |
 | hook 脚本非零退出、stdout 非 JSON | 必须 `exit 0`、stdout 只吐 `{}` |
 | 伪造成「现在」的时间戳 | 无时间戳的历史事件按 at=0 回填语义处理，绝不冒充当下 |
 | UI 裸色板 / hex / 任意 px 字号 | 语义 token；app.css 是 token 唯一真源；彩色只有 accent（谁）与 status（什么状态）；组件内禁止写死品牌色，accent 走 `data-agent` 属性 |
 | `any` | 具体类型；外部脏数据用 `as unknown as X` 收敛在 adapter 边界 |
+| BYOK key 进 settings.json / RPC 快照 / 日志 | settings.json 经 getSettings 整包发 webview——key 只进 credentials.json（0600），对外一律 maskKey 掩码 |
 
 规范文档与实现冲突时的仲裁：token/状态色以 `app.css` 为准，类型与 agent 集合以 `packages/core/src/types.ts` 为准，并顺手把 skill 改对。
 
@@ -123,10 +128,13 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 - 启动迁移（`migrate.ts`）幂等，但制品清扫经 agentPaths 改写各 agent 目录里的旧条目——迁移相关测试必须把 `MURMUR_CURSOR/CODEX/OPENCODE_*_HOME` env 钉进沙箱，绝不指向真机（教训见 `test/migrate.test.ts` 文件头）。
 - ingest 端口随机、token 每次启动重新生成并覆写 `~/.murmur/endpoint`（0600）——设计上隐含**单实例假设**。
 - 只读打开他人正在写入的 WAL 库（opencode/zcode）必须容错：失败跳过本轮，静默降级，不 crash。
-- `tray.getBounds()` 返回 AppKit 左下原点坐标，面板锚定需经 `mainScreenFrame()` 换算（见 `bun/index.ts` 文件头，别直接 setPosition）。
-- `screen.ts` 用 osascript 同步探测屏幕，主进程调用点要意识到阻塞成本。
+- `tray.getBounds()` 返回 AppKit 主屏左下原点全局坐标，`setPosition`/`Screen.*` 是左上原点逻辑坐标：y_tl = primaryH - bounds.y + gap，x 同轴直用；多屏/全屏 Space 下以光标所在屏钳位（`Screen.getCursorScreenPoint` + `getAllDisplays`），别用 `mainScreenFrame()`（focused 屏会漂移）。菜单栏弹层要 `setVisibleOnAllWorkspaces(true)` + `setAlwaysOnTop(true)`，否则全屏 Space 点托盘会先切屏再展现。
+- `screen.ts`（osascript 探测）已不在面板路径用；屏幕信息走 `Screen`（electrobun/main 导出，FFI 直读）。
 - codex `hooks.json` 的非 managed hook 按定义 hash 记 trust——command 字符串改一个字节即失效需重新 trust；脚本文件内容重写不影响（hash 不含文件字节）。app-server 额度通道的二进制发现：`MURMUR_CODEX_BIN` env → `Bun.which('codex')`，找不到自动回落 wham。
-- `apps/desktop/tsconfig.json` 的 `paths` 是整字段覆盖（不合并 extends）：46 条 electrobun 映射是从 `.hutch/devkit/tsconfig.json` 拷贝固化的（值改写为 `./.hutch/devkit/` 前缀），外加 `@/*`/`@core/*` 两条项目别名——**hutch 升级 devkit 后必须按同法重新生成**（读 devkit 表 → 值加前缀 → 追加两条别名），否则 vue-tsc 的 electrobun 解析会静默退回报错。
+- `apps/desktop/tsconfig.json` 的 `paths` 是整字段覆盖（不合并 extends）：46 条 electrobun 映射是从 `.hutch/devkit/tsconfig.json` 拷贝固化的（值改写为 `./.hutch/devkit/` 前缀），外加 `@/*`/`@core/*` 两条项目别名——**hutch 升级 devkit 后必须按同法重新生成**（读 devkit 表 → 值加前缀 → 追加两条别名），否则 tsc 的 electrobun 解析会静默退回报错。
 - settings/uninstall 测试别信 `MURMUR_HOME` env（全测试进程共享首个固化值）：`loadSettings/saveSettings` 收 `dir` 参数注入沙箱；`hasOurHook` 按**绝对 HOOKS_DIR** 判归属，测试命令串必须经 `writeHookScript()` 产出（见 `test/hooks-uninstall.test.ts`）。
-- reka-ui `SwitchRoot` 的绑定是 **`modelValue` / `update:model-value`**，不是 `:checked`（`:checked` 静默无效、开关恒渲染为关；`data-state="checked"` 只用于样式选择器）。
-- 新 UI 组件先上 `#/design` 设计板（`design/design-board.vue`）再进业务页。
+- radix Switch 绑定是 **`checked` / `onCheckedChange`**（shadcn `components/ui/switch.tsx`）；zustand selector 只取原始字段——返回数组/对象的派生用 `lib/selectors.ts` 纯函数 + `useMemo`/`useShallow`，直接 `useMurmurStore(s => 派生)` 每次渲染产新引用会无谓重渲。
+- Radix ScrollArea 的 Viewport 给内容包装层**内联** `display:table`（max-content 布局）：长文本不换行、横向撑出 392 面板——`scroll-area.tsx` 用 `[&>div]:block!` 归一为 block；WKWebView 文档级滚动看 documentElement，`html` 必须补 `overflow:hidden + overscroll-behavior:none`（只写 body 不够）。
+- 刊头/底栏是 `absolute` 玻璃覆盖层（`glass-chrome`），滚动区用 `--chrome-top`/`--chrome-bottom` padding 让位——**改刊头/底栏内容后必须回校 app.css 里这两个常量**，否则首行被遮或露缝。
+- macOS 编辑快捷键（⌘V/⌘C/⌘A/⌘Z）由**主菜单 keyEquivalent** 派发到第一响应者——菜单栏伴侣没有默认应用菜单，WKWebView 输入框粘贴/全选全废（Electron 同款坑）。`bun/index.ts` 启动时用 `setApplicationMenu`（`electrobun/main/app-menu`）注册最小 App+Edit 菜单（role 走原生 NSResponder selector），另挂隐藏 `Ctrl+V → paste`；webview 输入框再有 `onKeyDown` → `readClipboard` RPC 兜底（菜单已消费的事件到不了 JS，不会双贴；`e.currentTarget` 必须先捕获再 await）。
+- 新 UI 组件先上 `#/design` 设计板（`design/design-board.tsx`）再进业务页。
