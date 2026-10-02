@@ -31,6 +31,12 @@ Murmur 是常驻菜单栏的「状态伴侣」，质感来自**克制与一瞥�
 
 `--heat`（暖橙单色相 ramp 基色，深/浅主题各一值）仅热力图消费：`HEAT_LEVELS` = 中性空档 + `--heat` 22/45/70/100% 递进。它既非状态也非「谁」——是第三条、也是最后一条彩色通道，别再加第四种。
 
+### 图表系列色（灰阶）
+
+### 图表系列色（heat ramp）
+
+`--chart-1..7`：`--heat` 暖橙 ramp（100/72/52/38/28/21/16% 递减，双主题各一套、同构取值）——折线画的是用量，系列色是密度语义的延伸，与热力图同族；status/agent 语义色禁入系列位。浅档透明度低，系列可读性靠**色阶 + dash 双编码**：rank→dash/width 映射常量 `MODEL_LINE_STYLES` 在 `usage-view.tsx`（rank0 1.75px 实线、rank1 实线、rank2+ 各配一种虚线型），图例用线样不用圆点（圆点表达不了线型）。模型名归并大小写不敏感（`glm-5.3-flash`/`GLM-5.3-Flash` 同系列）。额度阈值同理不走琥珀：≥70% 前景加重（字重）、≥90% 才 `--status-stale` 红，正常态进度底色一律前景 50%（idle 是状态色，不做进度条）。
+
 ### 字体
 
 | Token | 用途 |
@@ -65,7 +71,7 @@ Murmur 是常驻菜单栏的「状态伴侣」，质感来自**克制与一瞥�
 
 ### Agent accent（品牌识别色，图表/图例唯一彩色入口）
 
-`--agent-kimi` 紫 / `--agent-zcode` 蓝 / `--agent-opencode` 绿 / `--agent-codex` 中性（暗底亮灰、亮底深灰）/ `--agent-cursor` 金，双主题各一套取值。
+`--agent-kimi` 紫 / `--agent-zcode` 蓝 / `--agent-opencode` 绿 / `--agent-codex` 中性（暗底亮灰、亮底深灰）/ `--agent-cursor` 金 / `--agent-devin` 珊瑚朱 / `--agent-qoder` 芽绿，双主题各一套取值。
 
 用法：`data-agent="<id>"` 属性 → 自动获得 `--accent` 变量（卡片内 accent 语境）→ `color-mix(in oklab, var(--accent) 15%, transparent)` 做底色；图表直接用 `var(--agent-*)`。组件内**禁止**写死品牌色。**注意：Switch、额度条等 chrome 件不读 --accent**——它们必须全 agent 同色（单色纪律）。
 
@@ -76,7 +82,7 @@ Murmur 是常驻菜单栏的「状态伴侣」，质感来自**克制与一瞥�
 - ❌ UI chrome 上彩色：链接/开关/按钮/焦点全中性；彩色只有 status（什么状态）与 agent accent（谁）
 - ❌ 衬线/装饰性字体、噪点颗粒纹理（用户自定义字体设置除外——那是用户自己的选择）
 - ❌ **图表禁用原生 `title` 悬浮**（OS 延迟 1-2s）——一律 `chart-tip.tsx` 瞬时浮层（bg-overlay），锚点用 `lib/chart-tip.ts` 的 `anchorTop()` 或准星逻辑，边缘翻转防溢出
-- ❌ **shadcn 生成件原样使用**——`components/ui/*.tsx` 落库即项目代码，必须把默认 palette（`bg-primary`/`ring-ring`/`dark:` 等）改写为上述语义 token 后才允许被引用；`data-slot` 属性仅作样式钩子保留
+- ❌ **shadcn 生成件原样使用**——`components/ui/*.tsx` 落库即项目代码，必须把默认 palette（`bg-primary`/`ring-ring`/`dark:` 等）改写为上述语义 token 后才允许被引用；`data-slot` 属性仅作样式钩子保留。禁止 CLI `--overwrite` 覆盖已存在组件（会冲掉 token 化定制）；确需升级走「干净工作区 → 覆盖 → `git diff` → 按 `components/CUSTOMIZATIONS.md` + `grep CUSTOMIZED:` 重打定制 → 更新清单」，定制处必须标 `CUSTOMIZED:` 注释
 - ❌ **玻璃铺满页面**：`glass-*` 是浮层专属材料（吸顶刊头/底栏 `glass-chrome`、浮卡 `glass-overlay`），地面与实体永不玻璃；禁整窗透明（macOS 26 方底板有案底）
 - ✅ 动效只用 `duration-fast`(120ms) / `duration-normal`(200ms)；交互动效加 `ease-spring`。keyframes 白名单：`breathe` / `attention` / `tip-in` / `enter`（版块入场，父级 inline delay 错峰 ≤40ms 步进）/ `hop`（栖枝鸟跳，key remount 驱动）/ `num-in`（AnimatedNumber 转轮）/ `hero-breathe`（waiting 头条琥珀环境光 4.5s + mark 峰点 live）/ `drift`（椋鸟群游动，每点 `--dx/--dy/--drift-*` 变量）
 - ✅ 密度：行高 9–10px padding、字走六档、hover 才展开次信息；popover 宽约 400px

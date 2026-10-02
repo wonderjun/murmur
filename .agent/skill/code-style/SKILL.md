@@ -52,6 +52,26 @@ import { pick } from './base';
 - shadcn 生成件落 `components/ui/` 即项目代码：先改写为语义 token 再用，`data-slot` 只作样式钩子。
 - Radix 受控件绑定 `checked`/`onCheckedChange`（Switch），不是 Vue 的 `modelValue`。
 
+## 文件体量
+
+机器门禁走 `packages/core/test/file-size.test.ts`（`bun run test` 顺带执行），本节是人肉判断的补充细则：
+
+- **新文件硬上限 500 有效行，软上限 400 行**——接近软上限就考虑下一档拆分，不要顶格写。有效行口径 = 去空行去注释行（与门禁测试一致）。
+- 拆分触发器：单文件有效行 >500 必拆（门禁直接 fail）；组件 JSX 大段/弹窗群考虑拆子组件；单个函数 >100 行考虑外移为纯函数。
+- 存量超限文件在门禁测试的 `RATCHET` 表逐文件锁死当前有效行数（只许降不许升），拆分达标后删除条目；勿调大数值、勿给新文件加棘轮条目（直接写小）。
+- 豁免：`components/ui/`（shadcn 复制式组件库，前缀豁免）、测试文件（体量是被测对象的镜像）；其他例外进 `EXEMPTIONS` 表且必须写清理由。
+
+拆分手法速判（按超限成分对号入座）：
+
+| 超限成分 | 手法 | 去处 |
+|---|---|---|
+| 可测纯逻辑（解析/转换/派生） | 抽纯函数 + 同名测试 | core 同目录新文件 / `lib/selectors.ts` |
+| adapter 单文件堆积 | 按职责切分文件（kimi/devin 的 `files.ts`、`quota.ts` 先例） | `agents/<id>/xxx.ts` |
+| UI 区块（JSX 大段/卡片群） | 拆子组件 | `components/` 就近子组件 |
+| 主进程编排堆积 | 按域拆模块（tray/system 先例） | `src/bun/` 单域文件 |
+
+拆分纪律：先补/确认测试锁语义再搬代码；搬移优先整块剪切（不重写）；拆完该文件的棘轮条目随之删除。
+
 ## 禁区
 
 | 禁区 | 正确做法 |
@@ -70,3 +90,4 @@ import { pick } from './base';
 - [ ] 无 I 前缀类型、布尔 is/has 前缀？
 - [ ] core 里没有桌面 API、UI 里没有裸色板？
 - [ ] zustand selector 没有返回派生新引用？
+- [ ] 新文件有效行 ≤400（硬上限 500），没顶格写？

@@ -19,7 +19,7 @@ Monorepo 无 workspaces：core 以 **TS 源码**直接被 desktop 消费（`expo
 bun run dev            # 构建并启动（watch 模式）
 bun run dev:hmr        # 带 vite HMR 的开发模式（vite@5173 + app 本体）
 bun run build          # 出稳定包
-bun run test           # core 引擎测试（bun test packages/core）
+bun run test           # core 引擎测试（cd packages/core && bun test——必须在 core 目录跑，bunfig.toml 的 test preload 沙箱才生效）
 bun run typecheck      # core 类型检查（tsc --noEmit）
 bun run typecheck:desktop  # 桌面端类型检查（tsc --noEmit，覆盖 webview + bun 主进程）
 ```
@@ -47,8 +47,8 @@ apps/desktop/
   src/bun/index.ts  主进程：tray + 透明面板 + registry 组装 + RPC 推送（唯一桌面 API 入口）
   src/bun/system.ts Dock 显隐（Utils.setDockIconVisible）+ 自启（~/Library/LaunchAgents plist）
   src/shared/rpc.ts 双端 RPC 契约 MurmurRPC
-  src/mainview/     React webview：store/murmur.ts（Zustand）+ components/*.tsx + components/ui/（shadcn 生成件）+ lib/appearance.ts（主题/字体应用）+ app.css（design token 唯一真源，暗/亮双主题）
-.agent/skill/       code-style（代码风格）、ui-design（视觉契约）两份规范，写码前必读
+  src/mainview/     React webview：store/murmur.ts（Zustand）+ components/*.tsx + components/ui/（shadcn 生成件 + CUSTOMIZATIONS.md 定制清单）+ lib/appearance.ts（主题/字体应用）+ app.css（design token 唯一真源，暗/亮双主题）
+.agent/skill/       code-style（代码风格）、ui-design（视觉契约）、testing（bun test 约定）、rpc-contract（RPC 三同步）四份规范，写码前必读
 ```
 
 ## 架构
@@ -82,7 +82,7 @@ session.start → idle    turn.start/tool.call → working    permission.request
 turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grace 60s 后清除）
 ```
 
-常量：working 无事件 3min（`STALE_AFTER_MS`）→ stale（watchdog 每 15s sweep）；stale 30min 无动静 → ended 兜底（进程多半已死）；waiting 30min 衰减回 idle；会话 24h 无动静剔除。**快照只出活跃会话**：working/waiting/stale 直出，idle 仅限 `LIVE_WINDOW_MS` 内新建（start→turn.start 过渡），ended 不进面板（grace 期只留 Map 供同 id 复活）。聚合态取最高优先级：working > waiting > stale > idle > ended。
+常量：working 无事件 3min（`STALE_AFTER_MS`）→ stale（watchdog 每 15s sweep）；stale 30min 无动静 → ended 兜底（进程多半已死）；waiting 30min 衰减回 idle；会话 24h 无动静剔除。**快照只出活跃会话**：working/waiting/stale 直出，idle 仅限 `LIVE_WINDOW_MS` 内新建（start→turn.start 过渡），ended 不进活跃面板（grace 期留 Map 供同 id 复活，经 `StatusEngine.recentlyEnded(limit)` 以 `AppSnapshot.recentlyEnded` 附带出快照喂「最近结束」折叠组，不进聚合态/通知）。聚合态取最高优先级：working > waiting > stale > idle > ended。
 
 ### 存储（ledger/db.ts）
 
@@ -90,7 +90,7 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 
 ### 主进程与通信
 
-`apps/desktop/src/bun/index.ts`：tray（标题 `◆n`（waiting）/ `●n`（working）聚合态，只能用默认文本渲染的几何字形，emoji 会在菜单栏变彩色、破坏单色体系；不放原生菜单，挂 menu 会接管左键点击）+ 392×600 面板（`titleBarStyle:"hiddenInset"` + 空标题 + 无按钮，标准窗口几何 + 全尺寸内容，系统圆角+阴影由系统裁——`titleBarStyle:"hidden"` 的无边框窗口在 macOS 26 露方形底板、`"default"` 会画出标题栏、`transparent:true` 关不掉方形原生阴影（2.0.1 无 hasShadow API），都不可用；失焦即 hide）+ RPC。bun 侧 requests：`getSnapshot / installHooks / hidePanel / refreshQuotas / usageDaily / getSettings / updateSettings / setAgentHook / setAgentObserved / setAgentKey / readClipboard / rebuildLedger / openSessions / scanSessions / deleteSessions / revealSession / openDataDir / quitApp`（quitApp 经 quitMurmur 保证 stop 失败也必 exit）；webview 侧 messages：`snapshot` 全量推送。另有一扇独立的会话文件管理窗（`#/files` hash 分流、780×560 可缩放，`openSessions` 幂等聚焦）：盘点各 CLI 磁盘会话产物、按工具/项目过滤、默认修改时间倒序、勾选批量删——文件/目录经 `Utils.moveToTrash` 进废纸篓，库内行（zcode/opencode/devin 的 sqlite）事务永久删并标 `needsVacuum`（删行不缩 .db，需对端压实才回收）；快照命中或 mtime 3min 内新鲜的会话标 `active` 禁删。UI 禁止直接摸 `window.electrobun`，一律走 `@/lib/rpc.ts` 的 `useRpc` 单例。四视图：live（动态）/ usage（用量）/ setup（接入）/ settings（设置）。
+`apps/desktop/src/bun/index.ts`：tray（标题 `◆n`（waiting）/ `●n`（working）聚合态，只能用默认文本渲染的几何字形，emoji 会在菜单栏变彩色、破坏单色体系；不放原生菜单，挂 menu 会接管左键点击）+ 392×600 面板（`titleBarStyle:"hiddenInset"` + 空标题 + 无按钮，标准窗口几何 + 全尺寸内容，系统圆角+阴影由系统裁——`titleBarStyle:"hidden"` 的无边框窗口在 macOS 26 露方形底板、`"default"` 会画出标题栏、`transparent:true` 关不掉方形原生阴影（2.0.1 无 hasShadow API），都不可用；失焦即 hide）+ RPC。bun 侧 requests：`getSnapshot / installHooks / hidePanel / refreshQuotas / usageDaily / getSettings / updateSettings / setAgentHook / setAgentObserved / setAgentKey / readClipboard / writeClipboard / rebuildLedger / openSessions / scanSessions / deleteSessions / revealSession / openDataDir / quitApp`（quitApp 经 quitMurmur 保证 stop 失败也必 exit）；webview 侧 messages：`snapshot` 全量推送。另有一扇独立的会话文件管理窗（`#/files` hash 分流、780×560 可缩放，`openSessions` 幂等聚焦）：盘点各 CLI 磁盘会话产物、按工具/项目过滤、默认修改时间倒序、勾选批量删——文件/目录经 `Utils.moveToTrash` 进废纸篓，库内行（zcode/opencode/devin 的 sqlite）事务永久删并标 `needsVacuum`（删行不缩 .db，需对端压实才回收）；快照命中或 mtime 3min 内新鲜的会话标 `active` 禁删。UI 禁止直接摸 `window.electrobun`，一律走 `@/lib/rpc.ts` 的 `useRpc` 单例。四视图：live（动态）/ usage（用量）/ setup（接入）/ settings（设置）。
 
 ### 设置与开关（settings.ts + 设置页）
 
@@ -104,6 +104,7 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 - 命名：文件 kebab-case；类型 PascalCase 无 I 前缀；模块常量 UPPER_SNAKE_CASE；布尔 is/has/can/should 前缀；adapter 工厂 `createXxxAdapter()`、翻译函数 `translateXxx()`。
 - import 五段（段间空行）：bun 内建（`bun:sqlite`、`bun:test`）→ `node:` 内建 → 三方 → `@/`、`@core/`、shared → 相对路径；`import type` 与值 import 分行。
 - 错误处理哲学：观察者 Never-Crash——watcher/quota/spool 全部失败静默降级；空 `catch {}` 必须带一句中文理由注释（如「DB 被占用时跳过本轮」）。
+- 文件体量：单文件 ≤500 有效行（软上限 400），`bun test` 棘轮门禁在 `packages/core/test/file-size.test.ts`（只许降不许升）；拆分触发器与手法见 code-style skill「文件体量」节。
 - 格式化：现状 core 单引号、desktop 双引号（Prettier 尚未落地统一），新文件跟随所在包现状。
 
 ## 禁区（违者返工）
@@ -135,6 +136,9 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 - settings/uninstall 测试别信 `MURMUR_HOME` env（全测试进程共享首个固化值）：`loadSettings/saveSettings` 收 `dir` 参数注入沙箱；`hasOurHook` 按**绝对 HOOKS_DIR** 判归属，测试命令串必须经 `writeHookScript()` 产出（见 `test/hooks-uninstall.test.ts`）。
 - radix Switch 绑定是 **`checked` / `onCheckedChange`**（shadcn `components/ui/switch.tsx`）；zustand selector 只取原始字段——返回数组/对象的派生用 `lib/selectors.ts` 纯函数 + `useMemo`/`useShallow`，直接 `useMurmurStore(s => 派生)` 每次渲染产新引用会无谓重渲。
 - Radix ScrollArea 的 Viewport 给内容包装层**内联** `display:table`（max-content 布局）：长文本不换行、横向撑出 392 面板——`scroll-area.tsx` 用 `[&>div]:block!` 归一为 block；WKWebView 文档级滚动看 documentElement，`html` 必须补 `overflow:hidden + overscroll-behavior:none`（只写 body 不够）。
+- `components/ui/` 是 shadcn 复制式组件库：**禁止 CLI `--overwrite` 覆盖已存在组件**（会冲掉本地 token 化定制）；确需升级走「干净工作区 → CLI 覆盖 → `git diff` 对照 → 按 `components/CUSTOMIZATIONS.md` + `grep CUSTOMIZED:` 重打定制 → 更新清单」；改动库文件必须在改动处标 `CUSTOMIZED:` 注释并登记清单。
+- Radix Dialog 的 DialogContent 必须限高（`max-h-[90vh]`，长内容 flex 列 + 中部 `min-h-0 overflow-y-auto`）；内层滚动容器固定惯用法 `-ml-1 overflow-y-auto pl-1 pr-1`——`focus-visible:ring-*` 画在边框盒外侧，左缘无 padding 时 ring 左弧被 overflow 裁掉（`-ml-1` 伸进 DialogContent 留白、`pl-1` 推回内容，视觉零位移留 4px 出血），禁止只加 `pl-1` 不补负 margin。
+- Radix `AlertDialog.Action` 交互后**自动关闭弹窗**：异步删除等破坏性操作必须用普通 Button 触发、仅在成功后显式关闭；请求期间禁用按钮，失败保持弹窗打开。
 - 刊头/底栏是 `absolute` 玻璃覆盖层（`glass-chrome`），滚动区用 `--chrome-top`/`--chrome-bottom` padding 让位——**改刊头/底栏内容后必须回校 app.css 里这两个常量**，否则首行被遮或露缝。
 - macOS 编辑快捷键（⌘V/⌘C/⌘A/⌘Z）由**主菜单 keyEquivalent** 派发到第一响应者——菜单栏伴侣没有默认应用菜单，WKWebView 输入框粘贴/全选全废（Electron 同款坑）。`bun/index.ts` 启动时用 `setApplicationMenu`（`electrobun/main/app-menu`）注册最小 App+Edit 菜单（role 走原生 NSResponder selector），另挂隐藏 `Ctrl+V → paste`；webview 输入框再有 `onKeyDown` → `readClipboard` RPC 兜底（菜单已消费的事件到不了 JS，不会双贴；`e.currentTarget` 必须先捕获再 await）。
 - 新 UI 组件先上 `#/design` 设计板（`design/design-board.tsx`）再进业务页。
