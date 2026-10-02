@@ -20,6 +20,7 @@ process.env.MURMUR_DEVIN_CONFIG = DEVIN_CONFIG;
 const { translateDevinHook, createDevinAdapter } = await import('../src/agents/devin');
 const { fetchDevinQuota, readDevinCredentials, sniffDevinOrgId } = await import('../src/quota/devin');
 const { mergeDevinHooksConfig, writeHookScript, removeHookScript } = await import('../src/hooks/install');
+const { Ledger } = await import('../src/ledger/db');
 
 describe('devin hook 事件翻译', () => {
   const ev = (name: string, extra: Record<string, unknown> = {}) =>
@@ -196,6 +197,42 @@ describe('devin quota', () => {
       process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
       process.env.MURMUR_DEVIN_CONFIG = DEVIN_CONFIG;
     }
+  });
+});
+
+describe('devin watch：message_nodes 台账', () => {
+  test('请求级 metrics 增量记台账；fork 复制行去重、死档跳过、游标持久化', async () => {
+    const { Database } = await import('bun:sqlite');
+    const dir = join(HOME, 'devin-db');
+    mkdirSync(join(dir, 'cli'), { recursive: true });
+    process.env.MURMUR_DEVIN_DATA = dir;
+    const db = new Database(join(dir, 'cli', 'sessions.db'));
+    db.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY, working_directory TEXT, model TEXT,
+               created_at INTEGER, last_activity_at INTEGER, title TEXT, hidden INTEGER DEFAULT 0);
+             CREATE TABLE message_nodes(row_id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
+               node_id INTEGER, parent_node_id INTEGER, chat_message TEXT, created_at INTEGER, metadata TEXT)`);
+    const now = Math.floor(Date.now() / 1000);
+    const msg = (mid: string, i: number, o: number, cr = 0) =>
+      JSON.stringify({ message_id: mid, role: 'assistant', metadata: { metrics: { input_tokens: i, output_tokens: o, cache_read_tokens: cr } } });
+    db.run("INSERT INTO sessions VALUES('s1','/w','m-x',?,?,NULL,0)", [now - 100, now - 10]);
+    // a) 正常推理行；b) 同 mid 同指标的 fork 复制（应去重）；c) 不同 mid 照计；d) 死档跳过。
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',1,?,?)", [msg('m-a', 100, 10), now - 50]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',2,?,?)", [msg('m-a', 100, 10), now - 49]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',3,?,?)", [msg('m-b', 200, 20), now - 40]);
+    db.run("INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES('s1',4,?,?)", [msg('m-c', 999, 9), now - 80 * 86400]);
+
+    const ledger = new Ledger();
+    const events: Array<Record<string, unknown>> = [];
+    const unwatch = await createDevinAdapter().watch!((e) => events.push(e as unknown as Record<string, unknown>), ledger);
+    const usage = events.filter((e) => e.kind === 'usage');
+    expect(usage).toHaveLength(2); // a + c；b 复制去重、d 死档跳过
+    expect(usage.map((e) => (e.tokens as Record<string, number>).input)).toEqual([100, 200]);
+    expect(ledger.getCursor('devin:mn_rowid')).toBe('3');
+
+    unwatch();
+    ledger.close();
+    db.close();
+    process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
   });
 });
 

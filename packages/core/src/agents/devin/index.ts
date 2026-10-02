@@ -10,11 +10,14 @@
  * pull 平面：只读轮询 cli/sessions.db（WAL，别人正在写：失败跳过本轮）。
  *   sessions 表出 title/cwd/model/created_at/last_activity_at（秒级 unix）
  *   ——建档 + 「activity 前进→working、连续静默→waiting」启发式（cursor 同款）。
- *   transcripts/<slug>.json 的 final_metrics{prompt/completion/cached/steps}
- *   是全量累计——按 ledger 游标记上次值、发 delta 记 token 台账（覆盖不全，
- *   仅辅助源）。session_locks/*.lock 是 PID 锁但陈旧极多（本机 897 锁仅 30
- *   活），不作活性判据。session_id 与 sessions.id(slug) 是否同一口径未实测
- *   确认——不一致时同会话会出两条目（保守并存，以 push 为准）。
+ *   message_nodes 表每条 assistant 消息带请求级
+ *   metadata.metrics.{input,output,cache_read,cache_creation}_tokens（实测
+ *   6.9w 行有量，input 与 cache_read 互斥口径）——按 rowid 游标增量扫、
+ *   逐请求记 token 台账，比 transcripts 的 final_metrics 会话合计粒度细
+ *   且覆盖全（transcripts 仅部分会话落盘，不再当源避免双计）。
+ *   session_locks/*.lock 是 PID 锁但陈旧极多（本机 897 锁仅 30 活），不作
+ *   活性判据。session_id 与 sessions.id(slug) 是否同一口径未实测确认——
+ *   不一致时同会话会出两条目（保守并存，以 push 为准）。
  * cloud 平面：BYOK cog_ 凭据存在时每 60s 轮询 v3 sessions（org 端点优先、
  *   enterprise 兜底）补云端会话状态——本地手段够不到云机。凭据从
  *   credentials.json 每轮现读（设置页填了 key 即刻生效，不用重启 watcher）。
@@ -23,14 +26,14 @@
  */
 
 import { Database } from 'bun:sqlite';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadCredentials } from '../../credentials';
 import { devinHooksRegistered, mergeDevinHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
-import { quotaFetch, readJsonFile } from '../../quota/common';
+import { quotaFetch } from '../../quota/common';
 import { fetchDevinQuota, sniffDevinOrgId } from '../../quota/devin';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
 import { pick, type AgentAdapter } from '../base';
@@ -86,13 +89,6 @@ interface Seen {
   activity: number;
   working: boolean;
   quiet: number;
-}
-
-/** transcripts final_metrics 的存量值（delta 记账基准），随 ledger 游标持久化。 */
-interface Metrics {
-  p: number;
-  c: number;
-  o: number;
 }
 
 /** v3 SessionResponse.status/status_detail → 归一化事件 kind。null = 不值得发。 */
@@ -160,8 +156,17 @@ export function createDevinAdapter(): AgentAdapter {
         }
       }
       const seen = new Map<string, Seen>();
-      /** slug → 上次处理的 {mtime, 累计值}：mtime 不动跳过解析（文件 ~500KB 级，不白读）。 */
-      const metricsSeen = new Map<string, { mtime: number; cur: Metrics }>();
+      /** message_nodes 请求级 token 明细的增量游标（row_id 持久化，防重启双计）。 */
+      let mnRowid = Number(ledger.getCursor('devin:mn_rowid') ?? 0) || 0;
+      /**
+       * fork/revert 会把同一逻辑消息复制成新 node（同 message_id 同指标，
+       * 实测 ~69% 明细行是复制）——去重域 (session_id,message_id,指标签名)；
+       * 签名不同说明同 id 发生了重推理（真实新消耗，照计）。
+       */
+      const metricSeen = new Map<string, string>();
+      let metricSeeded = false;
+      const metricKey = (sid: string, mid: string, i: number, o: number, cr: number, cw: number) =>
+        `${sid}${mid}${i}|${o}|${cr}|${cw}`;
 
       const pollSessions = () => {
         if (!db) return;
@@ -221,48 +226,89 @@ export function createDevinAdapter(): AgentAdapter {
         }
       };
 
-      // transcripts/*.json：final_metrics 增量 delta → usage（游标持久化防重启双计）。
-      const pollTranscripts = () => {
+      // message_nodes 请求级 token 明细（每行=一次推理）按 row_id 增量扫进台账。
+      // 首轮从游标赶进度：每轮 2000 行直至追上，之后每 5s 只有零头新行。
+      const pollMetrics = () => {
+        if (!db) return;
         try {
-          for (const name of readdirSync(transcriptsDir)) {
-            if (!name.endsWith('.json')) continue;
-            const path = join(transcriptsDir, name);
-            const mtime = statSync(path, { throwIfNoEntry: false })?.mtimeMs ?? 0;
-            if (!mtime || mtime < Date.now() - BACKFILL_WINDOW_MS) continue;
-            const slug = name.slice(0, -5);
-            const hit = metricsSeen.get(slug);
-            if (hit && hit.mtime === mtime) continue;
-            const prev: Metrics =
-              hit?.cur ?? (JSON.parse(ledger.getCursor(`devin:metrics:${slug}`) ?? 'null') as Metrics | null) ?? {
-                p: 0,
-                c: 0,
-                o: 0,
-              };
-            const obj = readJsonFile(path);
-            const fm = (obj?.final_metrics ?? {}) as Record<string, unknown>;
-            const cur: Metrics = {
-              p: Number(fm.total_prompt_tokens) || 0,
-              c: Number(fm.total_cached_tokens) || 0,
-              o: Number(fm.total_completion_tokens) || 0,
-            };
-            if (!cur.p && !cur.o) {
-              metricsSeen.set(slug, { mtime, cur });
-              continue;
+          if (!metricSeeded) {
+            metricSeeded = true;
+            // 去重集只含已计入行（row_id ≤ 游标）的签名：游标后的还没发，
+            // 全量播种会把待发行全判成复制——一行用量都出不去。
+            for (const r of db
+              .query(
+                `SELECT session_id,
+                        json_extract(chat_message, '$.message_id') AS mid,
+                        json_extract(chat_message, '$.metadata.metrics.input_tokens') AS i,
+                        json_extract(chat_message, '$.metadata.metrics.output_tokens') AS o,
+                        json_extract(chat_message, '$.metadata.metrics.cache_read_tokens') AS cr,
+                        json_extract(chat_message, '$.metadata.metrics.cache_creation_tokens') AS cw
+                 FROM message_nodes WHERE row_id <= ? AND chat_message LIKE '%input_tokens%'`,
+              )
+              .all(mnRowid) as Array<{ session_id: string; mid: string | null; i: number | null; o: number | null; cr: number | null; cw: number | null }>) {
+              metricSeen.set(
+                metricKey(r.session_id, r.mid ?? '', Number(r.i) || 0, Number(r.o) || 0, Number(r.cr) || 0, Number(r.cw) || 0),
+                '1',
+              );
             }
-            // 增量口径：prompt 含 cached（OpenAI 惯例）→ input 扣缓存分量。
-            const delta: TokenUsage = {
-              input: Math.max(0, cur.p - cur.c - (prev.p - prev.c)),
-              cacheRead: Math.max(0, cur.c - prev.c),
-              output: Math.max(0, cur.o - prev.o),
+          }
+          const cutoff = Math.floor((Date.now() - BACKFILL_WINDOW_MS) / 1000);
+          const rows = db
+            .query(
+              `SELECT mn.row_id, mn.session_id, mn.created_at,
+                      json_extract(mn.chat_message, '$.message_id') AS mid,
+                      json_extract(mn.chat_message, '$.metadata.metrics.input_tokens') AS input,
+                      json_extract(mn.chat_message, '$.metadata.metrics.output_tokens') AS output,
+                      json_extract(mn.chat_message, '$.metadata.metrics.cache_read_tokens') AS cacheRead,
+                      json_extract(mn.chat_message, '$.metadata.metrics.cache_creation_tokens') AS cacheWrite,
+                      s.model
+               FROM message_nodes mn LEFT JOIN sessions s ON s.id = mn.session_id
+               WHERE mn.row_id > ? AND mn.created_at > ? AND mn.chat_message LIKE '%input_tokens%'
+               ORDER BY mn.row_id LIMIT 5000`,
+            )
+            .all(mnRowid, cutoff) as Array<{
+            row_id: number;
+            session_id: string;
+            created_at: number;
+            mid: string | null;
+            input: number | null;
+            output: number | null;
+            cacheRead: number | null;
+            cacheWrite: number | null;
+            model: string | null;
+          }>;
+          let last = mnRowid;
+          for (const row of rows) {
+            last = row.row_id;
+            const input = Number(row.input) || 0;
+            const output = Number(row.output) || 0;
+            const cacheRead = Number(row.cacheRead) || 0;
+            const cacheWrite = Number(row.cacheWrite) || 0;
+            if (input + output + cacheRead + cacheWrite <= 0) continue;
+            const key = metricKey(row.session_id, row.mid ?? '', input, output, cacheRead, cacheWrite);
+            if (metricSeen.has(key)) continue;
+            metricSeen.set(key, '1');
+            const tokens: TokenUsage = {
+              input,
+              output,
+              ...(cacheRead > 0 ? { cacheRead } : {}),
+              ...(cacheWrite > 0 ? { cacheWrite } : {}),
             };
-            if (delta.input + delta.output + (delta.cacheRead ?? 0) > 0) {
-              emit({ agent: 'devin', sessionId: slug, kind: 'usage', tokens: delta, at: mtime, raw: { final_metrics: fm } });
-              ledger.setCursor(`devin:metrics:${slug}`, JSON.stringify(cur));
-            }
-            metricsSeen.set(slug, { mtime, cur });
+            emit({
+              agent: 'devin',
+              sessionId: row.session_id,
+              model: row.model ?? undefined,
+              kind: 'usage',
+              tokens,
+              at: toMs(row.created_at),
+            });
+          }
+          if (last > mnRowid) {
+            mnRowid = last;
+            ledger.setCursor('devin:mn_rowid', String(mnRowid));
           }
         } catch {
-          // 目录被并发改写时跳过本轮。
+          // DB 被占用/并发改写时跳过本轮。
         }
       };
 
@@ -310,11 +356,11 @@ export function createDevinAdapter(): AgentAdapter {
       };
 
       pollSessions();
-      pollTranscripts();
+      pollMetrics();
       void pollCloud();
       const localTimer = setInterval(() => {
         pollSessions();
-        pollTranscripts();
+        pollMetrics();
       }, 5000);
       const cloudTimer = setInterval(() => void pollCloud(), 60_000);
       return () => {
