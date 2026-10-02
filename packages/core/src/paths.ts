@@ -57,7 +57,7 @@ export function agentPaths(agent: AgentId): AgentPaths {
       return {
         home: dir,
         sessions: join(dir, 'v2'),
-        credentials: join(dir, 'v2', 'credentials.json'), // enc:v1 加密，暂不可用于 quota。
+        credentials: join(dir, 'v2', 'credentials.json'), // enc:v1 加密读不了；quota 走 BYOK（quota/zcode.ts）。
         hookConfig: join(dir, 'cli', 'config.json'),
       };
     }
@@ -92,6 +92,36 @@ export function agentPaths(agent: AgentId): AgentPaths {
         credentials:
           process.env.MURMUR_CURSOR_STATE_DB ?? join(appSupport, 'Cursor', 'User', 'globalStorage', 'state.vscdb'),
         hookConfig: join(dir, 'hooks.json'),
+      };
+    }
+    case 'devin': {
+      // Devin CLI/Desktop（Cognition）：数据根 ~/.local/share/devin——cli/sessions.db
+      // 是统一会话库（Desktop 经 ACP 桥写同库）、cli/transcripts/*.json 含 final_metrics、
+      // cli/session_locks/*.lock 是 PID 锁（陈旧锁多，不当判据）、credentials.toml 的
+      // windsurf_api_key 是 CLI 登录凭据（server.codeium.com Connect API 用）。
+      // 用户级 hook 配置在 ~/.config/devin/config.json 的 hooks 键（Claude 兼容组形状）。
+      const data = process.env.MURMUR_DEVIN_DATA ?? join(localShare, 'devin');
+      return {
+        home: data,
+        sessions: join(data, 'cli'),
+        credentials: join(data, 'credentials.toml'),
+        hookConfig: process.env.MURMUR_DEVIN_CONFIG ?? join(appData, 'devin', 'config.json'),
+      };
+    }
+    case 'qoder': {
+      // 新「Qoder」桌面产品（com.qoder.app）：Electron 壳 + 内嵌 qodercli runtime，
+      // 与 qodercli/旧 IDE 共用 ~/.qoder 数据根（官方 QODER_CONFIG_DIR 可整体搬迁）。
+      // projects/<slug>/<uuid>.jsonl 是会话 transcript（Claude 兼容行格式，带 ISO
+      // 时间戳与 message.usage 全量 token）；transcript/ 子目录放委派任务转录。
+      // .auth/user 是加密凭据（非明文，读不了——quota 平面临时缺席，BYOK PAT 留 v2）。
+      // settings.json 是共享配置（providers 有用户 key），hook 只 merge hooks 子树。
+      // app 侧会话台账在 com.qoder.app.stable/main.sqlite，路径由 adapter 自拼。
+      const dir = process.env.MURMUR_QODER_HOME ?? process.env.QODER_CONFIG_DIR ?? join(home, '.qoder');
+      return {
+        home: dir,
+        sessions: join(dir, 'projects'),
+        credentials: join(dir, '.auth', 'user'),
+        hookConfig: join(dir, 'settings.json'),
       };
     }
   }

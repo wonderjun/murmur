@@ -19,6 +19,12 @@ export {
   mergeTomlHooks,
   mergeTomlHooksText,
   mergeZcodeHooks,
+  mergeDevinHooks,
+  mergeDevinHooksConfig,
+  devinHooksRegistered,
+  mergeQoderHooks,
+  mergeQoderHooksConfig,
+  qoderHooksRegistered,
   tomlHookInstalled,
   unmergeJsonHooks,
   unmergeTomlHooks,
@@ -29,4 +35,5 @@ export {
   zcodeHookState,
 } from './hooks/install';
 export { DEFAULT_SETTINGS, flagEnabled, loadSettings, saveSettings, type MurmurSettings } from './settings';
+export { loadCredentials, saveCredentials, maskKey, type ByokCredential, type ByokStore } from './credentials';
 export type { AgentAdapter } from './agents/base';

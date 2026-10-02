@@ -21,6 +21,7 @@ import { agentPaths } from '../../paths';
 import { fetchKimiQuota } from '../../quota/kimi';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
 import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import { deleteKimiSessions, loadSessionIndex, scanKimiSessions } from './files';
 
 /**
  * wire.jsonl 真实 schema（v0.41 实测）：
@@ -78,20 +79,6 @@ function wireMeta(path: string): { sessionId: string } {
     return { sessionId: parts[agentsIdx - 1] ?? 'unknown' };
   }
   return { sessionId: parts[parts.length - 2] ?? 'unknown' };
-}
-
-/** session_index.jsonl → {sessionId: workDir} 映射（官方索引，cwd 真值来源）。 */
-function loadSessionIndex(homeDir: string): Map<string, string> {
-  const m = new Map<string, string>();
-  try {
-    const text = readFileSync(join(homeDir, 'session_index.jsonl'), 'utf8');
-    for (const line of text.split('\n')) {
-      if (!line.trim()) continue;
-      const r = JSON.parse(line) as { sessionId?: string; workDir?: string };
-      if (r.sessionId && r.workDir) m.set(r.sessionId, r.workDir);
-    }
-  } catch {}
-  return m;
 }
 
 /** wire 路径 → 会话目录（向上爬到 basename === sessionId，兼容 agents/ 嵌套）。 */
@@ -303,5 +290,8 @@ export function createKimiAdapter(): AgentAdapter {
     },
 
     quota: fetchKimiQuota,
+
+    scanSessions: scanKimiSessions,
+    deleteSessions: deleteKimiSessions,
   };
 }

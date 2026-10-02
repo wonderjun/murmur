@@ -6,6 +6,7 @@
  * 对外输出 AppSnapshot 与变化通知。
  */
 
+import { loadCredentials, maskKey, saveCredentials, type ByokStore } from '../credentials';
 import { startIngestServer, type IngestServer } from '../ingest/server';
 import { drainSpool } from '../ingest/spool';
 import { BACKFILL_EPOCH, BACKFILL_WINDOW_MS, Ledger } from '../ledger/db';
@@ -14,11 +15,13 @@ import { flagEnabled, loadSettings, saveSettings, type MurmurSettings } from '..
 import type { AgentAdapter } from '../agents/base';
 import { createCodexAdapter } from '../agents/codex';
 import { createCursorAdapter } from '../agents/cursor';
+import { createDevinAdapter } from '../agents/devin';
 import { createKimiAdapter } from '../agents/kimi';
 import { createOpencodeAdapter } from '../agents/opencode';
+import { createQoderAdapter } from '../agents/qoder';
 import { createZcodeAdapter } from '../agents/zcode';
-import type { AgentEvent, AgentId, AgentSnapshot, AppSnapshot, InstallInfo, QuotaSnapshot } from '../types';
-import { StatusEngine } from './status-engine';
+import type { AgentEvent, AgentId, AgentSnapshot, AppSnapshot, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
+import { STALE_AFTER_MS, StatusEngine } from './status-engine';
 
 /** quota 拉取间隔（额度变化慢，10 分钟足够）。 */
 const QUOTA_INTERVAL_MS = 10 * 60_000;
@@ -39,6 +42,8 @@ export class AgentRegistry {
   private listeners = new Set<() => void>();
   private unsubEngine: (() => void) | null = null;
   private settings: MurmurSettings = loadSettings();
+  /** BYOK 凭据（~/.murmur/credentials.json）：用户自填 key，永不进 settings/RPC 明文。 */
+  private byok: ByokStore = loadCredentials();
 
   constructor() {
     this.adapters = [
@@ -47,6 +52,8 @@ export class AgentRegistry {
       createOpencodeAdapter(),
       createCodexAdapter(),
       createCursorAdapter(),
+      createDevinAdapter(),
+      createQoderAdapter(),
     ];
   }
 
@@ -182,9 +189,11 @@ export class AgentRegistry {
     // 并发：串行 await 最坏 ≈3×8s（codex 降级链两段各 8s），会撞 RPC 15s 上限。
     await Promise.allSettled(
       this.adapters.map(async (a) => {
-        if (!a.quota || !this.isObserved(a.id) || !this.installs.get(a.id)?.hasCredentials) return;
+        if (!a.quota || !this.isObserved(a.id)) return;
+        // 拉取前提：本地凭据可读 或 用户配了 BYOK key（zcode 这种本地凭据加密的 agent）。
+        if (!this.installs.get(a.id)?.hasCredentials && !this.byok[a.id]?.apiKey) return;
         try {
-          const q = await a.quota();
+          const q = await a.quota(this.byok[a.id]);
           if (q.error && q.windows.length === 0) {
             const last = this.ledger.lastQuota(a.id);
             this.quotas.set(a.id, last?.windows.length ? last : q);
@@ -223,6 +232,80 @@ export class AgentRegistry {
       if (!this.isObserved(a.id) || !this.installs.get(a.id)?.installed) continue;
       void this.startWatch(a);
     }
+  }
+
+  /** 上次会话盘点的结果缓存（revealSession 查路径用，免二次全盘扫描）。 */
+  private lastSessionScan: StoredSession[] | null = null;
+
+  /** 会话产物盘点（清理页）：并发扫各 adapter；快照命中或 mtime 新鲜的标 active 禁删。 */
+  async scanSessions(): Promise<StoredSession[]> {
+    const live = new Set(this.engine.snapshot().map((s) => `${s.agent}:${s.sessionId}`));
+    const fresh = Date.now() - STALE_AFTER_MS;
+    const results = await Promise.allSettled(
+      this.adapters.map((a) => a.scanSessions?.() ?? Promise.resolve([] as StoredSession[])),
+    );
+    const out: StoredSession[] = [];
+    for (const r of results) {
+      if (r.status !== 'fulfilled') continue;
+      for (const s of r.value) {
+        s.active =
+          live.has(`${s.agent}:${s.id}`) ||
+          live.has(`${s.agent}:${s.id.replace(/^chat:/, '')}`) ||
+          s.modifiedAt > fresh;
+        out.push(s);
+      }
+    }
+    this.lastSessionScan = out;
+    return out;
+  }
+
+  /**
+   * 批量删除会话产物：active 会话拒删；trash 由主进程注入（Utils.moveToTrash），
+   * core 不碰桌面 API。单 adapter 异常不影响其余，per-item 回报。
+   */
+  async deleteSessions(
+    refs: { agent: AgentId; id: string }[],
+    trash: (path: string) => boolean,
+  ): Promise<SessionDeleteResult[]> {
+    const live = new Set(this.engine.snapshot().map((s) => `${s.agent}:${s.sessionId}`));
+    const results: SessionDeleteResult[] = [];
+    const byAgent = new Map<AgentId, string[]>();
+    for (const r of refs) {
+      if (live.has(`${r.agent}:${r.id}`) || live.has(`${r.agent}:${r.id.replace(/^chat:/, '')}`)) {
+        results.push({ agent: r.agent, id: r.id, ok: false, freedBytes: 0, error: '会话仍在活跃，未删除' });
+        continue;
+      }
+      const list = byAgent.get(r.agent) ?? [];
+      list.push(r.id);
+      byAgent.set(r.agent, list);
+    }
+    for (const [agent, ids] of byAgent) {
+      const a = this.adapters.find((x) => x.id === agent);
+      if (!a?.deleteSessions) {
+        results.push(...ids.map((id) => ({ agent, id, ok: false, freedBytes: 0, error: '该工具不支持删除' })));
+        continue;
+      }
+      try {
+        results.push(...(await a.deleteSessions(ids, trash)));
+      } catch (e) {
+        results.push(
+          ...ids.map((id) => ({
+            agent,
+            id,
+            ok: false,
+            freedBytes: 0,
+            error: e instanceof Error ? e.message : String(e),
+          })),
+        );
+      }
+    }
+    return results;
+  }
+
+  /** 会话产物的磁盘路径（Finder 定位用）：优先上次扫描缓存，没扫过现扫。 */
+  async sessionPaths(agent: AgentId, id: string): Promise<string[]> {
+    const scan = this.lastSessionScan ?? (await this.scanSessions());
+    return scan.find((s) => s.agent === agent && s.id === id)?.paths ?? [];
   }
 
   /** 台账保留清扫——失败静默（DB 被占等场景下轮再来）。 */
@@ -311,6 +394,28 @@ export class AgentRegistry {
     return this.settings;
   }
 
+  /**
+   * 设置页 BYOK：写/清某 agent 的用户自填 API Key。
+   * apiKey 空白或 null → 删条目并清掉内存中的额度快照（UI 即时消失）；
+   * 否则持久化到 credentials.json 并立即拉一轮额度。key 与 agent 的监听开关
+   * 无关——停监听保留 key（同 hooks 偏好保留语义），重开即恢复。
+   */
+  async setAgentKey(agent: AgentId, apiKey: string | null, baseUrl?: string) {
+    const key = apiKey?.trim();
+    if (key) {
+      this.byok[agent] = { apiKey: key, ...(baseUrl ? { baseUrl } : {}), updatedAt: Date.now() };
+    } else {
+      delete this.byok[agent];
+      this.quotas.delete(agent);
+    }
+    try {
+      saveCredentials(this.byok);
+    } catch {
+      // 写盘失败不阻塞：内存态已生效，下轮 refreshQuotas 照常用。
+    }
+    await this.refreshQuotas();
+  }
+
   /** 给监听中且 hook 开启的已安装 agent 装 hook（幂等）。返回各 agent 是否改动。 */
   async installAllHooks(): Promise<Record<AgentId, boolean>> {
     const out = {} as Record<AgentId, boolean>;
@@ -352,6 +457,7 @@ export class AgentRegistry {
     }
     const agents: AgentSnapshot[] = this.adapters.map((a) => {
       const disabled = !observed.has(a.id);
+      const cred = this.byok[a.id];
       return {
         agent: a.id,
         install: this.installs.get(a.id) ?? {
@@ -363,6 +469,11 @@ export class AgentRegistry {
         disabled,
         sessions: disabled ? [] : sessions.filter((s) => s.agent === a.id),
         quota: disabled ? undefined : this.quotas.get(a.id),
+        // BYOK 已配置状态（掩码预览）：停监听也保留——key 存在与否是事实陈述。
+        byok:
+          this.installs.get(a.id)?.supportsByok || cred?.apiKey
+            ? { hasKey: Boolean(cred?.apiKey), preview: cred?.apiKey ? maskKey(cred.apiKey) : undefined }
+            : undefined,
         // 停监听后今日/本周也该消失——隐藏会话却挂着用量数字对不上。
         today: disabled ? undefined : todayByAgent.get(a.id),
         week: disabled ? undefined : weekByAgent.get(a.id),

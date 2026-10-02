@@ -14,8 +14,8 @@ import { removeEndpointFile, writeEndpointFile, type HookEndpoint } from './endp
 /** 把原始 hook payload 翻译成归一化事件（可返回多条或 null）。 */
 export type HookTranslator = (payload: unknown) => unknown;
 
-// 路由白名单：已下线 agent（devin/claude-code）仍放行——旧 hook 脚本打进来 202 后
-// 无 adapter 接收即丢弃，比 404 更安静。
+// 路由白名单：已下线 agent（claude-code）仍放行——旧 hook 脚本打进来 202 后
+// 无 adapter 接收即丢弃，比 404 更安静。devin 已收编回来（agents/devin）。
 const VALID_AGENTS = new Set<AgentId>([
   'kimi',
   'zcode',
@@ -23,6 +23,7 @@ const VALID_AGENTS = new Set<AgentId>([
   'codex',
   'cursor',
   'devin',
+  'qoder',
   'claude-code',
 ] as AgentId[]);
 

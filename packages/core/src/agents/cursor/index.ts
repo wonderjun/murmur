@@ -26,6 +26,14 @@ import { readJsonFile } from '../../quota/common';
 import { fetchCursorQuota, hasCursorCredentials } from '../../quota/cursor';
 import type { AgentEvent, InstallInfo } from '../../types';
 import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import {
+  deleteCursorSessions,
+  listTranscripts,
+  scanCursorSessions,
+  slugToPath,
+  titleFromUserLine,
+  transcriptMeta,
+} from './files';
 
 // cursor 文档 hook 事件全集；CLI 只发其中子集（sessionStart/stop/postToolUse/
 // afterFileEdit/*ShellExecution），多挂无害——不触发的事件只是占位。
@@ -85,61 +93,6 @@ export function translateHookPayload(payload: unknown): AgentEvent[] {
   return [{ ...base, kind: 'status', status: 'working' }];
 }
 
-/** transcript 路径 → 会话归属：subagents/ 下的文件归并到父会话 uuid。 */
-function transcriptMeta(path: string): { sessionId: string; slug?: string; isSubagent: boolean } {
-  const parts = path.split('/');
-  const uuid = (parts[parts.length - 1] ?? '').replace(/\.jsonl$/, '');
-  const i = parts.lastIndexOf('agent-transcripts');
-  const slug = i > 0 ? parts[i - 1] : undefined;
-  const s = parts.lastIndexOf('subagents');
-  if (s > 0 && i > 0 && s > i) return { sessionId: parts[s - 1] ?? uuid, slug, isSubagent: true };
-  return { sessionId: uuid, slug, isSubagent: false };
-}
-
-const slugCache = new Map<string, string | undefined>();
-
-/**
- * projects 目录名是工作区绝对路径把 '/' 换成 '-'（如 Users-chen-Documents-flow）。
- * 逐段贪心最长匹配真实目录还原（目录名本身含 '-' 的歧义靠 existsSync 裁决），
- * 还原不出宁可不填 cwd。
- */
-function slugToPath(slug: string | undefined): string | undefined {
-  if (!slug) return undefined;
-  if (slugCache.has(slug)) return slugCache.get(slug);
-  const segs = slug.split('-');
-  let path = '';
-  let i = 0;
-  while (i < segs.length) {
-    let hit = '';
-    for (let j = segs.length; j > i; j--) {
-      const cand = segs.slice(i, j).join('-');
-      if (existsSync(join(path || '/', cand))) {
-        hit = cand;
-        break;
-      }
-    }
-    if (!hit) break;
-    path = join(path || '/', hit);
-    i += hit.split('-').length;
-  }
-  const resolved = i === segs.length && path ? path : undefined;
-  slugCache.set(slug, resolved);
-  return resolved;
-}
-
-/** 首个 user 行 → 会话标题：优先 <user_query> 包裹文本，退化为首个 text 块。 */
-function titleFromUserLine(obj: Record<string, unknown>): string | undefined {
-  const msg = obj.message as Record<string, unknown> | undefined;
-  const content = Array.isArray(msg?.content) ? (msg.content as Array<Record<string, unknown>>) : [];
-  const text = content
-    .map((b) => (b.type === 'text' && typeof b.text === 'string' ? b.text : ''))
-    .filter(Boolean)
-    .join('\n');
-  const inner = /<user_query>([\s\S]*?)<\/user_query>/.exec(text)?.[1] ?? text;
-  const t = inner.trim().replace(/\s+/g, ' ').slice(0, 80);
-  return t || undefined;
-}
-
 /** 判断 assistant 行是否含 tool_use 块。 */
 function hasToolUse(obj: Record<string, unknown>): boolean {
   const msg = obj.message as Record<string, unknown> | undefined;
@@ -185,24 +138,6 @@ export function translateTranscriptLine(
     return [{ ...base, kind: 'status', status: 'working' }];
   }
   return [{ ...base, kind: 'status' }];
-}
-
-/** 收集 projects 下全部 agent-transcripts jsonl（<uuid>.jsonl 与 <uuid>/<uuid>.jsonl、subagents/ 都收）。 */
-function listTranscripts(projectsDir: string): string[] {
-  const out: string[] = [];
-  const walk = (dir: string, depth: number) => {
-    if (depth > 3 || !existsSync(dir)) return;
-    for (const name of readdirSync(dir)) {
-      const p = join(dir, name);
-      const st = statSync(p, { throwIfNoEntry: false });
-      if (st?.isDirectory()) walk(p, depth + 1);
-      else if (name.endsWith('.jsonl')) out.push(p);
-    }
-  };
-  for (const proj of readdirSync(projectsDir)) {
-    walk(join(projectsDir, proj, 'agent-transcripts'), 0);
-  }
-  return out;
 }
 
 /** CLI 会话的轮询记忆：上次 updatedAtMs、是否刚报过 working、连续静默轮数。 */
@@ -327,5 +262,8 @@ export function createCursorAdapter(): AgentAdapter {
     },
 
     quota: fetchCursorQuota,
+
+    scanSessions: scanCursorSessions,
+    deleteSessions: deleteCursorSessions,
   };
 }

@@ -10,8 +10,9 @@
  *      opencode 插件），只动引用 legacy 家目录（~/.perch 或 PERCH_HOME）或
  *      带旧 hook 标记的串。改写后的条目含新 HOOKS_DIR 路径，
  *      能被新安装器识别为自己的条目，不会产生重复安装。
- *   3. 摘除 perch 注入过但 murmur 未收编的宿主配置（claude settings.json、
- *      devin config.json）——这些条目指向死端点，留着只会空转 spool。
+ *   3. 摘除 perch 注入过但 murmur 未收编的宿主配置（claude settings.json）
+ *      ——这些条目指向死端点，留着只会空转 spool；devin config.json 自
+ *      devin adapter 收编后走换词根改写（同 cursor 块），不再摘除。
  *
  * 幂等：目标目录已存在则跳过搬迁；制品清扫每次启动都跑，重复执行是 no-op，
  * 绝不碰 orca/otty 等他人条目（只认 legacy 家目录路径归属，裸 "perch" 子串不算）。
@@ -104,9 +105,9 @@ function migrateHomeDir(home: string, legacy: string): boolean {
 
 /** perch 注入过但 murmur 未收编的宿主 hook 配置（死端点条目摘除目标）。 */
 function legacyDeadHookConfigs(userHome: string): string[] {
-  const appData =
-    process.platform === 'win32' ? (process.env.APPDATA ?? join(userHome, 'AppData/Roaming')) : join(userHome, '.config');
-  return [join(userHome, '.claude', 'settings.json'), join(appData, 'devin', 'config.json')];
+  // devin config.json 曾在此列——devin adapter 收编后老条目换词根即可续用，
+  // 移到下方 rebrand 块处理。
+  return [join(userHome, '.claude', 'settings.json')];
 }
 
 /** 摘除 JSON hook 配置中含 legacy agent-hooks 路径的整条 entry（他人条目原样保留）。 */
@@ -171,7 +172,18 @@ function rebrandAgentArtifacts(legacyHome: string, deadConfigs: string[]): void 
       // 迁移失败时旧插件继续指向死路径静默失败，不影响其余采集平面。
     }
   }
-  // claude-code/devin：perch 注过 hook 但 murmur 无对应 adapter——改写没有意义
+  // devin：config.json 的 hooks 键与 cursor 同法换词根——perch 条目指向
+  // ~/.murmur/agent-hooks/devin.sh（migrateHomeDir 已把脚本搬过去并换词根）。
+  const devinCfg = agentPaths('devin').hookConfig;
+  if (devinCfg && existsSync(devinCfg)) {
+    try {
+      const cfg = JSON.parse(readFileSync(devinCfg, 'utf8')) as Record<string, unknown>;
+      if (rebrandJsonStrings(cfg, legacyHome)) writeFileSync(devinCfg, JSON.stringify(cfg, null, 2));
+    } catch {
+      // 配置损坏/被占用时不碰它，避免误伤用户配置。
+    }
+  }
+  // claude-code：perch 注过 hook 但 murmur 无对应 adapter——改写没有意义
   // （指过来只会收 404 变死信），整条摘除。marker 用本机 legacy 绝对路径，只认我们的脚本。
   const marker = join(legacyHome, 'agent-hooks');
   for (const cfgPath of deadConfigs) {

@@ -16,6 +16,9 @@ import { join } from 'node:path';
 import { MURMUR_HOME } from './paths';
 import type { AgentId } from './types';
 
+/** 面板主题：system=跟随 macOS 外观，dark/light=固定。仅 webview 消费。 */
+export type ThemePreference = 'system' | 'dark' | 'light';
+
 export interface MurmurSettings {
   /** 登录时启动（写 ~/Library/LaunchAgents plist，desktop 侧执行）。 */
   launchAtLogin: boolean;
@@ -25,6 +28,10 @@ export interface MurmurSettings {
   notifyOnWaiting: boolean;
   /** 启动时自动给已安装且被监听的 agent 装 hook。 */
   autoInstallHooks: boolean;
+  /** 面板主题，默认跟随系统。 */
+  theme: ThemePreference;
+  /** 自定义 UI 字体名（如 "Maple Mono NF CN"）；空串=系统栈（SF+苹方）。 */
+  font: string;
   /** per-agent 监听总闸；缺省 true。 */
   agents: Partial<Record<AgentId, boolean>>;
   /** per-agent hook 上报开关；缺省 true。 */
@@ -36,6 +43,8 @@ export const DEFAULT_SETTINGS: MurmurSettings = {
   showDockIcon: false,
   notifyOnWaiting: false,
   autoInstallHooks: true,
+  theme: 'system',
+  font: '',
   agents: {},
   hooks: {},
 };

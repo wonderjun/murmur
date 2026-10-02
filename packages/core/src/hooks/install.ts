@@ -151,6 +151,136 @@ export function mergeCodexHooks(configPath: string, agent: AgentId, events: stri
   return { changed: true };
 }
 
+/** devin 式 hook 条目：matcher-group 包 command handler——与 orca 实测条目同构；
+ * 不带 async（devin hook schema 未文档化该字段，保守按文档形状写）。 */
+function devinHookEntry(command: string) {
+  return { hooks: [{ type: 'command' as const, command, timeout: 10 }] };
+}
+
+/**
+ * 纯配置合并（devin ~/.config/devin/config.json 的 hooks 键 schema，无 fs 副作用）。
+ * 与 codex 同铁律：只加不减、已有我们的条目即跳过、他人条目（orca 等）原样保留。
+ */
+export function mergeDevinHooksConfig(cfg: Record<string, unknown>, command: string, events: string[]): boolean {
+  const hooks = (cfg.hooks ?? {}) as Record<string, unknown>;
+  let changed = false;
+  for (const ev of events) {
+    const cur = hooks[ev];
+    const list = Array.isArray(cur) ? [...cur] : cur != null ? [cur] : [];
+    if (!hasOurHook(list)) {
+      list.push(devinHookEntry(command));
+      changed = true;
+    }
+    hooks[ev] = list;
+  }
+  cfg.hooks = hooks;
+  return changed;
+}
+
+/**
+ * 合并写入 devin `~/.config/devin/config.json`（用户级配置的 hooks 键）。
+ * 铁律同上：追加不覆盖、原子写、脚本丢失自愈；config.json 是 devin 本体在管的
+ * 用户配置（permissions/mcp/devin.org_id 等同住），只动 hooks 子树。
+ */
+export function mergeDevinHooks(configPath: string, agent: AgentId, events: string[]): { changed: boolean } {
+  const dir = join(configPath, '..');
+  mkdirSync(dir, { recursive: true });
+  let cfg: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    try {
+      cfg = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+    } catch {
+      // 配置损坏时不碰它，避免误伤用户配置。
+      return { changed: false };
+    }
+  }
+  const hooks = (cfg.hooks ?? {}) as Record<string, unknown>;
+  const command = writeHookScript(agent);
+  if (events.every((ev) => hasOurHook(hooks[ev]))) return { changed: false };
+  mergeDevinHooksConfig(cfg, command, events);
+  const tmp = `${configPath}.murmur-tmp`;
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+  chmodSync(tmp, 0o600);
+  renameSync(tmp, configPath);
+  return { changed: true };
+}
+
+/** devin config.json 的 hooks 键里是否已有我们的条目（脚本路径片段判归属）。 */
+export function devinHooksRegistered(configPath: string | null): boolean {
+  if (!configPath || !existsSync(configPath)) return false;
+  try {
+    return readFileSync(configPath, 'utf8').includes('agent-hooks/devin.sh');
+  } catch {
+    // 读不了算未注册。
+    return false;
+  }
+}
+
+/** qoder 式 hook 条目：与 codex 同构的 matcher-group（官方 settings.json schema），
+ * async 后台跑不阻塞 agent 决策链；timeout 单位是秒（默认 600），脚本自限 1.5s 给 10s 余量。 */
+function qoderHookEntry(command: string) {
+  return { hooks: [{ type: 'command' as const, command, async: true, timeout: 10 }] };
+}
+
+/**
+ * 纯配置合并（qoder ~/.qoder/settings.json 的 hooks 键 schema，无 fs 副作用）。
+ * 与 codex/devin 同铁律：只加不减、已有我们的条目即跳过、他人条目原样保留。
+ */
+export function mergeQoderHooksConfig(cfg: Record<string, unknown>, command: string, events: string[]): boolean {
+  const hooks = (cfg.hooks ?? {}) as Record<string, unknown>;
+  let changed = false;
+  for (const ev of events) {
+    const cur = hooks[ev];
+    const list = Array.isArray(cur) ? [...cur] : cur != null ? [cur] : [];
+    if (!hasOurHook(list)) {
+      list.push(qoderHookEntry(command));
+      changed = true;
+    }
+    hooks[ev] = list;
+  }
+  cfg.hooks = hooks;
+  return changed;
+}
+
+/**
+ * 合并写入 qoder `~/.qoder/settings.json`。该文件是 agent 本体在管的共享配置
+ * （providers/enabledPlugins 等同住，含用户 API key）——只动 hooks 子树，其余键
+ * 原样保留；原子写同其他 merge*。官方文档明示配置改完即生效，无 trust 门槛。
+ */
+export function mergeQoderHooks(configPath: string, agent: AgentId, events: string[]): { changed: boolean } {
+  const dir = join(configPath, '..');
+  mkdirSync(dir, { recursive: true });
+  let cfg: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    try {
+      cfg = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+    } catch {
+      // 配置损坏时不碰它，避免误伤用户配置。
+      return { changed: false };
+    }
+  }
+  const hooks = (cfg.hooks ?? {}) as Record<string, unknown>;
+  const command = writeHookScript(agent);
+  if (events.every((ev) => hasOurHook(hooks[ev]))) return { changed: false };
+  mergeQoderHooksConfig(cfg, command, events);
+  const tmp = `${configPath}.murmur-tmp`;
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+  chmodSync(tmp, 0o600);
+  renameSync(tmp, configPath);
+  return { changed: true };
+}
+
+/** qoder settings.json 的 hooks 键里是否已有我们的条目（脚本路径片段判归属）。 */
+export function qoderHooksRegistered(configPath: string | null): boolean {
+  if (!configPath || !existsSync(configPath)) return false;
+  try {
+    return readFileSync(configPath, 'utf8').includes('agent-hooks/qoder.sh');
+  } catch {
+    // 读不了算未注册。
+    return false;
+  }
+}
+
 /**
  * 合并写入 zcode 用户级 hook 配置（`~/.zcode/cli/config.json`）。
  * 与 mergeJsonHooks 同铁律：追加不覆盖；原子写；脚本丢失时自愈重建。

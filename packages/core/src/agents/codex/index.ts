@@ -12,7 +12,7 @@
  *      仅 agent-turn-complete）兜底。
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, watch, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, watch, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -28,21 +28,7 @@ import { agentPaths } from '../../paths';
 import { fetchCodexQuota } from '../../quota/codex';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
 import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
-
-function listRollouts(dir: string, depth = 0): string[] {
-  const out: string[] = [];
-  if (depth > 4 || !existsSync(dir)) return out;
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    const st = statSync(p, { throwIfNoEntry: false });
-    if (st?.isDirectory()) out.push(...listRollouts(p, depth + 1));
-    else if (name.startsWith('rollout-') && name.endsWith('.jsonl')) out.push(p);
-  }
-  return out;
-}
-
-/** rollout 文件名尾段 uuid == session_meta.id，push/pull 两平面会话身份靠它对齐。 */
-const ROLLOUT_UUID_RE = /rollout-[^/]*?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i;
+import { deleteCodexSessions, listRollouts, ROLLOUT_UUID_RE, scanCodexSessions } from './files';
 
 /**
  * rollout 行 → 会话 id：文件名尾段 uuid 为唯一口径（push 侧 hookSessionId 同样抽它）。
@@ -289,5 +275,8 @@ export function createCodexAdapter(): AgentAdapter {
     },
 
     quota: fetchCodexQuota,
+
+    scanSessions: scanCodexSessions,
+    deleteSessions: deleteCodexSessions,
   };
 }

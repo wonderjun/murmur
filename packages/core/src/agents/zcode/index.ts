@@ -9,7 +9,8 @@
  *     {inputTokens,outputTokens,cacheReadTokens,cacheWriteTokens} 为真实增量。
  *     单行 ~300KB（request 内嵌完整 prompt/消息与 authorization 头），
  *     走 tailRaw + json-span 只局部 parse 目标字段，不物化全量负载。
- *   v2/credentials.json —— enc:v1 加密存储，quota 暂不可拉（留待 BYOK）。
+ *   v2/credentials.json —— enc:v1 加密存储，quota 走 BYOK（quota/zcode.ts，
+ *     用户自填 API Key 调官方 monitor 端点，区域由 coding-plan-cache 嗅探）。
  *
  * push 平面（可选增强）：往 ~/.zcode/cli/config.json 合并 hooks.events 七事件
  *   + enabled:true，command+async 旁路不干预决策链。给 permission/实时 turn.end
@@ -23,9 +24,11 @@ import { join } from 'node:path';
 import { isHookInstalled, mergeZcodeHooks, removeHookScript, unmergeZcodeHooks, zcodeHookState } from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
+import { fetchZcodeQuota } from '../../quota/zcode';
 import type { AgentEvent, TokenUsage } from '../../types';
 import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
 import { stringAtSpan, topLevelString, topLevelValueSpan, topLevelValueSpans } from '../json-span';
+import { deleteZcodeSessions, scanZcodeSessions } from './files';
 
 /** zcode hook 事件全集（~/.zcode/cli/config.json 的 hooks.events.<Event>[]）。 */
 const HOOK_EVENTS = [
@@ -150,9 +153,10 @@ export function createZcodeAdapter(): AgentAdapter {
       const hookState = zcodeHookState(paths.hookConfig);
       return {
         installed,
-        hasCredentials: false, // credentials.json 是 enc:v1 加密存储，quota 拉不了。
+        hasCredentials: false, // credentials.json 是 enc:v1 加密存储，读不了；quota 走 BYOK。
         homeDir: paths.home,
         hookInstalled: hookState === 'active' && isHookInstalled('zcode'),
+        supportsByok: true,
         note: installed
           ? `${taskCount} 个任务${hookState === 'disabled' ? '（hook 在 zcode 设置中被关闭）' : ''}`
           : '未发现 ~/.zcode/v2',
@@ -277,5 +281,10 @@ export function createZcodeAdapter(): AgentAdapter {
         for (const off of offs) off();
       };
     },
+
+    quota: (byok) => fetchZcodeQuota(byok),
+
+    scanSessions: scanZcodeSessions,
+    deleteSessions: deleteZcodeSessions,
   };
 }

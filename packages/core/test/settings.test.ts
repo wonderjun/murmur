@@ -15,12 +15,14 @@ import { DEFAULT_SETTINGS, flagEnabled, loadSettings, saveSettings } from '../sr
 const dir = mkdtempSync(join(tmpdir(), 'murmur-settings-'));
 
 describe('settings 读写', () => {
-  test('文件缺失时回默认：自启关、Dock 藏、通知关、自动装开', () => {
+  test('文件缺失时回默认：自启关、Dock 藏、通知关、自动装开、主题跟随系统、字体系统栈', () => {
     const s = loadSettings(dir);
     expect(s.launchAtLogin).toBe(false);
     expect(s.showDockIcon).toBe(false);
     expect(s.notifyOnWaiting).toBe(false);
     expect(s.autoInstallHooks).toBe(true);
+    expect(s.theme).toBe('system');
+    expect(s.font).toBe('');
     expect(s.agents).toEqual({});
     expect(s.hooks).toEqual({});
   });

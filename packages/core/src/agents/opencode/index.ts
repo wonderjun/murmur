@@ -21,6 +21,7 @@ import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
 import { pick, type AgentAdapter } from '../base';
+import { deleteOpencodeSessions, scanOpencodeSessions } from './files';
 import { watchLegacyJson } from './legacy';
 
 /** opencode 插件源码：事件总线 → POST ingest，失败静默。 */
@@ -296,5 +297,8 @@ export function createOpencodeAdapter(): AgentAdapter {
         db.close();
       };
     },
+
+    scanSessions: scanOpencodeSessions,
+    deleteSessions: deleteOpencodeSessions,
   };
 }

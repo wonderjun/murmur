@@ -7,7 +7,7 @@
  */
 
 /** 支持的编码 agent 标识。 */
-export type AgentId = 'kimi' | 'zcode' | 'opencode' | 'codex' | 'cursor';
+export type AgentId = 'kimi' | 'zcode' | 'opencode' | 'codex' | 'cursor' | 'devin' | 'qoder';
 
 /** 会话状态：working=干活中 waiting=轮到你了/等批准 idle=空闲 stale=疑似卡住 ended=已结束。 */
 export type AgentStatus = 'working' | 'waiting' | 'idle' | 'stale' | 'ended';
@@ -110,6 +110,8 @@ export interface InstallInfo {
   homeDir: string;
   /** 我们的 hook/插件是否已注入。 */
   hookInstalled: boolean;
+  /** quota 平面接受用户自带 API Key（BYOK）——UI 据此渲染 key 输入行。 */
+  supportsByok?: boolean;
   note?: string;
 }
 
@@ -121,10 +123,49 @@ export interface AgentSnapshot {
   disabled: boolean;
   sessions: SessionSnapshot[];
   quota?: QuotaSnapshot;
+  /** BYOK 已配置状态（掩码，绝不含明文 key）。仅 supportsByok 的 agent 出现。 */
+  byok?: { hasKey: boolean; preview?: string };
   /** 今日本地台账：token 合计与估算成本（quota API 之外始终可用）。 */
   today?: { tokens: number; costUsd: number };
   /** 近 7 日本地台账（用量页用）。 */
   week?: { tokens: number; costUsd: number };
+}
+
+/**
+ * 磁盘会话条目（会话文件管理页一行）：adapter 盘点产物，UI 消费。
+ * kind 决定删除语义——dir/file 进废纸篓可恢复，db 是库内行永久删除。
+ */
+export interface StoredSession {
+  agent: AgentId;
+  /** agent 内稳定 id（删除请求回传 key）。 */
+  id: string;
+  /** 会话标题（数据源携带时）。 */
+  title?: string;
+  /** 项目/工作目录绝对路径，不可得为空。 */
+  project?: string;
+  /** 磁盘占用字节：dir 递归和、file 本体、db 行内容字节估算。 */
+  sizeBytes: number;
+  /** 创建时间（ms epoch），不可考为 0。 */
+  createdAt: number;
+  /** 最后修改时间（ms epoch），列表默认按它倒序。 */
+  modifiedAt: number;
+  kind: 'dir' | 'file' | 'db';
+  /** 进行中/等输入会话（快照命中或 mtime 新鲜）——禁删。 */
+  active: boolean;
+  /** 该会话占用的磁盘路径（db 行无）；供「在 Finder 显示」与排查用。 */
+  paths?: string[];
+}
+
+/** 单个会话的删除结果。 */
+export interface SessionDeleteResult {
+  agent: AgentId;
+  id: string;
+  ok: boolean;
+  /** 实际释放的字节数（db 行是估算，文件体积需 VACUUM 才回收）。 */
+  freedBytes: number;
+  error?: string;
+  /** 库内删除提示：文件体积未回收，需压实数据库。 */
+  needsVacuum?: boolean;
 }
 
 /** 整个应用的渲染快照。 */

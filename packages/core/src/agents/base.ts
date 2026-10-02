@@ -10,11 +10,13 @@
  * 以字节偏移为游标，重启续跑不重算。
  */
 
-import { existsSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from 'node:fs';
 import { open } from 'node:fs/promises';
+import { join } from 'node:path';
 
+import type { ByokCredential } from '../credentials';
 import type { Ledger } from '../ledger/db';
-import type { AgentEvent, AgentId, InstallInfo, QuotaSnapshot } from '../types';
+import type { AgentEvent, AgentId, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
 
 export interface AgentAdapter {
   id: AgentId;
@@ -28,8 +30,15 @@ export interface AgentAdapter {
   translateHook?(payload: unknown): AgentEvent[];
   /** pull 平面：开始 watch，返回取消函数。 */
   watch?(emit: (e: AgentEvent) => void, ledger: Ledger): Promise<() => void>;
-  /** 额度快照（可选，失败静默）。 */
-  quota?(): Promise<QuotaSnapshot>;
+  /** 额度快照（可选，失败静默）。byok 是用户在设置页自填的 API Key，实现方自定与本地凭据的优先级。 */
+  quota?(byok?: ByokCredential): Promise<QuotaSnapshot>;
+  /** 会话文件盘点：列出该 agent 的持久化会话产物（清理页数据源）。 */
+  scanSessions?(): Promise<StoredSession[]>;
+  /**
+   * 删除指定会话产物：fs 路径经注入的 trash 进废纸篓（可恢复），
+   * db 行由各 adapter 自行事务删除（不可恢复，UI 侧单列确认）。
+   */
+  deleteSessions?(ids: string[], trash: (path: string) => boolean): Promise<SessionDeleteResult[]>;
 }
 
 /**
@@ -117,6 +126,36 @@ export class JsonlTailer {
     } finally {
       await fh.close();
     }
+  }
+}
+
+/** 目录递归总大小（字节）；文件则自身大小，不存在/不可读按 0 计。 */
+export function dirSize(path: string): number {
+  const st = statSync(path, { throwIfNoEntry: false });
+  if (!st) return 0;
+  if (!st.isDirectory()) return st.size;
+  let total = 0;
+  try {
+    for (const name of readdirSync(path)) total += dirSize(join(path, name));
+  } catch {
+    // 权限/竞态删除导致的读失败：按已扫到的部分算。
+  }
+  return total;
+}
+
+/** 读文件头部最多 max 字节（取首行元数据用，避免物化大行 JSONL）。 */
+export function readHead(path: string, max = 16384): string {
+  try {
+    const fd = openSync(path, 'r');
+    try {
+      const buf = Buffer.alloc(max);
+      const n = readSync(fd, buf, 0, max, 0);
+      return buf.toString('utf8', 0, n);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return '';
   }
 }
 
