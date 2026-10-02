@@ -1,6 +1,7 @@
 /**
  * shadcn Checkbox 的 murmur 版（radix-ui 底层）：3.5px 小方框 + hairline 描边，
  * 选中/半选都是 foreground 实心反相（单色体系，不引彩色）。
+ * CUSTOMIZED: 全量 token 化改写（默认 palette → murmur 语义 token），细节见 ../CUSTOMIZATIONS.md。
  */
 
 import { Check, Minus } from "lucide-react";

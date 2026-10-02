@@ -3,6 +3,7 @@
  * default 是 bg-raised + hairline 的次级按钮；inverse 是单色反相的强确认；
  * ghost 无框弱交互；destructive/destructiveSoft 是删除确认的红（独立
  * --destructive token，与 status 红同色相但不占状态色语义）。
+ * CUSTOMIZED: 全量 token 化改写（默认 palette → murmur 语义 token），细节见 ../CUSTOMIZATIONS.md。
  */
 
 import { cva, type VariantProps } from "class-variance-authority";

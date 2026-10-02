@@ -3,6 +3,7 @@
  * 1.5px 细轨道 + foreground/15 圆头滑块。
  * Viewport 的 `[&>div]:block!`：Radix 给内容包装层内联 `display:table`（max-content 布局，
  * 长文本不换行、横向撑出面板），归一为 block 与 reka（Vue 版 as-child 直渲）DOM 同构。
+ * CUSTOMIZED: 全量 token 化改写 + Viewport block 归一，细节见 ../CUSTOMIZATIONS.md。
  */
 
 import { ScrollArea as ScrollAreaPrimitive } from "radix-ui";

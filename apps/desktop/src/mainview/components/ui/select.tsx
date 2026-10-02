@@ -2,6 +2,7 @@
  * shadcn Select 的 murmur 版（radix-ui 底层）：trigger 是 bg-raised + hairline
  * 的 meta 小号形态，content 走 bg-card + shadow-raised 浮层语言（与 ScrollArea
  * 同族 token 化，无彩色）。
+ * CUSTOMIZED: 全量 token 化改写（默认 palette → murmur 语义 token），细节见 ../CUSTOMIZATIONS.md。
  */
 
 import { Check, ChevronDown } from "lucide-react";
