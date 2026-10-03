@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import AgentIcon from "@/components/agent-icon";
 import StatusDot from "@/components/status-dot";
 import { AGENT_META } from "@/lib/agent-meta";
-import { fmtTokens } from "@/lib/format";
+import { fmtQuotaHeadline, fmtTokens } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
@@ -196,7 +196,7 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
                     key={w.label}
                     className="rounded-full border border-hairline px-2 py-0.5 font-mono text-micro tabular-nums text-muted-foreground"
                   >
-                    <span className="font-sans">{w.label}</span> {w.usedPct}%
+                    <span className="font-sans">{w.label}</span> {fmtQuotaHeadline(w)}
                   </span>
                 ))}
               </div>

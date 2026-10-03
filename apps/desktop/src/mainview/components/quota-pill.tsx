@@ -2,6 +2,7 @@
  *  阈值语义与 setup-view 的额度条同规：≥70% 前景加重、≥90% 红；
  *  琥珀只属于「轮到你了」，正常态进度底色一律前景 50%（idle 是状态色，不做进度条）。 */
 
+import { fmtQuotaHeadline } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import type { QuotaWindow } from "@core/types";
@@ -39,7 +40,7 @@ export default function QuotaPill({ window: w }: { window: QuotaWindow }) {
       title={title}
     >
       <span className="font-sans font-medium">{w.label}</span>
-      <span className="tabular-nums">{w.usedPct}%</span>
+      <span className="tabular-nums">{fmtQuotaHeadline(w)}</span>
       <span className="relative h-[3px] w-7 overflow-hidden rounded-full bg-foreground/10">
         <span
           className={cn("absolute inset-y-0 left-0 rounded-full", danger ? "bg-stale" : warn ? "bg-foreground" : "bg-foreground/50")}

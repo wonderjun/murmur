@@ -4,7 +4,7 @@ import { useMemo } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import { AGENT_META, AGENT_ORDER, BYOK_REASON } from "@/lib/agent-meta";
-import { fmtTokens } from "@/lib/format";
+import { fmtQuotaAmount, fmtQuotaHeadline } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
@@ -82,7 +82,7 @@ export default function SetupView() {
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-meta font-medium text-foreground">{w.label}</span>
                         <span className={cn("font-mono text-meta tabular-nums", quotaTone(w.usedPct))}>
-                          {w.limit !== undefined ? `${w.usedPct}%` : fmtAmount(w.used ?? 0)}
+                          {fmtQuotaHeadline(w)}
                         </span>
                       </div>
                       <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-foreground/10">
@@ -92,7 +92,7 @@ export default function SetupView() {
                         />
                       </div>
                       <div className="mt-1 flex items-center justify-between gap-2 font-mono text-micro text-faint">
-                        <span>{quotaAmount(w)}</span>
+                        <span>{fmtQuotaAmount(w)}</span>
                         <span>{resetText(w)}</span>
                       </div>
                     </div>
@@ -158,18 +158,6 @@ function quotaTone(usedPct: number) {
 /* 进度条灰阶与 quota-pill 同规：正常态前景 50%、≥70% 前景实色、≥90% 红。 */
 function quotaBar(usedPct: number) {
   return usedPct >= 90 ? "bg-stale" : usedPct >= 70 ? "bg-foreground" : "bg-foreground/50";
-}
-
-function quotaAmount(window: QuotaWindow) {
-  if (window.used === undefined) return "用量未提供";
-  // 无上限窗口（devin ACU 这类计量计费）：只报已用，不编 limit。
-  if (window.limit === undefined) return `${fmtAmount(window.used)} 已用`;
-  return `${fmtAmount(window.used)} / ${fmtAmount(window.limit)}`;
-}
-
-/** 额度数字：小数值（ACU 这类小数计量）保一位小数，大数走紧凑格式。 */
-function fmtAmount(n: number) {
-  return n < 100 && !Number.isInteger(n) ? n.toFixed(1) : fmtTokens(n);
 }
 
 function resetText(window: QuotaWindow) {
