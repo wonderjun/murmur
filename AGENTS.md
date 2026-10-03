@@ -20,7 +20,7 @@ bun run dev            # 构建并启动（watch 模式）
 bun run dev:hmr        # 带 vite HMR 的开发模式（vite@5173 + app 本体）
 bun run build          # 出稳定包
 bun run test           # core 引擎测试（cd packages/core && bun test——必须在 core 目录跑，bunfig.toml 的 test preload 沙箱才生效）
-bun run test:desktop   # desktop RPC 契约测试 + tsconfig 同步脚本测试（不进 core 沙箱）
+bun run test:desktop   # desktop RPC 契约 + 架构边界（含显式 any 门禁）+ tsconfig 同步脚本测试（不进 core 沙箱）
 bun run typecheck      # core 类型检查（tsc --noEmit）
 bun run typecheck:desktop  # 桌面端类型检查（tsc --noEmit，覆盖 webview + bun 主进程；需要 .hutch/devkit）
 bun run sync:tsconfig  # 从 .hutch/devkit/tsconfig.json 重写 desktop tsconfig 的 paths
@@ -77,7 +77,7 @@ apps/desktop/
 
 ### 回填语义（pull 平面的灵魂）
 
-历史事件不冒充当下：无时间戳或超出 `LIVE_WINDOW_MS`（90s）的旧事件按「建档落真实残态」处理——旧 `turn.end` 落 waiting（真实状态就是等你），旧 `turn.start/tool.call` 落 ended（废弃 turn），不置 working、不发通知。回填语义版本号 `BACKFILL_EPOCH`（ledger/db.ts）变更时自动清库全量重扫。70 天（`BACKFILL_WINDOW_MS`）外的旧事件不落库。
+历史事件不冒充当下：无时间戳或超出 `LIVE_WINDOW_MS`（90s）的旧事件按「建档落真实残态」处理——旧 `turn.end` 落 waiting（真实状态就是等你），旧 `turn.start/tool.call/permission.request` 落 ended（废弃 turn / 废弃审批，旧审批不得冒充当前 waiting），不置 working、不发通知。比该会话已见最新事件更旧的历史事件不覆盖已到达状态（usage 仍累加）。回填语义版本号 `BACKFILL_EPOCH`（ledger/db.ts）变更时自动清库全量重扫。70 天（`BACKFILL_WINDOW_MS`）外的旧事件不落库。
 
 ### 状态机（engine/status-engine.ts）
 
@@ -125,7 +125,7 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 | hook 脚本非零退出、stdout 非 JSON | 必须 `exit 0`、stdout 只吐 `{}` |
 | 伪造成「现在」的时间戳 | 无时间戳的历史事件按 at=0 回填语义处理，绝不冒充当下 |
 | UI 裸色板 / hex / 任意 px 字号 | 语义 token；app.css 是 token 唯一真源；彩色只有 accent（谁）与 status（什么状态）；组件内禁止写死品牌色，accent 走 `data-agent` 属性 |
-| `any` | 具体类型；外部脏数据用 `as unknown as X` 收敛在 adapter 边界 |
+| `any` | 具体类型；外部脏数据用 `as unknown as X` 收敛在 adapter 边界。生产源码由 architecture-boundary 词法门禁卡住（注释、字符串、模板静态文本除外） |
 | BYOK key 进 settings.json / RPC 快照 / 日志 | settings.json 经 getSettings 整包发 webview——key 只进 credentials.json（0600），对外一律 maskKey 掩码 |
 
 规范文档与实现冲突时的仲裁：token/状态色以 `app.css` 为准，类型与 agent 集合以 `packages/core/src/types.ts` 为准，并顺手把 skill 改对。

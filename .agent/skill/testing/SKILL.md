@@ -63,6 +63,16 @@ describe('loadSettings', () => {
 - describe/it 文案用中文，写完读一遍能当行为文档。
 - 命名 `<被测模块>.test.ts`；一个文件测一个模块/一个主题面。
 
+## desktop 门禁（不进 core 沙箱）
+
+`bun run test:desktop` 跑三份，不进 `packages/core` 的 bunfig 沙箱：
+
+- `apps/desktop/test/rpc-contract.test.ts`：RPC 三同步
+- `apps/desktop/test/architecture-boundary.test.ts`：core 纯 TS、webview 桥、shared 类型 import，以及生产源码显式 `any`
+- `scripts/sync-desktop-tsconfig.test.ts`：desktop tsconfig paths
+
+显式 `any` 扫 `packages/core/src` 与 `apps/desktop/src`（不含 `*.test` / `*.spec`）。词法扫描跳过 `//`、块注释、单/双引号字符串和模板静态文本；`${}` 插值里的代码仍扫，嵌套模板同样。只认独立标识符 `any`（`anyone`、`any_`、`$any` 不算）。命中格式 `相对路径:行号`。行为断言调用导出的 `findExplicitAny` 扫临时字符串，不往仓库写非法文件。
+
 ## 不测什么
 
 - 组件渲染（无组件测试链）。
@@ -74,5 +84,6 @@ describe('loadSettings', () => {
 - [ ] 涉及 MURMUR_HOME 的走了动态 import、其余钉 tmpdir？
 - [ ] 没有指向真机家目录的路径？
 - [ ] `bun run test` 全量绿（含 file-size 门禁）？
+- [ ] `bun run test:desktop` 绿（RPC 契约、架构边界含 any 门禁、tsconfig paths）？
 
 相关技能：`code-style`。

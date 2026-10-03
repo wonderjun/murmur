@@ -80,7 +80,7 @@ import { pick } from './base';
 | `packages/core` import electrobun/react/DOM API | core 必须保持纯 TS（bun test 可跑）；桌面能力只能在 `apps/desktop/src/bun` 用 |
 | 覆盖/重写用户 hook 配置文件 | 一律 mergeJsonHooks 合并 + HOOK_MARKER 标记幂等 |
 | 在组件写裸色板/hex | 用语义 token（见 ui-design skill） |
-| `any` | 具体类型；脏数据用 `as unknown as X` 收敛在 adapter 边界 |
+| `any` | 具体类型；脏数据用 `as unknown as X` 收敛在 adapter 边界。`bun run test:desktop` 词法门禁扫生产源码（跳过注释与字符串） |
 | 非零退出 hook 脚本 / hook 脚本写 stdout 非 JSON | hook 脚本必须 `exit 0`、stdout 只吐 `{}` |
 
 ## 自查清单
