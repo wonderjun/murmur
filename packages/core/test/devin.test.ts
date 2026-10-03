@@ -319,6 +319,90 @@ describe('devin watch：message_nodes 台账', () => {
   });
 });
 
+describe('devin message_nodes 脏指标与游标续跑', () => {
+  const chat = (mid: string, metrics: unknown) =>
+    JSON.stringify({ message_id: mid, role: 'assistant', metadata: { metrics } });
+
+  async function openNodes(name: string) {
+    const { Database } = await import('bun:sqlite');
+    const dir = join(HOME, name);
+    mkdirSync(join(dir, 'cli'), { recursive: true });
+    process.env.MURMUR_DEVIN_DATA = dir;
+    const db = new Database(join(dir, 'cli', 'sessions.db'));
+    db.exec(`CREATE TABLE sessions(id TEXT PRIMARY KEY, working_directory TEXT, model TEXT,
+               created_at INTEGER, last_activity_at INTEGER, title TEXT, hidden INTEGER DEFAULT 0);
+             CREATE TABLE message_nodes(row_id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT,
+               node_id INTEGER, parent_node_id INTEGER, chat_message TEXT, created_at INTEGER, metadata TEXT)`);
+    return { db, ledger: new Ledger(join(dir, 'ledger')) };
+  }
+
+  const usageOf = (events: Array<Record<string, unknown>>) => events.filter((e) => e.kind === 'usage');
+
+  test('非 JSON、缺 metrics、负数或非数字不入账，且不挡住同批有效行', async () => {
+    const { db, ledger } = await openNodes('devin-db-dirty');
+    const now = Math.floor(Date.now() / 1000);
+    const ins = (body: string) =>
+      db.run('INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES(?,?,?,?)', ['s1', 1, body, now - 20]);
+    ins('{broken input_tokens'); // 非法 JSON：json_extract 整段会抛，必须滤掉
+    ins(JSON.stringify({ message_id: 'm-miss', metadata: 'input_tokens 只是文本' })); // 缺 metrics
+    ins(chat('m-neg', { input_tokens: -5, output_tokens: -1 })); // 全负
+    ins(chat('m-str', { input_tokens: 'nope', output_tokens: '12' })); // 数字字符串也不收
+    ins(chat('m-zero', { input_tokens: 0, output_tokens: 0 }));
+    ins(chat('m-mix', { input_tokens: -3, output_tokens: 8, cache_read_tokens: 'x' })); // 只留下正数
+    ins(chat('m-ok', { input_tokens: 4, output_tokens: 1, cache_read_tokens: 2, cache_creation_tokens: 3 }));
+    try {
+      const events: Array<Record<string, unknown>> = [];
+      const unwatch = await createDevinAdapter().watch!((e) => events.push(e as unknown as Record<string, unknown>), ledger);
+      const usage = usageOf(events);
+      expect(usage.map((e) => e.tokens)).toEqual([
+        { input: 0, output: 8 },
+        { input: 4, output: 1, cacheRead: 2, cacheWrite: 3 },
+      ]);
+      expect(ledger.getCursor('devin:mn_rowid')).toBe('7'); // 坏行被跳过，游标仍过到最后一条有效 JSON
+      unwatch();
+    } finally {
+      ledger.close();
+      db.close();
+      process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
+    }
+  });
+
+  test('游标续跑重开不重复：已入账行与 fork 复制都不再记', async () => {
+    const { db, ledger } = await openNodes('devin-db-resume');
+    const now = Math.floor(Date.now() / 1000);
+    const ins = (mid: string, i: number, o: number) =>
+      db.run('INSERT INTO message_nodes(session_id,node_id,chat_message,created_at) VALUES(?,?,?,?)', [
+        's1',
+        1,
+        chat(mid, { input_tokens: i, output_tokens: o }),
+        now - 20,
+      ]);
+    ins('m-a', 10, 1);
+    try {
+      const first: Array<Record<string, unknown>> = [];
+      const stop1 = await createDevinAdapter().watch!((e) => first.push(e as unknown as Record<string, unknown>), ledger);
+      expect(usageOf(first)).toHaveLength(1);
+      expect(ledger.getCursor('devin:mn_rowid')).toBe('1');
+      stop1();
+
+      ins('m-a', 10, 1); // fork 复制：row_id 新了，签名相同
+      ins('m-b', 7, 2); // 真新推理
+      const second: Array<Record<string, unknown>> = [];
+      const stop2 = await createDevinAdapter().watch!((e) => second.push(e as unknown as Record<string, unknown>), ledger);
+      const usage = usageOf(second);
+      expect(usage).toHaveLength(1);
+      expect(usage[0]).toMatchObject({ sessionId: 's1' });
+      expect(usage[0]?.tokens).toEqual({ input: 7, output: 2 });
+      expect(ledger.getCursor('devin:mn_rowid')).toBe('3');
+      stop2();
+    } finally {
+      ledger.close();
+      db.close();
+      process.env.MURMUR_DEVIN_DATA = DEVIN_DATA;
+    }
+  });
+});
+
 afterAll(() => {
   removeHookScript('devin');
 });

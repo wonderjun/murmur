@@ -24,7 +24,7 @@
     "dev:hmr": "cd apps/desktop && hutch run dev:hmr",
     "build": "cd apps/desktop && hutch run build",
     "test": "cd packages/core && bun test",
-    "test:desktop": "bun test apps/desktop/test/rpc-contract.test.ts scripts/sync-desktop-tsconfig.test.ts",
+    "test:desktop": "bun test apps/desktop/test/rpc-contract.test.ts apps/desktop/test/architecture-boundary.test.ts scripts/sync-desktop-tsconfig.test.ts",
     "typecheck": "cd packages/core && bunx tsc --noEmit",
     "typecheck:desktop": "cd apps/desktop && bunx tsc --noEmit",
     "sync:tsconfig": "bun scripts/sync-desktop-tsconfig.ts",

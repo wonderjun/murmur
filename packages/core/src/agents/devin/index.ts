@@ -69,6 +69,12 @@ export function devinMetricKey(sid: string, mid: string, i: number, o: number, c
   return JSON.stringify([sid, mid, i, o, cr, cw]);
 }
 
+/** 指标只收有限正数。null/非数字/负数按 0——负数倒减会把 usage_daily 改小。 */
+function devinMetricCount(v: unknown): number {
+  if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) return 0;
+  return v;
+}
+
 /** adapter 工厂选项：metricSeenCap 供测试注入小容量验证 LRU 淘汰。 */
 export interface DevinAdapterOptions {
   /** 去重集容量上限（缺省 DEVIN_METRIC_SEEN_CAP）。 */
@@ -281,6 +287,7 @@ export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter
             metricSeeded = true;
             // 去重集只含已计入行（row_id ≤ 游标）的签名：游标后的还没发，
             // 全量播种会把待发行全判成复制——一行用量都出不去。
+            // json_valid：一条坏 JSON 会让 json_extract 整段抛错，游标卡住，同批有效行也入不了账。
             for (const r of db
               .query(
                 `SELECT session_id,
@@ -289,11 +296,19 @@ export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter
                         json_extract(chat_message, '$.metadata.metrics.output_tokens') AS o,
                         json_extract(chat_message, '$.metadata.metrics.cache_read_tokens') AS cr,
                         json_extract(chat_message, '$.metadata.metrics.cache_creation_tokens') AS cw
-                 FROM message_nodes WHERE row_id <= ? AND chat_message LIKE '%input_tokens%'`,
+                 FROM message_nodes
+                 WHERE row_id <= ? AND json_valid(chat_message) AND chat_message LIKE '%input_tokens%'`,
               )
               .all(mnRowid) as Array<{ session_id: string; mid: string | null; i: number | null; o: number | null; cr: number | null; cw: number | null }>) {
               rememberMetric(
-                devinMetricKey(r.session_id, r.mid ?? '', Number(r.i) || 0, Number(r.o) || 0, Number(r.cr) || 0, Number(r.cw) || 0),
+                devinMetricKey(
+                  r.session_id,
+                  r.mid ?? '',
+                  devinMetricCount(r.i),
+                  devinMetricCount(r.o),
+                  devinMetricCount(r.cr),
+                  devinMetricCount(r.cw),
+                ),
               );
             }
           }
@@ -308,7 +323,8 @@ export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter
                       json_extract(mn.chat_message, '$.metadata.metrics.cache_creation_tokens') AS cacheWrite,
                       s.model
                FROM message_nodes mn LEFT JOIN sessions s ON s.id = mn.session_id
-               WHERE mn.row_id > ? AND mn.created_at > ? AND mn.chat_message LIKE '%input_tokens%'
+               WHERE mn.row_id > ? AND mn.created_at > ?
+                 AND json_valid(mn.chat_message) AND mn.chat_message LIKE '%input_tokens%'
                ORDER BY mn.row_id LIMIT 5000`,
             )
             .all(mnRowid, cutoff) as Array<{
@@ -325,10 +341,10 @@ export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter
           let last = mnRowid;
           for (const row of rows) {
             last = row.row_id;
-            const input = Number(row.input) || 0;
-            const output = Number(row.output) || 0;
-            const cacheRead = Number(row.cacheRead) || 0;
-            const cacheWrite = Number(row.cacheWrite) || 0;
+            const input = devinMetricCount(row.input);
+            const output = devinMetricCount(row.output);
+            const cacheRead = devinMetricCount(row.cacheRead);
+            const cacheWrite = devinMetricCount(row.cacheWrite);
             if (input + output + cacheRead + cacheWrite <= 0) continue;
             const key = devinMetricKey(row.session_id, row.mid ?? '', input, output, cacheRead, cacheWrite);
             if (metricSeenHas(key)) continue;

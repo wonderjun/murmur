@@ -23,6 +23,9 @@
  *   此刻它真实状态就是 waiting（在等你），不能因为"事件旧"就当它不存在。
  *   但旧 turn.start/tool.call 不会置 working——半路没下文的是废弃 turn（进程多半
  *   已死），落 ended 由 grace 期清走，而不是 stale「疑似卡住」吓用户。
+ *   旧 permission.request 同样是废弃审批：不落 waiting(approval)、不发通知，落 ended，
+ *   避免回放把面板卡在等批准。比本会话已见最新事件更旧的历史事件（乱序回放）不改状态、
+ *   不回写 cwd/title/model；live 仍按到达顺序迁移。usage 不论新旧、不论乱序都累加。
  *   旧事件不发 change 通知，避免启动回放刷屏；旧 status 事件不迁移状态。
  *
  * 订阅者经 onChange 收到「快照变化」通知（去抖由调用方做）。
@@ -93,11 +96,16 @@ export class StatusEngine {
       this.sessions.set(key, s);
     }
 
-    // 元信息与时间戳始终跟随最新事件（含回填），这样"x分钟前"显示真实。
+    // lastEventAt 取已见最大时间戳（含回放），"x分钟前"不被乱序旧事件拉回去。
+    // 比这个水位更旧的历史事件不回写元信息、不迁移状态；live 乱序仍按到达顺序覆盖。
+    const seenAt = s.lastEventAt;
     s.lastEventAt = Math.max(s.lastEventAt, e.at);
-    if (e.cwd) s.cwd = e.cwd;
-    if (e.title) s.title = e.title;
-    if (e.model) s.model = e.model;
+    const stale = !live && e.at < seenAt;
+    if (!stale) {
+      if (e.cwd) s.cwd = e.cwd;
+      if (e.title) s.title = e.title;
+      if (e.model) s.model = e.model;
+    }
 
     const set = (status: AgentStatus, reason?: WaitingReason) => {
       if (s.status !== status || s.waitingReason !== reason) {
@@ -112,7 +120,8 @@ export class StatusEngine {
       if (status !== 'waiting') s.waitingDetail = undefined;
     };
 
-    switch (e.kind) {
+    // 乱序历史事件到此为止：token 仍在下面累加，状态与时间线保持已到达的更新值。
+    if (!stale) switch (e.kind) {
       case 'session.start':
         if (s.status === 'ended') set('idle');
         break;
@@ -136,8 +145,11 @@ export class StatusEngine {
         s.statusAt = e.at;
         break;
       case 'permission.request':
-        set('waiting', 'approval');
-        s.waitingDetail = e.detail;
+        // 活审批→waiting(approval)；旧审批是废弃 turn，落 ended，不冒充当前等待。
+        if (live) {
+          set('waiting', 'approval');
+          s.waitingDetail = e.detail;
+        } else set('ended');
         break;
       case 'turn.end':
         set('waiting', e.waitingReason ?? 'turn-end');

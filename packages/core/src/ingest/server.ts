@@ -57,7 +57,13 @@ export function startIngestServer(opts: {
         }
         // Bun 在返回 Response 后会取消请求体，必须先读完再返回。
         const payload = await req.json().catch(() => null);
-        if (payload !== null) opts.translate(m[1] as AgentId, payload);
+        if (payload !== null) {
+          try {
+            opts.translate(m[1] as AgentId, payload);
+          } catch {
+            // 翻译抛错仍回 202：非 202 会让 hook 脚本把同一条反复补投。
+          }
+        }
         return new Response(null, { status: 202 });
       }
       return new Response('not found', { status: 404 });

@@ -15,6 +15,7 @@ import { drainSpool } from '../ingest/spool';
 import { BACKFILL_EPOCH, BACKFILL_WINDOW_MS, Ledger } from '../ledger/db';
 import { estimateCostUsd } from '../ledger/pricing';
 import { MURMUR_HOME } from '../paths';
+import { fallbackQuota, unavailable } from '../quota/common';
 import { flagEnabled, loadSettings, saveSettings, type MurmurSettings } from '../settings';
 import type { AgentAdapter } from '../agents/base';
 import { createCodexAdapter } from '../agents/codex';
@@ -166,6 +167,7 @@ export class AgentRegistry {
       try {
         this.installs.set(a.id, await a.detect());
       } catch {
+        // 单 agent 探测失败不阻断启动，按未安装继续处理其余 agent。
         this.installs.set(a.id, {
           installed: false,
           hasCredentials: false,
@@ -183,9 +185,13 @@ export class AgentRegistry {
 
     // 回填语义版本不一致（含首次启动/台账被清空）→ 清库清游标，watcher 全量重扫。
     // epoch 机制同时治愈旧版本污染数据（如历史事件被打上错误时间戳）。
-    if (this.ledger.getMeta('backfillEpoch') !== BACKFILL_EPOCH || this.ledger.isUsageEmpty()) {
-      this.rebuildLedger();
-      this.ledger.setMeta('backfillEpoch', BACKFILL_EPOCH);
+    try {
+      if (this.ledger.getMeta('backfillEpoch') !== BACKFILL_EPOCH || this.ledger.isUsageEmpty()) {
+        this.rebuildLedger();
+        this.ledger.setMeta('backfillEpoch', BACKFILL_EPOCH);
+      }
+    } catch {
+      // 台账被占用时跳过本轮清库：watcher 照常启动，下次启动再对账。
     }
 
     // 启动时自动装 hook（默认开）：只碰「监听中 + 已安装 + hook 未关」的 agent，merge 幂等。
@@ -245,15 +251,21 @@ export class AgentRegistry {
         try {
           const q = await a.quota(this.byok[a.id]);
           if (q.error && q.windows.length === 0) {
-            const last = this.ledger.lastQuota(a.id);
-            this.quotas.set(a.id, last?.windows.length ? last : q);
+            this.quotas.set(a.id, fallbackQuota(this.quotas.get(a.id), () => this.ledger.lastQuota(a.id), q));
           } else {
             this.quotas.set(a.id, q);
-            this.ledger.saveQuota(q);
+            try {
+              this.ledger.saveQuota(q);
+            } catch {
+              // 落库失败留着刚拿到的内存快照，不能用更旧的历史把它盖掉。
+            }
           }
-        } catch {
-          const last = this.ledger.lastQuota(a.id);
-          if (last) this.quotas.set(a.id, last);
+        } catch (e) {
+          const reason = e instanceof Error ? e.message : String(e);
+          this.quotas.set(
+            a.id,
+            fallbackQuota(this.quotas.get(a.id), () => this.ledger.lastQuota(a.id), unavailable(a.id, reason)),
+          );
         }
       }),
     );

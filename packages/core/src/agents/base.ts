@@ -7,7 +7,8 @@
  *   quota        —— 额度平面，用本机凭据调官方用量端点，失败静默降级。
  *
  * 另附 JsonlTailer：JSONL 文件增量 tail 工具（pull 平面共用），
- * 以字节偏移为游标，重启续跑不重算。
+ * 以字节偏移为游标，重启续跑不重算。半行不进持久游标（重启还能拼上前缀）；
+ * 截断归零并丢掉内存半行，避免拼进新文件。
  */
 
 import { closeSync, existsSync, openSync, readdirSync, readSync, statSync } from 'node:fs';
@@ -71,13 +72,38 @@ export function serialScan(run: () => Promise<void>): () => void {
       try {
         do {
           pending = false;
-          await run();
+          try {
+            await run();
+          } catch {
+            // 单轮扫描失败不占住串行锁，已经排队的下一轮照跑。
+          }
         } while (pending);
       } finally {
         running = false;
       }
     })();
   };
+}
+
+/**
+ * 缓冲末尾未完成的 UTF-8 序列字节数。
+ * toString 会把残缺多字节换成 U+FFFD 并吃掉这些字节，下一截就拼不回原字符。
+ * 返回 0 表示整段可解码（纯续字节/非法 lead 交给 toString 替换，避免死等）。
+ */
+function incompleteUtf8Tail(buf: Buffer, length: number): number {
+  const from = Math.max(0, length - 4);
+  for (let i = length - 1; i >= from; i--) {
+    const b = buf[i] ?? 0;
+    if ((b & 0xc0) === 0x80) continue;
+    let need = 1;
+    if ((b & 0xe0) === 0xc0) need = 2;
+    else if ((b & 0xf0) === 0xe0) need = 3;
+    else if ((b & 0xf8) === 0xf0) need = 4;
+    else return 0;
+    const have = length - i;
+    return have < need ? have : 0;
+  }
+  return 0;
 }
 
 /** JSONL 增量 tailer：记住偏移，每次调用只读新增内容并按行回调。 */
@@ -108,22 +134,44 @@ export class JsonlTailer {
     const key = this.cursorKey(path);
     let offset = this.offsets.get(path);
     if (offset === undefined) {
-      const saved = this.ledger?.getCursor(key);
+      let saved: string | null | undefined;
+      try {
+        saved = this.ledger?.getCursor(key);
+      } catch {
+        // 游标读失败不能当成 0（历史 usage 会重放双计），本轮跳过这个文件，下轮再试。
+        return 0;
+      }
       offset = saved !== null && saved !== undefined ? Number(saved) : firstRun ? 0 : statSync(path).size;
     }
     // 坏游标（NaN/负数）宁漏不重：offset=0 重读会把已入账的历史 usage 双计。
     if (!Number.isFinite(offset) || offset < 0) offset = statSync(path).size;
     const size = statSync(path).size;
-    if (size < offset) offset = 0; // 文件被截断重建。
+    if (size < offset) {
+      // 截断/重建：内存半行属于旧文件，留下会拼进新内容；游标不归零的话，
+      // 文件再长过旧偏移就检测不到截断，前缀被永久跳过。
+      offset = 0;
+      this.leftover.delete(path);
+      this.offsets.set(path, 0);
+      try {
+        this.ledger?.setCursor(key, '0');
+      } catch {
+        // 内存已归零，本进程仍会重读；落库失败留到下次成功写入。
+      }
+    }
     if (size === offset) return 0;
 
     const fh = await open(path, 'r');
     try {
       const { bytesRead, buffer } = await fh.read(Buffer.alloc(size - offset), 0, size - offset, offset);
       if (bytesRead <= 0) return 0;
-      const text = (this.leftover.get(path) ?? '') + buffer.toString('utf8', 0, bytesRead);
+      const pending = incompleteUtf8Tail(buffer, bytesRead);
+      const usable = bytesRead - pending;
+      if (usable <= 0) return 0; // 末尾只有半个字符，留在文件里等下一截。
+      const partialBefore = this.leftover.get(path) ?? '';
+      const text = partialBefore + buffer.toString('utf8', 0, usable);
       const lines = text.split('\n');
-      this.leftover.set(path, lines.pop() ?? ''); // 最后半行留到下次。
+      const partial = lines.pop() ?? '';
+      this.leftover.set(path, partial); // 最后半行留到下次。
       let consumed = 0;
       for (const line of lines) {
         const t = line.trim();
@@ -131,9 +179,17 @@ export class JsonlTailer {
         onLine(t);
         consumed += 1;
       }
-      const next = offset + bytesRead;
+      // 内存偏移停在已解码字节（不含未完成的 UTF-8）；持久游标停在当前半行开头，
+      // 进程重启丢了 leftover 也能把前缀再读出来。整行都完整时两者重合。
+      const next = offset + usable;
       this.offsets.set(path, next);
-      this.ledger?.setCursor(key, String(next));
+      const partialBytes = Buffer.byteLength(partial);
+      const durable = partialBytes <= next ? next - partialBytes : next;
+      try {
+        this.ledger?.setCursor(key, String(durable));
+      } catch {
+        // 行已经交给回调，内存偏移不能退回去重放；落库失败留到进程重启后的重扫。
+      }
       return consumed;
     } finally {
       await fh.close();
@@ -167,6 +223,7 @@ export function readHead(path: string, max = 16384): string {
       closeSync(fd);
     }
   } catch {
+    // 文件不可读时按空头处理，调用方走「没有 title」分支。
     return '';
   }
 }

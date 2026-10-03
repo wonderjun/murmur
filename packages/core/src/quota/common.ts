@@ -28,9 +28,28 @@ export function readJsonFile(path: string): Record<string, unknown> | null {
   }
 }
 
-/** 构造「不可用」快照（凭据缺失/未登录时）。 */
+/** 构造「不可用」快照（凭据缺失/未登录/端点失败且无历史时）。 */
 export function unavailable(agent: AgentId, reason: string): QuotaSnapshot {
   return { agent, windows: [], fetchedAt: Date.now(), error: reason };
+}
+
+/**
+ * 失败的额度轮次怎么留：内存里仍有窗口的快照优先（比台账新，落库失败时也还在），
+ * 其次读台账里上次有效的；都没有才留下这次的 unavailable。读台账失败按没有历史。
+ */
+export function fallbackQuota(
+  current: QuotaSnapshot | undefined,
+  readLast: () => QuotaSnapshot | null,
+  failed: QuotaSnapshot,
+): QuotaSnapshot {
+  if (current && current.windows.length > 0) return current;
+  try {
+    const last = readLast();
+    if (last && last.windows.length > 0) return last;
+  } catch {
+    // 台账被占用时读不到历史，不能把这一轮标成成功额度。
+  }
+  return failed;
 }
 
 /** kimi `{duration,timeUnit}` → 展示标签（"5h" / "每周" / "每日"…）。 */

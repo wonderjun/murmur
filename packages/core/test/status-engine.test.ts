@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'bun:test';
 
-import { StatusEngine } from '../src/engine/status-engine';
+import { LIVE_WINDOW_MS, StatusEngine } from '../src/engine/status-engine';
 import type { AgentEvent } from '../src/types';
 
 function ev(kind: AgentEvent['kind'], at = Date.now(), sessionId = 's1'): AgentEvent {
@@ -226,5 +226,80 @@ describe('StatusEngine', () => {
     e.apply(ev('session.start'));
     e.apply(ev('turn.end'));
     expect(e.recentlyEnded(10)).toEqual([]);
+  });
+
+  test('旧 permission.request 落 ended：不进活跃面板、不进最近结束、不发通知', () => {
+    const e = new StatusEngine();
+    let changes = 0;
+    e.onChange(() => changes++);
+    const old = Date.now() - LIVE_WINDOW_MS - 5_000;
+    e.apply({ ...ev('permission.request', old, 'old-perm'), detail: 'Bash · git push', title: '旧审批' });
+    expect(changes).toBe(0);
+    expect(e.snapshot().find((s) => s.sessionId === 'old-perm')).toBeUndefined();
+    expect(e.recentlyEnded(10).find((s) => s.sessionId === 'old-perm')).toBeUndefined();
+    expect(e.overall()).toBe('ended');
+    // 窗口内的审批仍是 waiting(approval)，并通知订阅者。
+    e.apply({ ...ev('permission.request', Date.now() - 1_000, 'live-perm'), detail: 'Bash' });
+    expect(changes).toBe(1);
+    expect(e.snapshot().find((s) => s.sessionId === 'live-perm')).toMatchObject({
+      status: 'waiting',
+      waitingReason: 'approval',
+      waitingDetail: 'Bash',
+    });
+    expect(e.overall()).toBe('waiting');
+  });
+
+  test('更旧的历史事件不覆盖已到达状态；旧 turn.end 仍落 waiting', () => {
+    const e = new StatusEngine();
+    let changes = 0;
+    e.onChange(() => changes++);
+    const now = Date.now();
+    const liveAt = now - 2_000;
+    e.apply({ ...ev('turn.start', liveAt, 'live'), title: '当前回合', cwd: '/now' });
+    const before = e.snapshot().find((s) => s.sessionId === 'live');
+    expect(before).toMatchObject({ status: 'working', phase: 'thinking', title: '当前回合', cwd: '/now' });
+    expect(changes).toBe(1);
+
+    const old = now - 3_600_000;
+    e.apply({ ...ev('permission.request', old, 'live'), detail: 'Bash', title: '回放标题', cwd: '/old' });
+    e.apply({ ...ev('turn.end', old + 1, 'live'), title: '更旧结束' });
+    e.apply({ ...ev('status', old + 2, 'live'), status: 'waiting', waitingReason: 'question', detail: '旧问题' });
+    const after = e.snapshot().find((s) => s.sessionId === 'live');
+    expect(after).toMatchObject({
+      status: 'working',
+      phase: 'thinking',
+      title: '当前回合',
+      cwd: '/now',
+      statusAt: before?.statusAt,
+      turnStartAt: liveAt,
+    });
+    expect(after?.waitingReason).toBeUndefined();
+    expect(after?.waitingDetail).toBeUndefined();
+    expect(changes).toBe(1);
+
+    // 旧 turn.end 自己仍是「在等你」，且不被更旧的审批盖成 ended。
+    e.apply({ ...ev('turn.end', old + 10_000, 'hist'), title: '历史回合' });
+    e.apply({ ...ev('permission.request', old, 'hist'), detail: 'Bash', title: '更旧审批' });
+    expect(e.snapshot().find((s) => s.sessionId === 'hist')).toMatchObject({
+      status: 'waiting',
+      waitingReason: 'turn-end',
+      title: '历史回合',
+    });
+    expect(changes).toBe(1);
+  });
+
+  test('乱序：更旧的 live 事件仍按到达顺序迁移；usage 不论乱序都累加且不改状态', () => {
+    const e = new StatusEngine();
+    const now = Date.now();
+    e.apply(ev('turn.end', now - 1_000, 'ooo'));
+    e.apply(ev('turn.start', now - 2_000, 'ooo'));
+    expect(e.snapshot().find((s) => s.sessionId === 'ooo')?.status).toBe('working');
+
+    e.apply({ ...ev('usage', now - 500, 'ooo'), tokens: { input: 40, output: 10 } });
+    e.apply({ ...ev('usage', now - 3_600_000, 'ooo'), tokens: { input: 5, output: 1, cacheRead: 2 } });
+    const s = e.snapshot().find((s) => s.sessionId === 'ooo');
+    expect(s?.status).toBe('working');
+    expect(s?.tokens).toMatchObject({ input: 45, output: 11, cacheRead: 2 });
+    expect(s?.lastEventAt).toBe(now - 500);
   });
 });

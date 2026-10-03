@@ -20,6 +20,7 @@ import { AgentRegistry, migrateLegacyHome, MURMUR_HOME } from "../../../../packa
 
 import type { AppSnapshot, ManagerTab } from "../../../../packages/core/src/index";
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
+import { createRpcHandlers } from "./rpc-handlers";
 import {
   appBundlePath,
   applyDockIcon,
@@ -95,87 +96,32 @@ async function settingsSnapshot(): Promise<SettingsSnapshot> {
 const rpc = BrowserView.defineRPC<MurmurRPC>({
   maxRequestTime: 15000,
   handlers: {
-    requests: {
-      getSnapshot: () => registry.snapshot(),
-      installHooks: async () => registry.installAllHooks(),
-      refreshQuotas: async () => {
-        await registry.refreshQuotas();
-        return { ok: true as const };
-      },
-      usageDaily: ({ days, since }) => registry.usageDailySince(since ?? Date.now() - (days ?? 70) * 86400_000),
+    requests: createRpcHandlers({
+      registry,
+      settingsSnapshot,
+      homeDir: process.env.HOME ?? "",
       hidePanel: () => {
         panel.hide();
-        return { ok: true as const };
       },
-      getSettings: () => settingsSnapshot(),
-      updateSettings: async ({ patch }) => {
-        await registry.updateSettings(patch);
-        if (patch.showDockIcon !== undefined) applyDockIcon(patch.showDockIcon);
-        if (patch.launchAtLogin !== undefined) {
-          const actual = setLaunchAtLogin(patch.launchAtLogin);
-          // 实际态与意图不符（如 dev 无 bundle）时回写，设置存储与系统实况保持自洽。
-          if (actual !== patch.launchAtLogin) await registry.updateSettings({ launchAtLogin: actual });
-        }
-        return settingsSnapshot();
-      },
-      setAgentHook: async ({ agent, enabled }) => {
-        await registry.setAgentHook(agent, enabled);
-        return settingsSnapshot();
-      },
-      setAgentObserved: async ({ agent, enabled }) => {
-        await registry.setAgentObserved(agent, enabled);
-        return settingsSnapshot();
-      },
-      setAgentKey: async ({ agent, apiKey, baseUrl }) => {
-        await registry.setAgentKey(agent, apiKey, baseUrl);
-        return settingsSnapshot();
-      },
-      readClipboard: () => ({ text: Utils.clipboardReadText() }),
-      writeClipboard: ({ text }) => {
+      readClipboard: () => Utils.clipboardReadText(),
+      writeClipboard: (text) => {
         Utils.clipboardWriteText(text);
-        return { ok: true as const };
       },
-      rebuildLedger: () => {
-        registry.rebuildLedger();
-        return { ok: true as const };
+      applyDockIcon,
+      setLaunchAtLogin,
+      // 显式签名：否则 openManagerWindow ↔ managerWin ↔ typeof rpc 形成推断环。
+      openManager: (tab: ManagerTab): void => {
+        openManagerWindow(tab);
       },
-      openManager: ({ tab }) => {
-        openManagerWindow(tab ?? "doctor");
-        return { ok: true as const };
+      revealInFinder: (path) => {
+        Utils.showItemInFolder(path);
       },
-      getDiagnostics: () => registry.diagnostics(),
-      testAgentHook: ({ agent }) => registry.testAgentHook(agent),
-      rescanAgent: async ({ agent }) => {
-        await registry.rescanAgent(agent);
-        return { ok: true as const };
-      },
-      installAgentHooks: ({ agent }) => registry.installAgentHooks(agent),
-      revealPath: ({ path }) => {
-        // 只放行用户家目录内的路径——诊断清单以外的任意路径不该被定位。
-        const home = process.env.HOME ?? "";
-        const ok = Boolean(home) && path.startsWith(`${home}/`);
-        if (ok) Utils.showItemInFolder(path);
-        return { ok };
-      },
-      scanSessions: async () => ({ items: await registry.scanSessions(), scannedAt: Date.now() }),
-      deleteSessions: async ({ items }) => ({
-        // 文件类产物一律进废纸篓（可恢复）；库内行由 adapter 自行事务删。
-        results: await registry.deleteSessions(items, (p) => Utils.moveToTrash(p)),
-      }),
-      revealSession: async ({ agent, id }) => {
-        const [p] = await registry.sessionPaths(agent, id);
-        if (p) Utils.showItemInFolder(p);
-        return { ok: Boolean(p) };
-      },
+      moveToTrash: (path) => Utils.moveToTrash(path),
       openDataDir: () => {
         Utils.showItemInFolder(MURMUR_HOME);
-        return { ok: true as const };
       },
-      quitApp: () => {
-        quitMurmur();
-        return { ok: true as const };
-      },
-    },
+      quit: quitMurmur,
+    }),
     messages: {},
   },
 });

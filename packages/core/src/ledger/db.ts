@@ -59,8 +59,11 @@ CREATE TABLE IF NOT EXISTS meta (
 
 /** 回填窗口：只把最近 ~70 天的历史用量扫进台账（与用量页热力图窗口对齐）。 */
 export const BACKFILL_WINDOW_MS = 70 * 86400_000;
-/** 回填语义版本：变更回填口径时 +1，启动检测到不一致自动清库重扫。 */
-export const BACKFILL_EPOCH = '4';
+/**
+ * 回填语义版本：变更回填口径时 +1，启动检测到不一致自动清库重扫。
+ * 5：旧 permission.request 落 ended；更旧的历史事件不覆盖已到达状态。
+ */
+export const BACKFILL_EPOCH = '5';
 /** 事件流水保留窗：events 是纯审计流（无查询读方），7d 够排查用。 */
 const EVENTS_KEEP_MS = 7 * 86400_000;
 /** 每个 agent 只留最近 N 条额度快照——lastQuota 只需要最新一条好快照兜底。 */
