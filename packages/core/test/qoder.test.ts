@@ -25,21 +25,30 @@ describe('qoder hook 事件翻译', () => {
   const ev = (name: string, extra: Record<string, unknown> = {}) =>
     translateQoderHook({ hook_event_name: name, session_id: 's1', cwd: '/w', ...extra });
 
-  test('生命周期事件映射', () => {
+  test('生命周期事件映射（含 detail/phase）', () => {
     expect(ev('SessionStart')[0].kind).toBe('session.start');
     expect(ev('UserPromptSubmit')[0].kind).toBe('turn.start');
-    expect(ev('PreToolUse')[0].kind).toBe('tool.call');
-    expect(ev('PermissionRequest')[0].kind).toBe('permission.request');
+    expect(ev('PreToolUse', { tool_name: 'Bash' })[0]).toMatchObject({ kind: 'tool.call', detail: 'Bash' });
+    expect(ev('PermissionRequest', { tool_name: 'Write' })[0]).toMatchObject({
+      kind: 'permission.request',
+      detail: 'Write',
+    });
     expect(ev('Stop')[0]).toMatchObject({ kind: 'turn.end', waitingReason: 'turn-end' });
     expect(ev('StopFailure')[0].kind).toBe('turn.end');
     expect(ev('SessionEnd')[0].kind).toBe('session.end');
-    expect(ev('PostToolUse')[0]).toMatchObject({ kind: 'status', status: 'working' });
-    expect(ev('SubagentStop')[0].kind).toBe('status');
-    expect(ev('Notification')[0].kind).toBe('status');
-    expect(ev('SomethingNew')[0]).toMatchObject({ kind: 'status', status: 'working' });
+    expect(ev('PostToolUse')[0]).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
+    expect(ev('SubagentStop')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
+    expect(ev('Notification')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
+    expect(ev('SomethingNew')[0]).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
   });
 
-  test('Elicitation → waiting(question)；prompt 当标题；缺 session_id 落 unknown', () => {
+  test('Elicitation → waiting(question,问题文本)；prompt 当标题；缺 session_id 落 unknown', () => {
+    expect(ev('Elicitation', { question: '要跑哪组测试？' })[0]).toMatchObject({
+      kind: 'status',
+      status: 'waiting',
+      waitingReason: 'question',
+      detail: '要跑哪组测试？',
+    });
     expect(ev('Elicitation')[0]).toMatchObject({ kind: 'status', status: 'waiting', waitingReason: 'question' });
     expect(ev('UserPromptSubmit', { prompt: '修一下构建' })[0]).toMatchObject({
       kind: 'turn.start',
@@ -118,13 +127,15 @@ describe('qoder transcript 行翻译', () => {
     expect(real.map((e) => e.kind)).toEqual(['session.start', 'turn.start']);
     expect(real[0].at).toBe(Date.parse(TS));
 
+    // tool_result 回填行是工具收尾回模型，标 thinking 而非新一轮 tool.call。
     const toolBack = translateTranscriptLine(P, {
       type: 'user',
       sessionId: 's1',
       timestamp: TS,
       message: { role: 'user', content: [{ type: 'tool_result', content: 'ok' }] },
     });
-    expect(toolBack.map((e) => e.kind)).toEqual(['tool.call']);
+    expect(toolBack.map((e) => e.kind)).toEqual(['status']);
+    expect(toolBack[0]).toMatchObject({ status: 'working', phase: 'thinking' });
   });
 
   test('assistant usage → usage 事件互斥口径 + model；tool_use → tool.call', () => {
@@ -168,6 +179,7 @@ describe('qoder transcript 行翻译', () => {
       },
     });
     expect(tool.map((e) => e.kind)).toEqual(['tool.call']);
+    expect(tool[0].detail).toBe('Bash');
   });
 
   test('isSidechain 行只作心跳不搬 turn 边界；ai-title 落 title', () => {

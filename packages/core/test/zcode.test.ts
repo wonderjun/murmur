@@ -167,23 +167,23 @@ describe('zcode translateZcodeHook', () => {
     expect(out[0].model).toBe('GLM-5.3');
   });
 
-  test('UserPromptSubmit → turn.start；PreToolUse → tool.call', () => {
+  test('UserPromptSubmit → turn.start；PreToolUse → tool.call(带工具名)', () => {
     expect(translateZcodeHook({ ...base, hook_event_name: 'UserPromptSubmit' })[0].kind).toBe('turn.start');
-    expect(
-      translateZcodeHook({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Write' })[0].kind,
-    ).toBe('tool.call');
+    expect(translateZcodeHook({ ...base, hook_event_name: 'PreToolUse', tool_name: 'Write' })[0]).toMatchObject({
+      kind: 'tool.call',
+      detail: 'Write',
+    });
   });
 
-  test('PermissionRequest → permission.request（pull 拿不到的 approval 信号）', () => {
+  test('PermissionRequest → permission.request（pull 拿不到的 approval 信号，带工具名）', () => {
     const out = translateZcodeHook({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash' });
-    expect(out[0].kind).toBe('permission.request');
+    expect(out[0]).toMatchObject({ kind: 'permission.request', detail: 'Bash' });
   });
 
-  test('PostToolUse/Failure → working 心跳；Stop → turn.end', () => {
+  test('PostToolUse/Failure → working(thinking) 心跳；Stop → turn.end', () => {
     for (const ev of ['PostToolUse', 'PostToolUseFailure']) {
       const e = translateZcodeHook({ ...base, hook_event_name: ev })[0];
-      expect(e.kind).toBe('status');
-      expect(e.status).toBe('working');
+      expect(e).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
     }
     const stop = translateZcodeHook({ ...base, hook_event_name: 'Stop' })[0];
     expect(stop.kind).toBe('turn.end');

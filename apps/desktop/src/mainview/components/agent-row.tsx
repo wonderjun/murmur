@@ -12,7 +12,8 @@ import { useEffect, useMemo, useState } from "react";
 import AgentIcon from "@/components/agent-icon";
 import StatusDot from "@/components/status-dot";
 import { AGENT_META } from "@/lib/agent-meta";
-import { fmtQuotaHeadline, fmtTokens } from "@/lib/format";
+import { fmtQuotaHeadline, fmtTokens, relAgo } from "@/lib/format";
+import { sessionStatusText, sessionTimeline } from "@/lib/status-text";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
@@ -179,11 +180,24 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
                     )}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
                       <span>{modelName(session.model)}</span>
-                      <span>{statusDetail(session)}</span>
+                      <span>{sessionStatusText(session)}</span>
+                      {session.status === "waiting" && (
+                        <span className="text-waiting">等了 {relAgo(session.statusAt)}</span>
+                      )}
                       <span className="ml-auto font-mono text-micro tabular-nums">
                         {fmtTokens(tokens(session))} 令牌
                       </span>
                     </div>
+                    {/* 轻量时间线：发起 / 最近工具调用 / 等待开始（缺项不渲染） */}
+                    {sessionTimeline(session).length > 0 && (
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-micro tabular-nums text-faint">
+                        {sessionTimeline(session).map((m) => (
+                          <span key={m.label}>
+                            {m.label} {relAgo(m.at)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -214,17 +228,6 @@ function statusText(status: AgentStatus) {
   ];
 }
 
-function statusDetail(session: SessionSnapshot) {
-  if (session.status === "waiting")
-    return session.waitingReason === "approval"
-      ? "等待批准"
-      : session.waitingReason === "question"
-        ? "等待回答"
-        : "等待继续";
-  if (session.status === "stale") return `最后更新 ${age(session.lastEventAt)}`;
-  return `更新于 ${age(session.lastEventAt)}`;
-}
-
 function modelName(model?: string) {
   return model ? model.split("/").pop() : "未标注模型";
 }
@@ -240,13 +243,6 @@ function elapsed(start: number) {
   if (minutes < 1) return "刚开始";
   if (minutes < 60) return `${minutes}m`;
   return `${Math.floor(minutes / 60)}h${minutes % 60}m`;
-}
-
-function age(at: number) {
-  const minutes = Math.max(0, Math.floor((Date.now() - at) / 60_000));
-  if (minutes < 1) return "刚刚";
-  if (minutes < 60) return `${minutes}分钟前`;
-  return `${Math.floor(minutes / 60)}小时前`;
 }
 
 function tokens(session: SessionSnapshot) {

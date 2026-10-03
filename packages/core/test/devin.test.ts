@@ -26,16 +26,19 @@ describe('devin hook 事件翻译', () => {
   const ev = (name: string, extra: Record<string, unknown> = {}) =>
     translateDevinHook({ hook_event_name: name, session_id: 's1', cwd: '/w', ...extra });
 
-  test('全事件映射', () => {
+  test('全事件映射（含 detail/phase）', () => {
     expect(ev('SessionStart')[0].kind).toBe('session.start');
     expect(ev('UserPromptSubmit')[0].kind).toBe('turn.start');
-    expect(ev('PreToolUse')[0].kind).toBe('tool.call');
-    expect(ev('PermissionRequest')[0].kind).toBe('permission.request');
+    expect(ev('PreToolUse', { tool_name: 'Edit' })[0]).toMatchObject({ kind: 'tool.call', detail: 'Edit' });
+    expect(ev('PermissionRequest', { tool_name: 'Bash' })[0]).toMatchObject({
+      kind: 'permission.request',
+      detail: 'Bash',
+    });
     expect(ev('Stop')[0]).toMatchObject({ kind: 'turn.end', waitingReason: 'turn-end' });
-    expect(ev('PostToolUse')[0].kind).toBe('status');
-    expect(ev('PostCompaction')[0].kind).toBe('status');
+    expect(ev('PostToolUse')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
+    expect(ev('PostCompaction')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
     expect(ev('SessionEnd')[0].kind).toBe('session.end');
-    expect(ev('SomethingNew')[0].kind).toBe('status');
+    expect(ev('SomethingNew')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
   });
 
   test('UserPromptSubmit 带 prompt 当标题；缺 session_id 落 unknown', () => {

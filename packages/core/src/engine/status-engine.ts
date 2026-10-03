@@ -4,11 +4,19 @@
  *
  * 迁移规则：
  *   session.start              → idle
- *   turn.start / tool.call     → working
- *   permission.request         → waiting(approval)
+ *   turn.start                 → working(thinking)，记 turnStartAt
+ *   tool.call                  → working(tool)，记 toolCallAt/toolName
+ *   permission.request         → waiting(approval)，记 waitingDetail
+ *   status waiting(question)   → waiting(question)，记 waitingDetail
  *   turn.end                   → waiting(turn-end)  ← 「轮到你了」信号
  *   session.end                → ended（保留 grace 期后清除）
  *   长时间无事件且 working     → stale（watchdog 周期检查）
+ *
+ * working 相位（phase）由事件流推导：turn.start 与 PostToolUse 系之间标
+ * thinking（模型往返中），tool.call 起标 tool。是推断不是真值——排队/重试
+ * 不可分辨；无细粒度源的会话 phase 恒缺省。离开 waiting 清 waitingDetail，
+ * 离开 working 清 phase；statusAt 在状态迁移与新活动（turn.start/tool.call）
+ * 时前进，相位翻转与无 phase 心跳不动它——waiting 会话上它就是「等了多久」。
  *
  * 回填语义（LIVE_WINDOW 之外的历史事件）：
  *   建档会话并按终态事件落档——kimi 正在运行但 10 分钟前已 TurnEnd，
@@ -36,8 +44,7 @@ const STALE_GIVEUP_MS = 30 * 60_000;
 const SESSION_VISIBLE_MS = 24 * 3600 * 1000;
 
 interface SessionState extends SessionSnapshot {
-  /** 上次状态迁移时间（watchdog 依据）。 */
-  changedAt: number;
+  // statusAt（SessionSnapshot 字段）兼任内部「上次状态迁移时间」，watchdog 依据。
 }
 
 function emptyTokens(): TokenUsage {
@@ -74,12 +81,12 @@ export class StatusEngine {
         agent: e.agent,
         sessionId: e.sessionId,
         status: 'idle',
+        statusAt: e.at,
         cwd: e.cwd,
         title: e.title,
         model: e.model,
         lastEventAt: e.at,
         startedAt: e.at,
-        changedAt: e.at,
         tokens: emptyTokens(),
         costUsd: 0,
       };
@@ -96,8 +103,13 @@ export class StatusEngine {
       if (s.status !== status || s.waitingReason !== reason) {
         s.status = status;
         s.waitingReason = reason;
-        s.changedAt = e.at;
+        s.statusAt = e.at;
       }
+      // 相位与等待对象是状态上下文：离开 working 清相位、离开 waiting 清等待对象；
+      // 同为 working 的无 phase 心跳不清相位——粗粒度轮询（zcode tasks）不知道
+      // 当前相位，不该把 hook 标好的 tool 相位抹掉。
+      if (status !== 'working') s.phase = undefined;
+      if (status !== 'waiting') s.waitingDetail = undefined;
     };
 
     switch (e.kind) {
@@ -105,14 +117,27 @@ export class StatusEngine {
         if (s.status === 'ended') set('idle');
         break;
       case 'turn.start':
-      case 'tool.call':
-        // 活事件→working；旧事件说明 turn 半路没了下文（废弃/进程已死），落 ended。
+        // 活事件→working(thinking)；旧事件说明 turn 半路没了下文（废弃/进程已死），落 ended。
         // stale 只留给「live working 后突然沉默」的场景——那才真是疑似卡住。
-        set(live ? 'working' : 'ended');
-        s.changedAt = e.at;
+        if (live) {
+          set('working');
+          s.phase = 'thinking';
+        } else set('ended');
+        s.turnStartAt = e.at;
+        s.statusAt = e.at;
+        break;
+      case 'tool.call':
+        if (live) {
+          set('working');
+          s.phase = 'tool';
+        } else set('ended');
+        s.toolCallAt = e.at;
+        if (e.detail) s.toolName = e.detail;
+        s.statusAt = e.at;
         break;
       case 'permission.request':
         set('waiting', 'approval');
+        s.waitingDetail = e.detail;
         break;
       case 'turn.end':
         set('waiting', e.waitingReason ?? 'turn-end');
@@ -121,7 +146,17 @@ export class StatusEngine {
         set('ended');
         break;
       case 'status':
-        if (e.status && live) set(e.status, e.waitingReason);
+        // live 才迁移；回填 status 只刷活性，也不写相位——相位描述的是"现在"。
+        if (live) {
+          if (e.status) {
+            set(e.status, e.waitingReason);
+            if (e.status === 'waiting') s.waitingDetail = e.detail;
+          }
+          if (e.phase && s.status === 'working') {
+            s.phase = e.phase;
+            if (e.phase === 'tool' && e.detail) s.toolName = e.detail;
+          }
+        }
         break;
       case 'usage':
         break;
@@ -145,7 +180,7 @@ export class StatusEngine {
     let changed = false;
     for (const [key, s] of this.sessions) {
       if (
-        (s.status === 'ended' && now - s.changedAt > ENDED_GRACE_MS) ||
+        (s.status === 'ended' && now - s.statusAt > ENDED_GRACE_MS) ||
         now - s.lastEventAt > SESSION_VISIBLE_MS
       ) {
         // ended 过 grace 或任何状态超龄（回填建档的死会话）都清除，防 Map 无界增长。
@@ -153,17 +188,19 @@ export class StatusEngine {
         changed = true;
       } else if (s.status === 'working' && now - s.lastEventAt > STALE_AFTER_MS) {
         s.status = 'stale';
-        s.changedAt = now;
+        s.phase = undefined;
+        s.statusAt = now;
         changed = true;
       } else if (s.status === 'stale' && now - s.lastEventAt > STALE_GIVEUP_MS) {
         // stale 沉默 30min：进程多半已死，落 ended 走 grace 清走。
         s.status = 'ended';
-        s.changedAt = now;
+        s.statusAt = now;
         changed = true;
       } else if (s.status === 'waiting' && now - s.lastEventAt > WAITING_DECAY_MS) {
         s.status = 'idle';
         s.waitingReason = undefined;
-        s.changedAt = now;
+        s.waitingDetail = undefined;
+        s.statusAt = now;
         changed = true;
       }
     }
@@ -187,16 +224,16 @@ export class StatusEngine {
 
   /**
    * grace 期内刚结束的会话（只读副本，按结束时间倒序截 limit）——「最近结束」
-   * 折叠组数据源。endedAt≈changedAt（状态迁移时刻）；sweep 清走后自然消失。
+   * 折叠组数据源。endedAt≈statusAt（状态迁移时刻）；sweep 清走后自然消失。
    * 与 snapshot() 分工：活跃面不含 ended，这里只出 ended，互不影响聚合态。
    */
   recentlyEnded(limit: number): SessionSnapshot[] {
     const now = Date.now();
     return [...this.sessions.values()]
-      .filter((s) => s.status === 'ended' && now - s.changedAt <= ENDED_GRACE_MS)
-      .sort((a, b) => b.changedAt - a.changedAt)
+      .filter((s) => s.status === 'ended' && now - s.statusAt <= ENDED_GRACE_MS)
+      .sort((a, b) => b.statusAt - a.statusAt)
       .slice(0, limit)
-      .map((s) => ({ ...s, endedAt: s.changedAt }));
+      .map((s) => ({ ...s, endedAt: s.statusAt }));
   }
 
   /** 聚合态：working > waiting > stale > idle > ended。allowed 给定时只统计其中的 agent。 */

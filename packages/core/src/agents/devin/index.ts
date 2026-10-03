@@ -30,13 +30,19 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadCredentials } from '../../credentials';
-import { HOOKS_DIR, devinHooksRegistered, mergeDevinHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
+import {
+  HOOKS_DIR,
+  devinHooksRegistered,
+  mergeDevinHooks,
+  removeHookScript,
+  unmergeJsonHooks,
+} from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { quotaFetch } from '../../quota/common';
 import { fetchDevinQuota, sniffDevinOrgId } from '../../quota/devin';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { pick, type AgentAdapter, type DataSourceRef } from '../base';
+import { clip, pick, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteDevinSessions, scanDevinSessions, toMs } from './files';
 
 /** devin hook 全事件（文档生命周期全集，一次挂齐）。 */
@@ -88,17 +94,17 @@ export function translateDevinHook(payload: unknown): AgentEvent[] {
       return [{ ...base, kind: 'turn.start', ...(prompt ? { title: prompt.slice(0, 120) } : {}) }];
     }
     case 'PreToolUse':
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'PermissionRequest':
-      return [{ ...base, kind: 'permission.request' }];
+      return [{ ...base, kind: 'permission.request', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'Stop':
       // 回合停——「轮到你了」。
       return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end' }];
     case 'SessionEnd':
       return [{ ...base, kind: 'session.end' }];
     default:
-      // PostToolUse/PostCompaction/未知事件：心跳防 stale。
-      return [{ ...base, kind: 'status' }];
+      // PostToolUse/PostCompaction/未知事件：回模型往返的心跳。
+      return [{ ...base, kind: 'status', phase: 'thinking' }];
   }
 }
 

@@ -29,6 +29,18 @@ if (location.search.includes("seed")) {
             agent: "kimi" as const,
             sessionId: `s${i}`,
             status: (i === 0 ? "working" : i < 4 ? "waiting" : "idle") as AgentStatus,
+            waitingReason: (i === 1 ? "approval" : i === 2 ? "question" : i === 3 ? "turn-end" : undefined) as
+              | "approval"
+              | "question"
+              | "turn-end"
+              | undefined,
+            waitingDetail:
+              i === 1 ? "Bash · Running: git push --force-with-lease" : i === 2 ? "剩余范围怎么定？" : undefined,
+            phase: (i === 0 ? (i % 2 === 0 ? "tool" : "thinking") : undefined) as "thinking" | "tool" | undefined,
+            toolName: i === 0 ? "Bash" : undefined,
+            statusAt: now - (i === 0 ? 45_000 : 180_000),
+            turnStartAt: now - 600_000,
+            toolCallAt: i === 0 ? now - 45_000 : now - 120_000,
             title: `会话 ${i} — review一下git未提交的改动，看有没有bug或者可优化的地方`,
             cwd: "~/Documents/flow",
             model: "k3-256k",
@@ -54,6 +66,9 @@ if (location.search.includes("seed")) {
             agent: "codex" as const,
             sessionId: `c${i}`,
             status: "working" as const,
+            phase: "thinking" as const,
+            statusAt: now - 30_000,
+            turnStartAt: now - 600_000,
             title: `codex 会话 ${i} — 长标题挤压版面高度测试`,
             cwd: "~/Documents/murmur",
             model: "gpt-5.3",
@@ -72,6 +87,7 @@ if (location.search.includes("seed")) {
             agent: "cursor" as const,
             sessionId: `cu${i}`,
             status: "stale" as const,
+            statusAt: now - 400_000,
             title: `cursor 会话 ${i} — 停止更新`,
             cwd: "~/Documents/flow",
             lastEventAt: now - 400_000,

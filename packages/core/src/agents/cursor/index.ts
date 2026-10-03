@@ -19,13 +19,19 @@
 import { existsSync, readdirSync, statSync, watch } from 'node:fs';
 import { join } from 'node:path';
 
-import { HOOKS_DIR, isHookInstalled, mergeJsonHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
+import {
+  HOOKS_DIR,
+  isHookInstalled,
+  mergeJsonHooks,
+  removeHookScript,
+  unmergeJsonHooks,
+} from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { readJsonFile } from '../../quota/common';
 import { fetchCursorQuota, hasCursorCredentials } from '../../quota/cursor';
 import type { AgentEvent, InstallInfo } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
+import { JsonlTailer, clip, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import {
   deleteCursorSessions,
   listTranscripts,
@@ -57,16 +63,8 @@ const EVENTS = [
 ];
 
 const TURN_END_EVENTS = new Set(['stop', 'afterAgentResponse']);
-const TOOL_EVENTS = new Set([
-  'preToolUse',
-  'postToolUse',
-  'afterFileEdit',
-  'beforeShellExecution',
-  'afterShellExecution',
-  'beforeMCPExecution',
-  'afterMCPExecution',
-  'subagentStart',
-]);
+/** 工具/子代理开始：会话进 working(tool)。收尾事件（postToolUse/after*）落默认 thinking 心跳。 */
+const TOOL_START_EVENTS = new Set(['preToolUse', 'beforeShellExecution', 'beforeMCPExecution', 'subagentStart']);
 
 /** cursor hook payload → 归一化事件。字段名以 hook_event_name/hookEventName 兼容。 */
 export function translateHookPayload(payload: unknown): AgentEvent[] {
@@ -88,16 +86,26 @@ export function translateHookPayload(payload: unknown): AgentEvent[] {
   }
   if (event === 'sessionEnd') return [{ ...base, kind: 'session.end' }];
   if (TURN_END_EVENTS.has(event)) return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end' }];
-  if (TOOL_EVENTS.has(event)) return [{ ...base, kind: 'tool.call' }];
-  // afterAgentThought/subagentStop 等 = turn 内活动心跳。
-  return [{ ...base, kind: 'status', status: 'working' }];
+  if (TOOL_START_EVENTS.has(event)) {
+    return [{ ...base, kind: 'tool.call', detail: clip(pick(p, 'tool_name', 'toolName', 'tool')) }];
+  }
+  // 工具收尾（postToolUse/after*）与 afterAgentThought 等：回模型往返心跳。
+  return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
 }
 
-/** 判断 assistant 行是否含 tool_use 块。 */
+/** assistant 行是否含 tool_use 块。 */
 function hasToolUse(obj: Record<string, unknown>): boolean {
   const msg = obj.message as Record<string, unknown> | undefined;
   const content = Array.isArray(msg?.content) ? (msg.content as Array<Record<string, unknown>>) : [];
   return content.some((b) => b.type === 'tool_use');
+}
+
+/** assistant 行首个 tool_use 块名（块可无 name 字段，与判定分开）。 */
+function toolUseName(obj: Record<string, unknown>): string | undefined {
+  const msg = obj.message as Record<string, unknown> | undefined;
+  const content = Array.isArray(msg?.content) ? (msg.content as Array<Record<string, unknown>>) : [];
+  const hit = content.find((b) => b.type === 'tool_use');
+  return hit ? pick(hit, 'name', 'tool_name') : undefined;
 }
 
 /**
@@ -121,8 +129,10 @@ export function translateTranscriptLine(
   };
 
   if (meta.isSubagent) {
-    if (obj.role === 'assistant' && hasToolUse(obj)) return [{ ...base, kind: 'tool.call' }];
-    return [{ ...base, kind: 'status', status: 'working' }];
+    if (obj.role === 'assistant' && hasToolUse(obj)) {
+      return [{ ...base, kind: 'tool.call', detail: clip(toolUseName(obj)) }];
+    }
+    return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
   }
   if (obj.type === 'turn_ended' || obj.type === 'error') {
     return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end' }];
@@ -134,8 +144,8 @@ export function translateTranscriptLine(
     ];
   }
   if (obj.role === 'assistant') {
-    if (hasToolUse(obj)) return [{ ...base, kind: 'tool.call' }];
-    return [{ ...base, kind: 'status', status: 'working' }];
+    if (hasToolUse(obj)) return [{ ...base, kind: 'tool.call', detail: clip(toolUseName(obj)) }];
+    return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
   }
   return [{ ...base, kind: 'status' }];
 }

@@ -1,0 +1,58 @@
+# desktop 类型检查依赖 gitignore 的 apps/desktop/.hutch/devkit。
+# Hutch 装进 runner 临时目录（官方 install.sh），不使用开发机 ~/.hutch。
+# electrobun.version 钉在 apps/desktop/hutch.config.ts；sync 失败则本 job 失败，不跳过 typecheck:desktop。
+# 仓库不是 bun workspace：lockfile 在 packages/core 与 apps/desktop，各自 frozen install。
+
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      HUTCH_HOME: ${{ runner.temp }}/hutch
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install JS dependencies
+        run: |
+          bun install --frozen-lockfile --cwd packages/core
+          bun install --frozen-lockfile --cwd apps/desktop
+
+      - name: Install Hutch
+        run: |
+          curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh -s -- \
+            --version 0.27.1 \
+            --hutch-home "$HUTCH_HOME" \
+            --no-modify-path
+          echo "$HUTCH_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Sync Electrobun devkit
+        working-directory: apps/desktop
+        run: hutch electrobun sync
+
+      - name: Test
+        run: bun run test
+
+      - name: Typecheck core
+        run: bun run typecheck
+
+      - name: Desktop contract tests
+        run: bun run test:desktop
+
+      - name: Check desktop tsconfig
+        run: bun run check:tsconfig
+
+      - name: Typecheck desktop
+        run: bun run typecheck:desktop

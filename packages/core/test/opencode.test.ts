@@ -53,12 +53,12 @@ describe('translateOpencodeEvent', () => {
     expect(retry[0].kind).toBe('status');
   });
 
-  test('permission.asked/updated→permission.request，replied→tool.call，已决不迁移', () => {
+  test('permission.asked/updated→permission.request(带权限名)，replied→tool.call，已决不迁移', () => {
     const asked = translateOpencodeEvent({
       type: 'permission.asked',
-      properties: { sessionID: 'ses_1', id: 'per_1' },
+      properties: { sessionID: 'ses_1', id: 'per_1', permission: 'bash', patterns: ['git push *'] },
     });
-    expect(asked[0].kind).toBe('permission.request');
+    expect(asked[0]).toMatchObject({ kind: 'permission.request', detail: 'bash · git push *' });
     const updated = translateOpencodeEvent({
       type: 'permission.updated',
       properties: { sessionID: 'ses_1', id: 'per_1' },
@@ -68,12 +68,29 @@ describe('translateOpencodeEvent', () => {
       type: 'permission.updated',
       properties: { sessionID: 'ses_1', id: 'per_1', response: 'allow' },
     });
-    expect(resolved[0].kind).toBe('status');
+    expect(resolved[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
     const replied = translateOpencodeEvent({
       type: 'permission.replied',
       properties: { sessionID: 'ses_1', requestID: 'per_1', action: 'allow' },
     });
     expect(replied[0].kind).toBe('tool.call');
+  });
+
+  test('question.asked → waiting(question,问题原文)；replied/rejected → working(thinking)', () => {
+    const asked = translateOpencodeEvent({
+      type: 'question.asked',
+      properties: { sessionID: 'ses_1', questions: [{ question: '走哪条迁移路径？', header: '方向' }] },
+    });
+    expect(asked[0]).toMatchObject({
+      kind: 'status',
+      status: 'waiting',
+      waitingReason: 'question',
+      detail: '走哪条迁移路径？',
+    });
+    for (const t of ['question.replied', 'question.rejected', 'question.cancelled']) {
+      const out = translateOpencodeEvent({ type: t, properties: { sessionID: 'ses_1' } });
+      expect(out[0]).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
+    }
   });
 
   test('session.updated 的 info.model 对象取 id 作 model；累计 tokens 不落账', () => {
@@ -111,6 +128,19 @@ describe('translateOpencodeEvent', () => {
     });
     expect(out.map((e) => e.kind)).toEqual(['usage', 'turn.end']);
     expect(out[0].tokens).toEqual({ input: 60, output: 40, cacheRead: 10, cacheWrite: 0, reasoning: 0 });
+  });
+
+  test('part tool：running → tool.call(带工具名)；completed → working(thinking)', () => {
+    const running = translateOpencodeEvent({
+      type: 'message.part.updated',
+      properties: { sessionID: 'ses_1', part: { type: 'tool', tool: 'bash', state: { status: 'running' } } },
+    });
+    expect(running[0]).toMatchObject({ kind: 'tool.call', detail: 'bash' });
+    const done = translateOpencodeEvent({
+      type: 'message.part.updated',
+      properties: { sessionID: 'ses_1', part: { type: 'tool', tool: 'bash', state: { status: 'completed' } } },
+    });
+    expect(done[0]).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
   });
 
   test('session.error → status（不迁移状态）', () => {

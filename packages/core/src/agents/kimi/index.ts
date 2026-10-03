@@ -9,20 +9,25 @@
  * push 平面（0.41 实测 payload）：config.toml `[[hooks]]` 挂 19 事件 → ingest；
  *   恒带 session_id/cwd/client_type，无任何 usage 字段——token 台账只能靠 pull。
  * pull 平面保留：wire.jsonl 的 usage.record 是 token 唯一真源，另管 title
- *   （state.json）、历史回填与装 hook 前已跑会话的覆盖；interaction.request
- *   的 kind 细分（approval→permission.request / question→waiting(question)）
- *   也走这里——hook 侧没有提问事件，提问等待只能靠 pull（≤5s 延迟）。
+ *   （state.json）、历史回填与装 hook 前已跑会话的覆盖。
  */
 
 import { existsSync, readFileSync, readdirSync, statSync, watch } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { HOOKS_DIR, isHookInstalled, mergeTomlHooks, removeHookScript, tomlHookInstalled, unmergeTomlHooks } from '../../hooks/install';
+import {
+  HOOKS_DIR,
+  isHookInstalled,
+  mergeTomlHooks,
+  removeHookScript,
+  tomlHookInstalled,
+  unmergeTomlHooks,
+} from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { fetchKimiQuota } from '../../quota/kimi';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
+import { JsonlTailer, clip, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteKimiSessions, loadSessionIndex, scanKimiSessions } from './files';
 
 /**
@@ -32,8 +37,11 @@ import { deleteKimiSessions, loadSessionIndex, scanKimiSessions } from './files'
  *     turn.prompt                用户发起 turn（含 prompt 文本）
  *     turn.ended                 turn 收尾（reason: completed/cancelled/…）
  *     context.append_loop_event  {event:{type: step.begin|content.part|tool.call|tool.result|step.end}}
+ *                                 tool.call 行带 event.name/description（实测）
  *     usage.record               {model, usage:{inputOther,output,inputCacheRead,inputCacheCreation}, usageScope:"turn"}
- *     interaction.request        审批/提问请求（kind 细分）
+ *     interaction.request        审批/提问请求：顶层 kind 实测区分 approval
+ *                                （request.toolName/action/display）与 question
+ *                                （request.questions[].question 原文 + options）
  *     context.append_message     消息落库（role/content）
  * 其余（config.update / file_history / goal / metadata 等）是簿记噪音，跳过。
  */
@@ -42,7 +50,7 @@ interface WireMessage {
   agentId?: string;
   /** ms epoch。 */
   time?: number;
-  event?: { type?: string };
+  event?: { type?: string; name?: string };
   model?: string;
   usage?: {
     inputOther?: number;
@@ -50,8 +58,18 @@ interface WireMessage {
     inputCacheRead?: number;
     inputCacheCreation?: number;
   };
-  interaction?: { kind?: string };
+  /** interaction.request 的细分：approval=审批（带 toolName/action），question=提问（带 questions）。 */
   kind?: string;
+  /** interaction.request 顶层字段（实测形状）。 */
+  id?: string;
+  toolCallId?: string;
+  /** interaction.request 的请求体（实测形状）。 */
+  request?: {
+    toolName?: string;
+    action?: string;
+    questions?: { question?: string; header?: string; options?: { label?: string; description?: string }[] }[];
+    display?: { kind?: string; command?: string };
+  };
 }
 
 /** 递归找 sessions/ 下所有 wire.jsonl（兼容 <sid>/wire.jsonl 与 <sid>/agents/<agent>/wire.jsonl 两种布局）。 */
@@ -121,9 +139,9 @@ export function translateWireLine(path: string, obj: WireMessage, title?: string
       return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end' }];
     case 'context.append_loop_event': {
       const et = obj.event?.type;
-      if (et === 'tool.call') return [{ ...base, kind: 'tool.call' }];
-      // step.begin/content.part/tool.result/step.end → 活动心跳（保持 working）。
-      return [{ ...base, kind: 'status', status: 'working' }];
+      if (et === 'tool.call') return [{ ...base, kind: 'tool.call', detail: clip(obj.event?.name) }];
+      // tool.result/step.begin/content.part/step.end：工具收尾回模型或模型往返中 → thinking。
+      return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
     }
     case 'usage.record': {
       const u = obj.usage ?? {};
@@ -137,8 +155,16 @@ export function translateWireLine(path: string, obj: WireMessage, title?: string
       };
       return [{ ...base, kind: 'usage', tokens }];
     }
-    case 'interaction.request':
-      return [{ ...base, kind: 'permission.request' }];
+    case 'interaction.request': {
+      // kind=question：agent 在等用户回答（带问题原文）；approval 及其余：等批准（带工具名+动作）。
+      const req = obj.request ?? {};
+      if (obj.kind === 'question') {
+        const q = req.questions?.find((x) => x.question)?.question;
+        return [{ ...base, kind: 'status', status: 'waiting', waitingReason: 'question', detail: clip(q) }];
+      }
+      const what = req.toolName && req.action ? `${req.toolName} · ${req.action}` : req.toolName || req.action;
+      return [{ ...base, kind: 'permission.request', detail: clip(what) }];
+    }
     default:
       return [];
   }
@@ -197,9 +223,9 @@ export function translateKimiHook(payload: unknown): AgentEvent[] {
       return [{ ...base, kind: 'turn.start' }];
     case 'PreToolUse':
     case 'SubagentStart':
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'PermissionRequest':
-      return [{ ...base, kind: 'permission.request' }];
+      return [{ ...base, kind: 'permission.request', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'Stop':
     case 'StopFailure':
     case 'Interrupt':
@@ -213,7 +239,8 @@ export function translateKimiHook(payload: unknown): AgentEvent[] {
     case 'TaskStarted':
     case 'PreCompact':
     case 'PostCompact':
-      return [{ ...base, kind: 'status', status: 'working' }];
+      // 工具收尾/审批已决/排队继续——回到模型往返。
+      return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
     default:
       // Notification 与未来新增事件：只刷活性，不迁移状态。
       return [{ ...base, kind: 'status' }];

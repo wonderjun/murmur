@@ -49,19 +49,51 @@ describe('kimi translateWireLine', () => {
     expect(out[0].tokens).toEqual({ input: 100, output: 10, cacheRead: 50, cacheWrite: 20 });
   });
 
-  test('loop_event tool.call → tool.call；其余 → status(working) 心跳', () => {
-    expect(
-      translateWireLine(P, { type: 'context.append_loop_event', event: { type: 'tool.call' }, time: 1 })[0].kind,
-    ).toBe('tool.call');
+  test('loop_event tool.call → tool.call(带工具名)；其余 → status(working,thinking)', () => {
+    const call = translateWireLine(P, {
+      type: 'context.append_loop_event',
+      event: { type: 'tool.call', name: 'Bash' },
+      time: 1,
+    })[0];
+    expect(call).toMatchObject({ kind: 'tool.call', detail: 'Bash' });
     const s = translateWireLine(P, { type: 'context.append_loop_event', event: { type: 'step.begin' }, time: 1 })[0];
-    expect(s.kind).toBe('status');
-    expect(s.status).toBe('working');
+    expect(s).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
+    // tool.result = 工具收尾回模型，同 thinking。
+    const done = translateWireLine(P, { type: 'context.append_loop_event', event: { type: 'tool.result' }, time: 1 })[0];
+    expect(done).toMatchObject({ kind: 'status', phase: 'thinking' });
   });
 
-  test('interaction.request → permission.request；簿记噪音丢弃', () => {
-    expect(translateWireLine(P, { type: 'interaction.request', kind: 'approval', time: 1 })[0].kind).toBe(
-      'permission.request',
-    );
+  // interaction.request 形状取自 ~/.kimi-code 真机 wire.jsonl 实测。
+  test('interaction.request 按 kind 细分：approval→permission.request(工具名+动作)，question→waiting(question,问题原文)', () => {
+    const approval = translateWireLine(P, {
+      type: 'interaction.request',
+      id: 'approval_x',
+      kind: 'approval',
+      toolCallId: 'call_1',
+      agentId: 'main',
+      request: { toolName: 'Bash', action: 'Running: git status --short', display: { kind: 'command' } },
+      time: 1,
+    })[0];
+    expect(approval).toMatchObject({ kind: 'permission.request', detail: 'Bash · Running: git status --short' });
+
+    const question = translateWireLine(P, {
+      type: 'interaction.request',
+      id: 'question_x',
+      kind: 'question',
+      toolCallId: 'tool_1',
+      agentId: 'main',
+      request: { questions: [{ question: '这次想往哪个方向深入？', header: '方向', options: [] }] },
+      time: 1,
+    })[0];
+    expect(question).toMatchObject({
+      kind: 'status',
+      status: 'waiting',
+      waitingReason: 'question',
+      detail: '这次想往哪个方向深入？',
+    });
+
+    // kind 缺省（老版本/未知细分）仍归 permission.request。
+    expect(translateWireLine(P, { type: 'interaction.request', time: 1 })[0].kind).toBe('permission.request');
     expect(translateWireLine(P, { type: 'config.update', time: 1 })).toHaveLength(0);
     expect(translateWireLine(P, { type: 'file_history.tracked', time: 1 })).toHaveLength(0);
   });
@@ -102,7 +134,7 @@ describe('kimi translateKimiHook', () => {
     expect(turn[0].kind).toBe('turn.start');
   });
 
-  test('PreToolUse → tool.call；PostToolUse/PermissionResult → working 心跳', () => {
+  test('PreToolUse → tool.call(带工具名)；PostToolUse/PermissionResult → working(thinking) 心跳', () => {
     const pre = translateKimiHook({
       ...base,
       hook_event_name: 'PreToolUse',
@@ -110,18 +142,16 @@ describe('kimi translateKimiHook', () => {
       tool_input: { command: 'echo hi' },
       tool_call_id: 'tool_x',
     });
-    expect(pre[0].kind).toBe('tool.call');
+    expect(pre[0]).toMatchObject({ kind: 'tool.call', detail: 'Bash' });
     for (const ev of ['PostToolUse', 'PostToolUseFailure', 'PermissionResult', 'UserPromptQueued', 'TaskStarted']) {
       const s = translateKimiHook({ ...base, hook_event_name: ev })[0];
-      expect(s.kind).toBe('status');
-      expect(s.status).toBe('working');
+      expect(s).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
     }
   });
 
-  test('PermissionRequest → permission.request', () => {
-    expect(translateKimiHook({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash' })[0].kind).toBe(
-      'permission.request',
-    );
+  test('PermissionRequest → permission.request(带工具名)', () => {
+    const e = translateKimiHook({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash' })[0];
+    expect(e).toMatchObject({ kind: 'permission.request', detail: 'Bash' });
   });
 
   test('Stop/StopFailure/Interrupt → turn.end(turn-end)；SessionEnd → session.end', () => {

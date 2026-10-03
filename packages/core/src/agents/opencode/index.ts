@@ -20,7 +20,7 @@ import { HOOK_MARKER } from '../../hooks/script';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { pick, type AgentAdapter, type DataSourceRef } from '../base';
+import { clip, pick, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteOpencodeSessions, scanOpencodeSessions } from './files';
 import { watchLegacyJson } from './legacy';
 
@@ -42,7 +42,7 @@ function loadEndpoint() {
   }
 }
 
-const WATCHED = /^(session\.|permission\.|message\.updated$|message\.part\.updated$)/;
+const WATCHED = /^(session\.|permission\.|question\.|message\.updated$|message\.part\.updated$)/;
 
 function shouldForward(event) {
   if (!event || !WATCHED.test(event.type || "")) return false;
@@ -124,7 +124,20 @@ export function translateOpencodeEvent(ev: Record<string, unknown>): AgentEvent[
     const done =
       (props.response !== undefined && props.response !== null) ||
       ['replied', 'resolved', 'approved', 'denied'].includes(pick(props, 'status', 'state') ?? '');
-    return done ? [{ ...base, kind: 'status' }] : [{ ...base, kind: 'permission.request' }];
+    if (done) return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
+    // permission 是权限名（bash/edit/…），patterns[0] 是首个待批资源——合成等待对象摘要。
+    const pattern = Array.isArray(props.patterns) ? pick({ p: props.patterns[0] }, 'p') : undefined;
+    const what = pick(props, 'permission', 'tool');
+    return [{ ...base, kind: 'permission.request', detail: clip(what && pattern ? `${what} · ${pattern}` : (what ?? pattern)) }];
+  }
+  if (type.startsWith('question.')) {
+    // question.asked：agent 向你提问（questions[0].question 是原文）；replied/rejected/cancelled 回工作。
+    if (type === 'question.asked') {
+      const qs = Array.isArray(props.questions) ? (props.questions as Array<Record<string, unknown>>) : [];
+      const q = pick(qs[0], 'question', 'header') ?? pick(props, 'question', 'title');
+      return [{ ...base, kind: 'status', status: 'waiting', waitingReason: 'question', detail: clip(q) }];
+    }
+    return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
   }
   if (type.startsWith('session.created')) {
     return [{ ...base, kind: 'session.start', title: pick(info, 'title', 'slug') }];
@@ -140,7 +153,8 @@ export function translateOpencodeEvent(ev: Record<string, unknown>): AgentEvent[
     if (role === 'assistant' && time.completed) {
       return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end', model: modelOf(info) }];
     }
-    return [{ ...base, kind: 'status' }];
+    // assistant 消息在写（未 completed）= 模型往返中。
+    return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
   }
   if (type.startsWith('message.part.updated')) {
     const part = (props.part ?? {}) as Record<string, unknown>;
@@ -162,8 +176,16 @@ export function translateOpencodeEvent(ev: Record<string, unknown>): AgentEvent[
       return [usage];
     }
     if (part.type === 'step-finish') return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end' }];
-    if (part.type === 'tool' || part.type === 'tool-invocation') return [{ ...base, kind: 'tool.call' }];
-    return [{ ...base, kind: 'status' }];
+    if (part.type === 'tool' || part.type === 'tool-invocation') {
+      // tool part 会多次 updated：completed/error 态是收尾回模型，running/pending 才是执行中。
+      const state = pick((part.state ?? {}) as Record<string, unknown>, 'status');
+      if (state === 'completed' || state === 'error') {
+        return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
+      }
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(part, 'tool', 'name')) }];
+    }
+    // text/reasoning chunk = 模型往返中。
+    return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
   }
   return [{ ...base, kind: 'status' }];
 }

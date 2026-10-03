@@ -16,6 +16,13 @@ export type AgentStatus = 'working' | 'waiting' | 'idle' | 'stale' | 'ended';
 export type WaitingReason = 'approval' | 'turn-end' | 'question';
 
 /**
+ * working 的细分相位：thinking=模型往返/思考中（turn.start 与 PostToolUse 之间）、
+ * tool=工具执行中（PreToolUse/tool.call 起）。由既有事件流推导，不承诺更细
+ * （排队/重试/压缩不可分辨）；无细粒度源的 agent 恒缺省，UI 按普通「工作中」渲染。
+ */
+export type WorkingPhase = 'thinking' | 'tool';
+
+/**
  * token 计量口径：字段互斥，合计 = input + output + cacheRead + cacheWrite。
  *   input = 非缓存输入；cacheRead/cacheWrite = 命中/写入缓存的输入分量；
  *   reasoning 是 output 的细分（信息字段，不参与合计）。
@@ -50,6 +57,14 @@ export interface AgentEvent {
   status?: AgentStatus;
   /** kind=waiting 相关事件的细分原因。 */
   waitingReason?: WaitingReason;
+  /** working 细分相位（turn.start/tool.call/status 事件可携带）。 */
+  phase?: WorkingPhase;
+  /**
+   * 上下文对象摘要（≤80 字符）：permission.request/question 事件是等待对象
+   * （审批命令/问题文本），tool.call 是工具名。来自 hook payload 的原文一律截断，
+   * 含完整 prompt 的字段不进此字段（zcode 约定）。
+   */
+  detail?: string;
   /** 会话标题/摘要（若数据源携带）。 */
   title?: string;
   /** kind=usage 时的计量。 */
@@ -67,6 +82,18 @@ export interface SessionSnapshot {
   sessionId: string;
   status: AgentStatus;
   waitingReason?: WaitingReason;
+  /** 等待对象摘要（≤80 字符）：approval=审批命令/工具名，question=问题文本。离开 waiting 即清。 */
+  waitingDetail?: string;
+  /** working 细分相位（status=working 时可有）；无细粒度源的会话恒缺省。 */
+  phase?: WorkingPhase;
+  /** 最近工具名：phase=tool 时是当前执行中的工具，其余时刻是时间线的「最近工具调用」。 */
+  toolName?: string;
+  /** 进入当前状态的时刻（ms epoch）——「等了 N 分钟」「工作中 N 分钟」的计时起点。 */
+  statusAt: number;
+  /** 最近一次 turn.start 时刻（轻量时间线「发起」位）；无则缺省。 */
+  turnStartAt?: number;
+  /** 最近一次 tool.call 时刻（轻量时间线「工具」位）；无则缺省。 */
+  toolCallAt?: number;
   cwd?: string;
   title?: string;
   model?: string;

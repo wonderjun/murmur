@@ -41,7 +41,7 @@ import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { readJsonFile } from '../../quota/common';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
+import { JsonlTailer, clip, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteQoderSessions, scanQoderSessions, slugToPath } from './files';
 
 /** qoder hook 事件：生命周期 + 工具 + 审批 + 任务粒度全收，文件级噪音（FileChanged 等）不挂。 */
@@ -88,12 +88,15 @@ export function translateQoderHook(payload: unknown): AgentEvent[] {
     case 'PreToolUse':
     case 'SubagentStart':
     case 'TaskCreated':
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'PermissionRequest':
-      return [{ ...base, kind: 'permission.request' }];
-    case 'Elicitation':
-      // agent 发起问询——在等用户输入。
-      return [{ ...base, kind: 'status', status: 'waiting', waitingReason: 'question' }];
+      return [{ ...base, kind: 'permission.request', detail: clip(pick(p, 'tool_name', 'toolName')) }];
+    case 'Elicitation': {
+      // agent 发起问询——在等用户输入；payload 里取问题原文做等待对象。
+      const qs = Array.isArray(p.questions) ? (p.questions as Array<Record<string, unknown>>) : [];
+      const q = pick(qs[0], 'question', 'header') ?? pick(p, 'question', 'message', 'prompt', 'title');
+      return [{ ...base, kind: 'status', status: 'waiting', waitingReason: 'question', detail: clip(q) }];
+    }
     case 'Stop':
     case 'StopFailure':
       // 回合停——「轮到你了」。
@@ -101,8 +104,9 @@ export function translateQoderHook(payload: unknown): AgentEvent[] {
     case 'SessionEnd':
       return [{ ...base, kind: 'session.end' }];
     default:
-      // PostToolUse*/SubagentStop/TaskCompleted/Notification/Compact 等：心跳防 stale。
-      return [{ ...base, kind: 'status', status: 'working' }];
+      // PostToolUse*/PermissionDenied/ElicitationResult/SubagentStop/TaskCompleted/Notification/
+      // Compact 等：回模型往返的心跳，防 stale。
+      return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
   }
 }
 
@@ -119,12 +123,13 @@ function lineAt(obj: Record<string, unknown>): number {
   return 0;
 }
 
-/** user/assistant 行的 message.content → 文本与块类型集合。 */
-function messageShape(obj: Record<string, unknown>): { text: string; blocks: Set<string> } {
+/** user/assistant 行的 message.content → 文本、块类型集合与首个工具名。 */
+function messageShape(obj: Record<string, unknown>): { text: string; blocks: Set<string>; toolName?: string } {
   const msg = obj.message as Record<string, unknown> | undefined;
   const content = msg?.content;
   const blocks = new Set<string>();
   let text = '';
+  let toolName: string | undefined;
   if (typeof content === 'string') {
     text = content;
   } else if (Array.isArray(content)) {
@@ -133,10 +138,11 @@ function messageShape(obj: Record<string, unknown>): { text: string; blocks: Set
       const t = typeof b?.type === 'string' ? b.type : '';
       if (t) blocks.add(t);
       if (t === 'text' && typeof b.text === 'string') parts.push(b.text);
+      if (!toolName && t === 'tool_use') toolName = pick(b, 'name');
     }
     text = parts.join('\n');
   }
-  return { text, blocks };
+  return { text, blocks, toolName };
 }
 
 /** usage 字段 → 互斥 TokenUsage（Anthropic 口径原生吻合：input_tokens 即非缓存输入）。 */
@@ -185,9 +191,9 @@ export function translateTranscriptLine(path: string, obj: Record<string, unknow
   if (type === 'user') {
     const { blocks } = messageShape(obj);
     if (obj.isSidechain === true) return [{ ...base, kind: 'status', status: 'working' }];
-    // content 只有 tool_result 块 = 工具结果回填，非用户回合。
+    // content 只有 tool_result 块 = 工具结果回填——工具已收尾回模型，非用户回合也非新调用。
     if (blocks.size > 0 && [...blocks].every((b) => b === 'tool_result')) {
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
     }
     const out: AgentEvent[] = [
       { ...base, kind: 'session.start' },
@@ -200,12 +206,12 @@ export function translateTranscriptLine(path: string, obj: Record<string, unknow
     const usage = usageOf(obj);
     if (usage) events.push({ ...base, kind: 'usage', tokens: usage.tokens, model: usage.model });
     if (obj.isSidechain === true) {
-      events.push({ ...base, kind: 'status', status: 'working' });
+      events.push({ ...base, kind: 'status', status: 'working', phase: 'thinking' });
       return events;
     }
-    const { blocks } = messageShape(obj);
+    const { blocks, toolName } = messageShape(obj);
     if (blocks.has('tool_use')) {
-      events.push({ ...base, kind: 'tool.call' });
+      events.push({ ...base, kind: 'tool.call', detail: clip(toolName) });
       return events;
     }
     const msg = obj.message as Record<string, unknown> | undefined;
@@ -214,12 +220,12 @@ export function translateTranscriptLine(path: string, obj: Record<string, unknow
       events.push({ ...base, kind: 'turn.end', waitingReason: 'turn-end' });
       return events;
     }
-    events.push({ ...base, kind: 'status', status: 'working' });
+    events.push({ ...base, kind: 'status', status: 'working', phase: 'thinking' });
     return events;
   }
   // system/progress/session_meta/attachment/file-history-snapshot/active-leaf/
   // worktree-state/last-prompt/runtime-config 等簿记行：只刷活性不迁移。
-  return [{ ...base, kind: 'status', status: 'working', model: pick(obj, 'model') }];
+  return [{ ...base, kind: 'status', status: 'working', phase: 'thinking', model: pick(obj, 'model') }];
 }
 
 /** 递归收集 projects 下全部 transcript（<slug>/*.jsonl 与 transcript/、<uuid>/ 子目录都收）。 */

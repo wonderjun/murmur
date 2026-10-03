@@ -59,6 +59,76 @@ describe('StatusEngine', () => {
     expect(e.snapshot()[0].waitingReason).toBe('approval');
   });
 
+  test('working 相位：turn.start→thinking，tool.call→tool(记工具名)，status 相位信号切换回 thinking', () => {
+    const e = new StatusEngine();
+    const t0 = Date.now() - 1000;
+    e.apply(ev('turn.start', t0));
+    let s = e.snapshot()[0];
+    expect(s.phase).toBe('thinking');
+    expect(s.turnStartAt).toBe(t0);
+    expect(s.statusAt).toBe(t0);
+
+    e.apply({ ...ev('tool.call'), detail: 'Bash' });
+    s = e.snapshot()[0];
+    expect(s.phase).toBe('tool');
+    expect(s.toolName).toBe('Bash');
+    expect(s.toolCallAt).toBeGreaterThan(0);
+
+    // PostToolUse 系 status 相位信号回 thinking；时间线字段保留。
+    e.apply({ ...ev('status'), phase: 'thinking' });
+    s = e.snapshot()[0];
+    expect(s.phase).toBe('thinking');
+    expect(s.toolName).toBe('Bash');
+    expect(s.turnStartAt).toBe(t0);
+  });
+
+  test('waitingDetail：permission.request 记等待对象，回 working 清相位与 detail', () => {
+    const e = new StatusEngine();
+    e.apply(ev('session.start'));
+    e.apply(ev('turn.start'));
+    e.apply({ ...ev('permission.request'), detail: 'Bash · Running: git push' });
+    let s = e.snapshot()[0];
+    expect(s).toMatchObject({ status: 'waiting', waitingReason: 'approval', waitingDetail: 'Bash · Running: git push' });
+    expect(s.phase).toBeUndefined();
+    // 等了多久 = statusAt（进入 waiting 的时刻）。
+    expect(s.statusAt).toBeGreaterThan(0);
+
+    e.apply(ev('turn.start'));
+    s = e.snapshot()[0];
+    expect(s.status).toBe('working');
+    expect(s.phase).toBe('thinking');
+    expect(s.waitingDetail).toBeUndefined();
+  });
+
+  test('question 细分：status waiting(question) 记问题文本；衰减回 idle 后清空', () => {
+    const e = new StatusEngine();
+    e.apply(ev('session.start'));
+    e.apply(ev('turn.start'));
+    e.apply({ ...ev('status'), status: 'waiting', waitingReason: 'question', detail: '往哪条迁移路径走？' });
+    let s = e.snapshot()[0];
+    expect(s).toMatchObject({ status: 'waiting', waitingReason: 'question', waitingDetail: '往哪条迁移路径走？' });
+
+    // waiting 30min 无动静衰减回 idle——detail/reason 一并清。
+    e.sweep(Date.now() + 31 * 60_000);
+    // 再起来时 detail 不带残留。
+    e.apply(ev('turn.start'));
+    s = e.snapshot()[0];
+    expect(s.status).toBe('working');
+    expect(s.waitingReason).toBeUndefined();
+    expect(s.waitingDetail).toBeUndefined();
+  });
+
+  test('回填事件不写相位：旧 status 的 phase 不生效，旧 turn.start 仍落 ended', () => {
+    const e = new StatusEngine();
+    const old = Date.now() - 3600_000;
+    e.apply({ ...ev('session.start', old), sessionId: 'old-s' });
+    e.apply({ ...ev('status', old, 'old-s'), status: 'working', phase: 'tool', detail: 'Bash' });
+    // 回填 status 不迁移不置相位——快照里它甚至不可见（idle 超窗）。
+    expect(e.snapshot().find((s) => s.sessionId === 'old-s')).toBeUndefined();
+    e.apply({ ...ev('turn.start', old), sessionId: 'old-s' });
+    expect(e.overall()).toBe('ended');
+  });
+
   test('usage 事件累计 token', () => {
     const e = new StatusEngine();
     e.apply(ev('session.start'));

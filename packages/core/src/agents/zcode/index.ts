@@ -33,7 +33,7 @@ import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { fetchZcodeQuota } from '../../quota/zcode';
 import type { AgentEvent, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
+import { JsonlTailer, clip, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { stringAtSpan, topLevelString, topLevelValueSpan, topLevelValueSpans } from '../json-span';
 import { deleteZcodeSessions, scanZcodeSessions } from './files';
 
@@ -125,12 +125,12 @@ export function translateZcodeHook(payload: unknown): AgentEvent[] {
     case 'UserPromptSubmit':
       return [{ ...base, kind: 'turn.start' }];
     case 'PreToolUse':
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'PermissionRequest':
-      return [{ ...base, kind: 'permission.request' }];
+      return [{ ...base, kind: 'permission.request', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'PostToolUse':
     case 'PostToolUseFailure':
-      return [{ ...base, kind: 'status', status: 'working' }];
+      return [{ ...base, kind: 'status', status: 'working', phase: 'thinking' }];
     case 'Stop':
       return [{ ...base, kind: 'turn.end', waitingReason: 'turn-end' }];
     default:

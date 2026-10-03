@@ -180,3 +180,11 @@ export function pick(obj: unknown, ...keys: string[]): string | undefined {
   }
   return undefined;
 }
+
+/** detail 摘要截断：压成单行、限长（面板只给一瞥，原文在 raw/数据源里）。 */
+export function clip(text: string | undefined, max = 80): string | undefined {
+  if (!text) return undefined;
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (!flat) return undefined;
+  return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+}

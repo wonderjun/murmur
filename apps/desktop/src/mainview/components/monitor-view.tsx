@@ -15,10 +15,11 @@ import { Button } from "@/components/ui/button";
 import { AGENT_META } from "@/lib/agent-meta";
 import { fmtTokens } from "@/lib/format";
 import { allSessions, todayTokens } from "@/lib/selectors";
+import { waitingReasonLabel } from "@/lib/status-text";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
-import type { AgentId, SessionSnapshot, WaitingReason } from "@core/types";
+import type { AgentId, SessionSnapshot } from "@core/types";
 
 export default function MonitorView() {
   const snapshot = useMurmurStore((s) => s.snapshot);
@@ -140,10 +141,17 @@ export default function MonitorView() {
               轮到你了 · {agentName(waitingSessions[0].agent)}
             </p>
             <p className="mt-1.5 text-title font-medium leading-snug">
-              {waitingSessions[0].title || "一个任务正在等你继续"}
+              {/* 提问类等待直接把问题原文顶到标题位——"发生了什么"一瞥即读 */}
+              {waitingSessions[0].waitingReason === "question" && waitingSessions[0].waitingDetail
+                ? waitingSessions[0].waitingDetail
+                : waitingSessions[0].title || "一个任务正在等你继续"}
             </p>
             <p className="mt-1 text-meta text-muted-foreground">
-              {waitingReason(waitingSessions[0].waitingReason)} · {age(waitingSessions[0].lastEventAt)}
+              {waitingReasonLabel(waitingSessions[0].waitingReason)}
+              {waitingSessions[0].waitingReason !== "question" && waitingSessions[0].waitingDetail
+                ? ` · ${waitingSessions[0].waitingDetail}`
+                : ""}{" "}
+              · 等了 {age(waitingSessions[0].statusAt)}
             </p>
           </div>
           {waitingSessions.length > 1 && (
@@ -260,12 +268,6 @@ function EndedRow({ session }: { session: SessionSnapshot }) {
 
 function agentName(agent: AgentId) {
   return AGENT_META[agent].name;
-}
-
-function waitingReason(reason?: WaitingReason) {
-  if (reason === "approval") return "等待批准";
-  if (reason === "question") return "等待回答";
-  return "本轮完成，等待继续";
 }
 
 function age(at: number) {

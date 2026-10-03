@@ -28,7 +28,7 @@ import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { fetchCodexQuota } from '../../quota/codex';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
+import { JsonlTailer, clip, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteCodexSessions, listRollouts, ROLLOUT_UUID_RE, scanCodexSessions } from './files';
 
 /**
@@ -77,14 +77,16 @@ export function translateRolloutLine(path: string, obj: Record<string, unknown>)
       return [{ ...base, kind: 'usage', tokens, model: pick(t, 'model') }];
     }
     if (sub === 'exec_approval_request' || sub === 'apply_patch_approval_request') {
-      return [{ ...base, kind: 'permission.request' }];
+      // 审批对象：exec 是命令串（数组形），apply_patch 是补丁摘要。
+      const cmd = Array.isArray(payload.command) ? (payload.command as unknown[]).join(' ') : pick(payload, 'command', 'call_id');
+      return [{ ...base, kind: 'permission.request', detail: clip(cmd) }];
     }
     return [{ ...base, kind: 'status' }];
   }
   if (type === 'response_item') {
     const itemType = String(payload.type ?? '');
     if (itemType === 'function_call' || itemType === 'local_shell_call') {
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(payload, 'name', 'tool')) }];
     }
     return [{ ...base, kind: 'status' }];
   }
@@ -154,9 +156,9 @@ export function translateCodexHookEvent(payload: unknown): AgentEvent[] {
     }
     case 'PreToolUse':
       // 工具执行前触发，比 rollout 的 response_item 落行更早。
-      return [{ ...base, kind: 'tool.call' }];
+      return [{ ...base, kind: 'tool.call', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'PermissionRequest':
-      return [{ ...base, kind: 'permission.request' }];
+      return [{ ...base, kind: 'permission.request', detail: clip(pick(p, 'tool_name', 'toolName')) }];
     case 'Stop':
     case 'Interrupt':
       // 回合停/被中断——都是「轮到你了」。
@@ -164,8 +166,8 @@ export function translateCodexHookEvent(payload: unknown): AgentEvent[] {
     case 'SessionEnd':
       return [{ ...base, kind: 'session.end' }];
     default:
-      // PostToolUse/PreCompact/PostCompact/Subagent*/未知事件：心跳防 stale。
-      return [{ ...base, kind: 'status' }];
+      // PostToolUse/PreCompact/PostCompact/Subagent*/未知事件：回模型往返的心跳。
+      return [{ ...base, kind: 'status', phase: 'thinking' }];
   }
 }
 

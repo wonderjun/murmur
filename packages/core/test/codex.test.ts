@@ -38,9 +38,14 @@ describe('codex translateRolloutLine', () => {
     expect(
       translateRolloutLine(ROLLOUT, { ...ts, type: 'event_msg', payload: { type: 'task_complete' } })[0],
     ).toMatchObject({ kind: 'turn.end', waitingReason: 'turn-end' });
+    // exec_approval_request 的 command 数组拼成等待对象摘要。
     expect(
-      translateRolloutLine(ROLLOUT, { ...ts, type: 'event_msg', payload: { type: 'exec_approval_request' } })[0].kind,
-    ).toBe('permission.request');
+      translateRolloutLine(ROLLOUT, {
+        ...ts,
+        type: 'event_msg',
+        payload: { type: 'exec_approval_request', command: ['git', 'push', '--force'] },
+      })[0],
+    ).toMatchObject({ kind: 'permission.request', detail: 'git push --force' });
     const usage = translateRolloutLine(ROLLOUT, {
       ...ts,
       type: 'event_msg',
@@ -57,10 +62,10 @@ describe('codex translateRolloutLine', () => {
     expect(usage.tokens).toMatchObject({ input: 10, output: 3, cacheRead: 2, reasoning: 1 });
   });
 
-  test('response_item：function_call→tool.call，其余 status', () => {
+  test('response_item：function_call→tool.call(带工具名)，其余 status', () => {
     expect(
-      translateRolloutLine(ROLLOUT, { ...ts, type: 'response_item', payload: { type: 'function_call' } })[0].kind,
-    ).toBe('tool.call');
+      translateRolloutLine(ROLLOUT, { ...ts, type: 'response_item', payload: { type: 'function_call', name: 'shell' } })[0],
+    ).toMatchObject({ kind: 'tool.call', detail: 'shell' });
     expect(
       translateRolloutLine(ROLLOUT, { ...ts, type: 'response_item', payload: { type: 'reasoning' } })[0].kind,
     ).toBe('status');
@@ -91,16 +96,19 @@ describe('codex hooks.json 事件翻译', () => {
       ...extra,
     });
 
-  test('全事件映射', () => {
+  test('全事件映射（含 detail/phase）', () => {
     expect(ev('SessionStart')[0].kind).toBe('session.start');
-    expect(ev('PreToolUse')[0].kind).toBe('tool.call');
-    expect(ev('PermissionRequest')[0].kind).toBe('permission.request');
+    expect(ev('PreToolUse', { tool_name: 'Bash' })[0]).toMatchObject({ kind: 'tool.call', detail: 'Bash' });
+    expect(ev('PermissionRequest', { tool_name: 'Edit' })[0]).toMatchObject({
+      kind: 'permission.request',
+      detail: 'Edit',
+    });
     expect(ev('Stop')[0]).toMatchObject({ kind: 'turn.end', waitingReason: 'turn-end' });
     expect(ev('Interrupt')[0].kind).toBe('turn.end');
     expect(ev('SessionEnd')[0].kind).toBe('session.end');
-    expect(ev('PostToolUse')[0].kind).toBe('status');
-    expect(ev('SubagentStart')[0].kind).toBe('status');
-    expect(ev('SomethingNew')[0].kind).toBe('status');
+    expect(ev('PostToolUse')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
+    expect(ev('SubagentStart')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
+    expect(ev('SomethingNew')[0]).toMatchObject({ kind: 'status', phase: 'thinking' });
   });
 
   test('UserPromptSubmit → turn.start 且 prompt 作 title', () => {

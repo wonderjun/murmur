@@ -60,15 +60,24 @@ describe('cursor hook payload', () => {
 
   test('CLI 也发的事件：sessionStart/postToolUse/afterShellExecution 归位', () => {
     expect(translateHookPayload({ hook_event_name: 'sessionStart', session_id: 's1' })[0].kind).toBe('session.start');
-    expect(translateHookPayload({ hook_event_name: 'postToolUse', session_id: 's1' })[0].kind).toBe('tool.call');
-    expect(translateHookPayload({ hook_event_name: 'afterShellExecution', session_id: 's1' })[0].kind).toBe('tool.call');
+    // 前置事件 → tool.call（带工具名 detail）；收尾事件 → thinking 心跳回模型往返。
+    const pre = translateHookPayload({ hook_event_name: 'preToolUse', session_id: 's1', tool_name: 'Shell' });
+    expect(pre[0]).toMatchObject({ kind: 'tool.call', detail: 'Shell' });
+    expect(translateHookPayload({ hook_event_name: 'postToolUse', session_id: 's1' })[0]).toMatchObject({
+      kind: 'status',
+      status: 'working',
+      phase: 'thinking',
+    });
+    expect(translateHookPayload({ hook_event_name: 'afterShellExecution', session_id: 's1' })[0]).toMatchObject({
+      kind: 'status',
+      phase: 'thinking',
+    });
     expect(translateHookPayload({ hook_event_name: 'sessionEnd', session_id: 's1' })[0].kind).toBe('session.end');
   });
 
-  test('未知事件 → status 心跳', () => {
+  test('未知事件 → status(thinking) 心跳', () => {
     const evs = translateHookPayload({ hook_event_name: 'afterAgentThought', session_id: 's1' });
-    expect(evs[0].kind).toBe('status');
-    expect(evs[0].status).toBe('working');
+    expect(evs[0]).toMatchObject({ kind: 'status', status: 'working', phase: 'thinking' });
   });
 });
 

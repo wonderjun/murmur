@@ -299,29 +299,44 @@ const AGENT_NAMES: Record<string, string> = {
   qoder: "Qoder",
 };
 
-// 「轮到你了」通知：waiting 集合只增才发。首个快照作基线——回填建档的旧 waiting
-// 是历史残态不是新事件，不该在启动时轰炸通知中心。
+// 「轮到你了」通知：waiting 集合（sessionId+reason 键）只增才发——同会话从
+// 「本轮完成」升级成「等批准/等回答」会再发一次（可操作态升级值得打断）。
+// 首个快照作基线——回填建档的旧 waiting 是历史残态不是新事件，不该在启动时
+// 轰炸通知中心；另加 statusAt 新鲜度门槛，慢速重扫/spool 补投出的"新" waiting 同样不报。
+const NOTIFY_FRESH_MS = 120_000;
 let prevWaiting: Set<string> | null = null;
 function maybeNotifyWaiting(snap: AppSnapshot) {
   const waiting = new Map(
-    snap.agents.flatMap((a) => a.sessions.filter((s) => s.status === "waiting").map((s) => [`${a.agent}:${s.sessionId}`, a.agent])),
+    snap.agents.flatMap((a) =>
+      a.sessions
+        .filter((s) => s.status === "waiting")
+        .map((s) => [`${a.agent}:${s.sessionId}:${s.waitingReason ?? "turn-end"}`, s] as const),
+    ),
   );
   if (prevWaiting === null) {
     prevWaiting = new Set(waiting.keys());
     return;
   }
-  const fresh = [...waiting.entries()].filter(([k]) => !prevWaiting!.has(k)).map(([, agent]) => agent);
+  const fresh = [...waiting.entries()].filter(([k]) => !prevWaiting!.has(k)).map(([, s]) => s);
   prevWaiting = new Set(waiting.keys());
   if (!fresh.length || !registry.getSettings().notifyOnWaiting || panel.isVisible()) return;
-  const names = [...new Set(fresh.map((id) => AGENT_NAMES[id] ?? id))];
+  const recent = fresh.filter((s) => Date.now() - s.statusAt <= NOTIFY_FRESH_MS);
+  if (!recent.length) return;
+  const lines = recent.slice(0, 3).map(notifyLine);
+  const body = lines.join("\n") + (recent.length > lines.length ? `\n等 ${recent.length} 个会话` : "");
   try {
-    Utils.showNotification({
-      title: "Murmur",
-      body: `${names.join("、")} 有 ${fresh.length} 个会话轮到你了`,
-    });
+    Utils.showNotification({ title: "Murmur", body });
   } catch {
     // 通知失败不打断主流程。
   }
+}
+
+/** 单条通知文案：「Kimi Code · murmur：等待批准 · Bash」。 */
+function notifyLine(s: AppSnapshot["agents"][number]["sessions"][number]): string {
+  const where = s.cwd?.split("/").filter(Boolean).pop() ?? s.title?.slice(0, 24) ?? "未命名任务";
+  const reason =
+    s.waitingReason === "approval" ? "等待批准" : s.waitingReason === "question" ? "等待回答" : "本轮完成";
+  return `${AGENT_NAMES[s.agent] ?? s.agent} · ${where}：${reason}${s.waitingDetail ? ` · ${s.waitingDetail}` : ""}`;
 }
 
 function showPanel() {

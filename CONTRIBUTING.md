@@ -21,11 +21,34 @@ bun run dev            # 构建并启动（watch 模式）
 bun run dev:hmr        # vite HMR 开发模式（vite@5173 + app 本体）
 bun run build          # 出稳定 .app 包
 bun run test           # core 引擎测试（cd packages/core && bun test，bunfig preload 沙箱生效）
+bun run test:desktop   # desktop RPC 契约 + tsconfig 同步脚本测试
 bun run typecheck      # core 类型检查
-bun run typecheck:desktop  # 桌面端类型检查
+bun run typecheck:desktop  # 桌面端类型检查（需要先 sync 出 .hutch/devkit）
+bun run sync:tsconfig  # 按当前 devkit 重写 apps/desktop/tsconfig.json 的 paths
+bun run check:tsconfig # 检查 tsconfig paths 是否与 devkit 漂移
 ```
 
-提交前请确保 `bun run test` 与两个 typecheck 全绿。
+提交前请确保 `bun run test`、`bun run test:desktop`、`bun run check:tsconfig` 与两个 typecheck 全绿。
+
+## 升级 Hutch / Electrobun devkit
+
+`apps/desktop/.hutch/` 被 gitignore。本机 `~/.hutch` 只是开发机缓存，CI 不读它。
+
+1. 改 `apps/desktop/hutch.config.ts` 的 `electrobun.version`（精确 semver；不写 `stable` / `latest`，否则 sync 会漂）
+2. `cd apps/desktop && hutch electrobun sync`
+3. 仓库根目录 `bun run sync:tsconfig`，重写 `apps/desktop/tsconfig.json` 的 `paths`
+4. `bun run check:tsconfig && bun run typecheck:desktop`
+
+`paths` 从 `.hutch/devkit/tsconfig.json` 读取后加上 `./.hutch/devkit/` 前缀，再追加 `@/*` 与 `@core/*`。不要手抄 Electrobun 映射，条目数会随 devkit 变。
+
+CI（`.github/workflows/ci.yml`）在 ubuntu runner 上用 [官方 install.sh](https://hutch.blackboard.sh/hutch/install.sh) 把 Hutch 0.27.1 装进临时目录，再于 `apps/desktop` 执行 `hutch electrobun sync`。JS 依赖按包 frozen install（仓库不是 bun workspace，根目录没有 lockfile）：
+
+```bash
+bun install --frozen-lockfile --cwd packages/core
+bun install --frozen-lockfile --cwd apps/desktop
+```
+
+sync 失败就让 `typecheck:desktop` 失败，不要跳过。Hutch 安装脚本支持 linux-x64 / linux-arm64 / macos-arm64，不支持 Intel macOS。
 
 ## 仓库结构
 
