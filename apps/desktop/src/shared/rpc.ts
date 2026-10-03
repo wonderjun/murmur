@@ -4,7 +4,15 @@
 
 import type { RPCSchema } from "electrobun/main";
 
-import type { AgentId, AppSnapshot, SessionDeleteResult, StoredSession } from "@core/types";
+import type {
+  AgentId,
+  AppSnapshot,
+  DiagnosticsSnapshot,
+  HookTestResult,
+  ManagerTab,
+  SessionDeleteResult,
+  StoredSession,
+} from "@core/types";
 import type { MurmurSettings } from "@core/settings";
 
 /** usageDaily 行（天 × agent × model 聚合明细）。 */
@@ -32,6 +40,8 @@ export interface SettingsSnapshot {
     dataDir: string;
     /** hook ingest 端点描述（如 127.0.0.1:54321）。 */
     ingestEndpoint: string;
+    /** settings.json 尚未写过 = 首次启动（管理窗引导卡与自弹窗信号）。 */
+    firstRun: boolean;
   };
 }
 
@@ -39,12 +49,13 @@ export type MurmurRPC = {
   bun: RPCSchema<{
     requests: {
       getSnapshot: { params: {}; response: AppSnapshot };
-      installHooks: { params: {}; response: Record<string, boolean> };
+      /** 全量装 hook：各 agent 改动标记 + 触碰的配置文件清单。 */
+      installHooks: { params: {}; response: Record<AgentId, { changed: boolean; files: string[] }> };
       hidePanel: { params: {}; response: { ok: true } };
       /** 手动触发各 agent 额度拉取。 */
       refreshQuotas: { params: {}; response: { ok: true } };
-      /** 近 N 天 × agent × model 的 token 明细（用量页三图）。 */
-      usageDaily: { params: { days?: number }; response: UsageDailyRow[] };
+      /** 用量明细：days 取近 N 天，since 取任意起点（ms epoch，区间筛选用）。 */
+      usageDaily: { params: { days?: number; since?: number }; response: UsageDailyRow[] };
       /** 设置页：读设置 + 运行时实况。 */
       getSettings: { params: {}; response: SettingsSnapshot };
       /** 设置页：应用设置补丁（dock/自启即时生效）。 */
@@ -64,8 +75,18 @@ export type MurmurRPC = {
       writeClipboard: { params: { text: string }; response: { ok: true } };
       /** 清空台账与游标，pull watcher 下轮全量重扫。 */
       rebuildLedger: { params: {}; response: { ok: true } };
-      /** 打开会话文件管理窗口（已开则聚焦）。 */
-      openSessions: { params: {}; response: { ok: true } };
+      /** 打开管理台窗口并定位 tab（已开则聚焦并切 tab；缺省 doctor）。 */
+      openManager: { params: { tab?: ManagerTab }; response: { ok: true } };
+      /** 接入诊断快照：各 agent 数据源探针 + push/pull 活性 + 提示。 */
+      getDiagnostics: { params: {}; response: DiagnosticsSnapshot };
+      /** 单 agent hook 链路自检：marker 事件走全真链路逐步验。 */
+      testAgentHook: { params: { agent: AgentId }; response: HookTestResult };
+      /** 单 agent 重扫：重启其 pull watcher（不清游标拾漏）。 */
+      rescanAgent: { params: { agent: AgentId }; response: { ok: true } };
+      /** 单 agent 装 hook：改动标记 + 触碰的配置文件清单。 */
+      installAgentHooks: { params: { agent: AgentId }; response: { changed: boolean; files: string[] } };
+      /** Finder 定位任意诊断出的路径（限 home 内）。 */
+      revealPath: { params: { path: string }; response: { ok: boolean } };
       /** 盘点全部 agent 的磁盘会话产物。 */
       scanSessions: { params: {}; response: { items: StoredSession[]; scannedAt: number } };
       /** 批量删除：fs 产物进废纸篓、库内行永久删；per-item 回报。 */
@@ -86,6 +107,8 @@ export type MurmurRPC = {
     messages: {
       /** 主进程 → UI 的全量快照推送。 */
       snapshot: AppSnapshot;
+      /** 管理台窗口已开时的切 tab 指令（openManager 重开同窗用）。 */
+      managerNav: { tab: ManagerTab };
     };
   }>;
 };

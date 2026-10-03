@@ -7,6 +7,7 @@ export { agentPaths, MURMUR_HOME, type AgentPaths } from './paths';
 export { migrateLegacyHome, LEGACY_PERCH_HOME } from './migrate';
 export { StatusEngine, STALE_AFTER_MS } from './engine/status-engine';
 export { AgentRegistry } from './engine/registry';
+export { SELFTEST_PREFIX, assembleDiagnostics, probePath, runHookTest, selfTestPayload } from './engine/diagnostics';
 export { Ledger } from './ledger/db';
 export { estimateCostUsd, priceFor } from './ledger/pricing';
 export { startIngestServer } from './ingest/server';

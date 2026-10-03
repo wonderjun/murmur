@@ -16,6 +16,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, w
 import { join } from 'node:path';
 
 import {
+  HOOKS_DIR,
   isHookInstalled,
   mergeCodexHooks,
   removeHookScript,
@@ -27,7 +28,7 @@ import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { fetchCodexQuota } from '../../quota/codex';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteCodexSessions, listRollouts, ROLLOUT_UUID_RE, scanCodexSessions } from './files';
 
 /**
@@ -232,6 +233,17 @@ export function createCodexAdapter(): AgentAdapter {
         note,
       };
     },
+
+    dataSources() {
+      const out: DataSourceRef[] = [];
+      if (paths.sessions) out.push({ label: '会话 rollout', path: paths.sessions, kind: 'dir' });
+      if (paths.credentials) out.push({ label: '凭据', path: paths.credentials, kind: 'file' });
+      return out;
+    },
+
+    // hooks.json 是全事件通道、config.toml 是 legacy notify 兜底——两文件都触碰。
+    hookTargets: () =>
+      [join(paths.home, 'hooks.json'), paths.hookConfig ?? '', join(HOOKS_DIR, 'codex.sh')].filter(Boolean),
 
     async installHooks() {
       const cfg = paths.hookConfig;

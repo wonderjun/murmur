@@ -36,6 +36,7 @@ packages/core/src/
                     <id>/files.ts 会话产物盘点/删除（清理页数据源；trash 回调由主进程注入）
     base.ts         AgentAdapter 接口（detect/installHooks/watch/quota 能力面全可选）+ JsonlTailer + pick()
   engine/           registry.ts 组装根（定时器/快照/广播）+ status-engine.ts 会话状态机
+                    + diagnostics.ts 接入诊断（路径/sqlite 探针 + hint 派生 + marker 链路自检）
   ingest/           server.ts（Bun.serve，token 鉴权）+ endpoint.ts（~/.murmur/endpoint）+ spool.ts（离线补投）
   ledger/           db.ts（bun:sqlite 台账、游标、聚合）+ pricing.ts（内置价表估成本）
   hooks/            script.ts（POSIX sh 上报脚本模板）+ install.ts（merge* 合并安装 / unmerge* 卸载，只认脚本路径判归属）
@@ -90,7 +91,7 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 
 ### 主进程与通信
 
-`apps/desktop/src/bun/index.ts`：tray（标题 `◆n`（waiting）/ `●n`（working）聚合态，只能用默认文本渲染的几何字形，emoji 会在菜单栏变彩色、破坏单色体系；不放原生菜单，挂 menu 会接管左键点击）+ 392×600 面板（`titleBarStyle:"hiddenInset"` + 空标题 + 无按钮，标准窗口几何 + 全尺寸内容，系统圆角+阴影由系统裁——`titleBarStyle:"hidden"` 的无边框窗口在 macOS 26 露方形底板、`"default"` 会画出标题栏、`transparent:true` 关不掉方形原生阴影（2.0.1 无 hasShadow API），都不可用；失焦即 hide）+ RPC。bun 侧 requests：`getSnapshot / installHooks / hidePanel / refreshQuotas / usageDaily / getSettings / updateSettings / setAgentHook / setAgentObserved / setAgentKey / readClipboard / writeClipboard / rebuildLedger / openSessions / scanSessions / deleteSessions / revealSession / openDataDir / quitApp`（quitApp 经 quitMurmur 保证 stop 失败也必 exit）；webview 侧 messages：`snapshot` 全量推送。另有一扇独立的会话文件管理窗（`#/files` hash 分流、780×560 可缩放，`openSessions` 幂等聚焦）：盘点各 CLI 磁盘会话产物、按工具/项目过滤、默认修改时间倒序、勾选批量删——文件/目录经 `Utils.moveToTrash` 进废纸篓，库内行（zcode/opencode/devin 的 sqlite）事务永久删并标 `needsVacuum`（删行不缩 .db，需对端压实才回收）；快照命中或 mtime 3min 内新鲜的会话标 `active` 禁删。UI 禁止直接摸 `window.electrobun`，一律走 `@/lib/rpc.ts` 的 `useRpc` 单例。四视图：live（动态）/ usage（用量）/ setup（接入）/ settings（设置）。
+`apps/desktop/src/bun/index.ts`：tray（标题 `◆n`（waiting）/ `●n`（working）聚合态，只能用默认文本渲染的几何字形，emoji 会在菜单栏变彩色、破坏单色体系；不放原生菜单，挂 menu 会接管左键点击）+ 392×600 面板（`titleBarStyle:"hiddenInset"` + 空标题 + 无按钮，标准窗口几何 + 全尺寸内容，系统圆角+阴影由系统裁——`titleBarStyle:"hidden"` 的无边框窗口在 macOS 26 露方形底板、`"default"` 会画出标题栏、`transparent:true` 关不掉方形原生阴影（2.0.1 无 hasShadow API），都不可用；失焦即 hide）+ RPC。bun 侧 requests：`getSnapshot / installHooks / hidePanel / refreshQuotas / usageDaily / getSettings / updateSettings / setAgentHook / setAgentObserved / setAgentKey / readClipboard / writeClipboard / rebuildLedger / openManager / getDiagnostics / testAgentHook / rescanAgent / installAgentHooks / revealPath / scanSessions / deleteSessions / revealSession / openDataDir / quitApp`（quitApp 经 quitMurmur 保证 stop 失败也必 exit）；webview 侧 messages：`snapshot` 全量推送（面板与管理窗双发）+ `managerNav`（管理窗已开时的切 tab 指令）。**管理台窗口**（`#/manage/<tab>` hash 分流、860×640 可缩放、`openManager` 幂等聚焦切 tab）四 tab：**接入诊断**（doctor-view：逐 agent 数据面探针/hook 上报活性/pull 游标活性 + 「测试链路」marker 全真自检 + 重扫/重装/Finder 恢复操作 + 首启引导卡）、**用量**（区间筛选 7d/30d/自定义 ≤92d，hero 与热力图是固定语义不吃筛选）、**会话文件**（盘点各 CLI 磁盘会话产物、勾选批量删——文件进废纸篓、库内行事务永久删标 `needsVacuum`、active 禁删）、**设置**。弹层只留 动态+工具 两视图（极简：状态摘要 + 管理台入口）。**首启**（settings.json 缺席=`firstRun`）非 dev channel 自动弹管理台 doctor tab。UI 禁止直接摸 `window.electrobun`，一律走 `@/lib/rpc.ts` 的 `useRpc` 单例。
 
 ### 设置与开关（settings.ts + 设置页）
 

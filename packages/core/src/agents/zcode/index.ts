@@ -21,12 +21,19 @@ import { Database } from 'bun:sqlite';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { isHookInstalled, mergeZcodeHooks, removeHookScript, unmergeZcodeHooks, zcodeHookState } from '../../hooks/install';
+import {
+  HOOKS_DIR,
+  isHookInstalled,
+  mergeZcodeHooks,
+  removeHookScript,
+  unmergeZcodeHooks,
+  zcodeHookState,
+} from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { fetchZcodeQuota } from '../../quota/zcode';
 import type { AgentEvent, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { stringAtSpan, topLevelString, topLevelValueSpan, topLevelValueSpans } from '../json-span';
 import { deleteZcodeSessions, scanZcodeSessions } from './files';
 
@@ -161,6 +168,21 @@ export function createZcodeAdapter(): AgentAdapter {
           ? `${taskCount} 个任务${hookState === 'disabled' ? '（hook 在 zcode 设置中被关闭）' : ''}`
           : '未发现 ~/.zcode/v2',
       };
+    },
+
+    dataSources() {
+      const p = agentPaths('zcode');
+      const out: DataSourceRef[] = [
+        { label: '任务库', path: join(p.sessions ?? p.home, 'tasks-index.sqlite'), kind: 'sqlite' },
+        { label: '调用流水', path: join(p.home, 'cli', 'rollout'), kind: 'dir' },
+      ];
+      if (p.credentials) out.push({ label: '凭据', path: p.credentials, kind: 'file' });
+      return out;
+    },
+
+    hookTargets() {
+      const p = agentPaths('zcode');
+      return [p.hookConfig ?? '', join(HOOKS_DIR, 'zcode.sh')].filter(Boolean);
     },
 
     async installHooks() {

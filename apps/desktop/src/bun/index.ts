@@ -18,7 +18,7 @@ import { setApplicationMenu } from "electrobun/main/app-menu";
 
 import { AgentRegistry, migrateLegacyHome, MURMUR_HOME } from "../../../../packages/core/src/index";
 
-import type { AppSnapshot } from "../../../../packages/core/src/index";
+import type { AppSnapshot, ManagerTab } from "../../../../packages/core/src/index";
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
 import {
   appBundlePath,
@@ -87,6 +87,7 @@ async function settingsSnapshot(): Promise<SettingsSnapshot> {
       channel,
       dataDir: MURMUR_HOME,
       ingestEndpoint: registry.ingestEndpoint(),
+      firstRun: registry.isFirstRun(),
     },
   };
 }
@@ -101,7 +102,7 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
         await registry.refreshQuotas();
         return { ok: true as const };
       },
-      usageDaily: ({ days }) => registry.usageDaily(days ?? 70),
+      usageDaily: ({ days, since }) => registry.usageDailySince(since ?? Date.now() - (days ?? 70) * 86400_000),
       hidePanel: () => {
         panel.hide();
         return { ok: true as const };
@@ -138,9 +139,23 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
         registry.rebuildLedger();
         return { ok: true as const };
       },
-      openSessions: () => {
-        openSessionsWindow();
+      openManager: ({ tab }) => {
+        openManagerWindow(tab ?? "doctor");
         return { ok: true as const };
+      },
+      getDiagnostics: () => registry.diagnostics(),
+      testAgentHook: ({ agent }) => registry.testAgentHook(agent),
+      rescanAgent: async ({ agent }) => {
+        await registry.rescanAgent(agent);
+        return { ok: true as const };
+      },
+      installAgentHooks: ({ agent }) => registry.installAgentHooks(agent),
+      revealPath: ({ path }) => {
+        // 只放行用户家目录内的路径——诊断清单以外的任意路径不该被定位。
+        const home = process.env.HOME ?? "";
+        const ok = Boolean(home) && path.startsWith(`${home}/`);
+        if (ok) Utils.showItemInFolder(path);
+        return { ok };
       },
       scanSessions: async () => ({ items: await registry.scanSessions(), scannedAt: Date.now() }),
       deleteSessions: async ({ items }) => ({
@@ -167,29 +182,38 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
 
 const url = await resolveMainViewUrl();
 
-/** 会话文件页与面板同 bundle：#/files hash 分流（dev server 需补 / 前缀）。 */
-function sessionsViewUrl(): string {
-  return url.startsWith("http") ? `${url}/#/files` : `${url}#/files`;
+/** 管理台页与面板同 bundle：#/manage/<tab> hash 分流（dev server 需补 / 前缀）。 */
+function managerViewUrl(tab: ManagerTab): string {
+  return url.startsWith("http") ? `${url}/#/manage/${tab}` : `${url}#/manage/${tab}`;
 }
 
-/** 会话文件管理窗：独立页面容器（popover 失焦即收起的语义不适用于管理操作）。 */
-let sessionsWin: BrowserWindow<typeof rpc> | null = null;
-function openSessionsWindow() {
-  if (sessionsWin) {
-    sessionsWin.show();
+/**
+ * 管理台窗口：接入诊断/用量/会话文件/设置四 tab 的独立页面容器。
+ * popover 失焦即收起的语义不适用于「检查→切换→验证」的管理任务；
+ * 已开时聚焦并送 managerNav 切 tab，不重建窗口。
+ */
+let managerWin: BrowserWindow<typeof rpc> | null = null;
+function openManagerWindow(tab: ManagerTab) {
+  if (managerWin) {
+    managerWin.show();
+    try {
+      managerWin.webview.rpc?.send.managerNav({ tab });
+    } catch {
+      // 页面尚未加载完成时忽略推送失败；首次渲染按 URL hash 定 tab。
+    }
     return;
   }
-  sessionsWin = new BrowserWindow<typeof rpc>({
-    title: "Murmur 会话文件",
-    url: sessionsViewUrl(),
+  managerWin = new BrowserWindow<typeof rpc>({
+    title: "Murmur 管理",
+    url: managerViewUrl(tab),
     rpc,
     titleBarStyle: "hiddenInset",
     styleMask: { Closable: true, Miniaturizable: true, Resizable: true },
     // 缺省 x/y → 系统居中。
-    frame: { width: 780, height: 560 },
+    frame: { width: 860, height: 640 },
   });
-  sessionsWin.on("close", () => {
-    sessionsWin = null;
+  managerWin.on("close", () => {
+    managerWin = null;
   });
 }
 
@@ -351,10 +375,13 @@ registry.onChange(() => {
   const snap = registry.snapshot();
   updateTrayTitle(snap);
   maybeNotifyWaiting(snap);
-  try {
-    panel.webview.rpc?.send.snapshot(snap);
-  } catch {
-    // 面板尚未加载完成时忽略推送失败。
+  // 面板与管理窗都要快照：管理窗里的设置/诊断视图同样消费 agents 实况。
+  for (const win of [panel, managerWin]) {
+    try {
+      win?.webview.rpc?.send.snapshot(snap);
+    } catch {
+      // 页面尚未加载完成时忽略推送失败。
+    }
   }
 });
 
@@ -365,3 +392,9 @@ await registry.start();
 updateTrayTitle(registry.snapshot());
 if (appBundlePath()) console.log("[murmur] bundle:", appBundlePath());
 console.log("[murmur] started — ingest endpoint:", registry.ingestEndpoint());
+
+// 首启引导：非 dev channel 且从未写过设置 → 直接弹管理窗的接入诊断页
+// （accessory app 也能出标准窗，会话文件窗已验证）；用户未必找得到菜单栏图标。
+if (!url.startsWith("http") && registry.isFirstRun()) {
+  openManagerWindow("doctor");
+}

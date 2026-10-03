@@ -1,5 +1,5 @@
 /**
- * 会话文件管理页（独立窗口 #/files）：跨 agent 盘点磁盘会话产物。
+ * 会话文件管理页（管理台 files tab，#/manage/files）：跨 agent 盘点磁盘会话产物。
  *
  * 过滤按工具/项目；排序默认修改时间倒序（表头可切大小/创建/修改）；
  * 勾选批量删除——文件/目录进废纸篓（可恢复），「库内」行是数据库记录
@@ -74,7 +74,7 @@ function SortHead({
 
 const GRID = "grid grid-cols-[26px_26px_minmax(0,1fr)_132px_64px_82px_82px_26px] items-center gap-x-2";
 
-export default function SessionsView() {
+export default function SessionsView({ embedded }: { embedded?: boolean }) {
   const scanSessions = useMurmurStore((s) => s.scanSessions);
   const deleteSessions = useMurmurStore((s) => s.deleteSessions);
   const revealSession = useMurmurStore((s) => s.revealSession);
@@ -227,8 +227,8 @@ export default function SessionsView() {
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
-      {/* 顶部拖拽条：hiddenInset 红绿灯落在这条里 */}
-      <div className="h-8 shrink-0" />
+      {/* 顶部拖拽条：独立窗时给 hiddenInset 红绿灯让位；管理台嵌入态由外壳出 chrome。 */}
+      {!embedded && <div className="h-8 shrink-0" />}
 
       {/* 头行：标题 + 规模合计 + 重扫 */}
       <header className="flex items-end justify-between gap-3 px-4 pb-3">

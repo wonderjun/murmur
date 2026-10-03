@@ -14,7 +14,15 @@ import { useRpc } from "@/lib/rpc";
 
 import type { SettingsSnapshot, UsageDailyRow } from "../../shared/rpc";
 import type { MurmurSettings } from "@core/settings";
-import type { AgentId, AppSnapshot, SessionDeleteResult, StoredSession } from "@core/types";
+import type {
+  AgentId,
+  AppSnapshot,
+  DiagnosticsSnapshot,
+  HookTestResult,
+  ManagerTab,
+  SessionDeleteResult,
+  StoredSession,
+} from "@core/types";
 
 interface MurmurStore {
   snapshot: AppSnapshot | null;
@@ -25,10 +33,12 @@ interface MurmurStore {
   settingsSnap: SettingsSnapshot | null;
   /** 最近一次 loadSettings 失败；读到设置即复位。 */
   settingsError: boolean;
+  /** 管理窗切 tab 指令（managerNav 推送；at 是 nonce——同 tab 重发也要生效）。 */
+  managerNav: { tab: ManagerTab; at: number } | null;
   refresh(): Promise<void>;
-  installHooks(): Promise<void>;
+  installHooks(): Promise<Record<AgentId, { changed: boolean; files: string[] }>>;
   refreshQuotas(): Promise<void>;
-  usageDaily(days?: number): Promise<UsageDailyRow[]>;
+  usageDaily(opts?: { days?: number; since?: number }): Promise<UsageDailyRow[]>;
   /** 进入设置页时拉取；之后以各 mutation 的响应为准（响应即最新态）。 */
   loadSettings(): Promise<void>;
   updateSettings(patch: Partial<MurmurSettings>): Promise<void>;
@@ -41,8 +51,18 @@ interface MurmurStore {
   /** 复制通道：写系统剪贴板（cwd/路径复制）。 */
   writeClipboard(text: string): Promise<void>;
   rebuildLedger(): Promise<void>;
-  /** 打开会话文件管理窗（独立窗口，幂等聚焦）。 */
-  openSessions(): Promise<void>;
+  /** 打开管理台窗口并定位 tab（已开则聚焦切 tab）。 */
+  openManager(tab?: ManagerTab): Promise<void>;
+  /** 接入诊断快照（doctor 页数据源）。 */
+  getDiagnostics(): Promise<DiagnosticsSnapshot>;
+  /** 单 agent hook 链路自检。 */
+  testAgentHook(agent: AgentId): Promise<HookTestResult>;
+  /** 单 agent 重扫（重启 pull watcher 拾漏）。 */
+  rescanAgent(agent: AgentId): Promise<void>;
+  /** 单 agent 装 hook：改动标记 + 触碰文件清单。 */
+  installAgentHooks(agent: AgentId): Promise<{ changed: boolean; files: string[] }>;
+  /** Finder 定位诊断路径。 */
+  revealPath(path: string): Promise<boolean>;
   /** 盘点全部 agent 的磁盘会话产物（清理页数据源）。 */
   scanSessions(): Promise<{ items: StoredSession[]; scannedAt: number }>;
   /** 批量删除：fs 产物进废纸篓、库内行永久删，per-item 回报。 */
@@ -54,7 +74,10 @@ interface MurmurStore {
 }
 
 export const useMurmurStore = create<MurmurStore>()((set) => {
-  const rpc = useRpc((s) => set({ snapshot: s, loading: false }));
+  const rpc = useRpc(
+    (s) => set({ snapshot: s, loading: false }),
+    (tab) => set({ managerNav: { tab, at: Date.now() } }),
+  );
 
   async function refresh() {
     try {
@@ -67,8 +90,9 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
   }
 
   async function installHooks() {
-    await rpc.rpc!.request.installHooks({});
+    const result = await rpc.rpc!.request.installHooks({});
     await refresh();
+    return result;
   }
 
   async function refreshQuotas() {
@@ -76,8 +100,8 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     await refresh();
   }
 
-  async function usageDaily(days = 70) {
-    return rpc.rpc!.request.usageDaily({ days });
+  async function usageDaily(opts: { days?: number; since?: number } = { days: 70 }) {
+    return rpc.rpc!.request.usageDaily(opts);
   }
 
   async function loadSettings() {
@@ -122,8 +146,29 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     await refresh();
   }
 
-  async function openSessions() {
-    await rpc.rpc!.request.openSessions({});
+  async function openManager(tab: ManagerTab = "doctor") {
+    await rpc.rpc!.request.openManager({ tab });
+  }
+
+  async function getDiagnostics() {
+    return rpc.rpc!.request.getDiagnostics({});
+  }
+
+  async function testAgentHook(agent: AgentId) {
+    return rpc.rpc!.request.testAgentHook({ agent });
+  }
+
+  async function rescanAgent(agent: AgentId) {
+    await rpc.rpc!.request.rescanAgent({ agent });
+  }
+
+  async function installAgentHooks(agent: AgentId) {
+    return rpc.rpc!.request.installAgentHooks({ agent });
+  }
+
+  async function revealPath(path: string) {
+    const r = await rpc.rpc!.request.revealPath({ path });
+    return r.ok;
   }
 
   async function scanSessions() {
@@ -154,6 +199,7 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     snapshotError: false,
     settingsSnap: null,
     settingsError: false,
+    managerNav: null,
     refresh,
     installHooks,
     refreshQuotas,
@@ -166,7 +212,12 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     readClipboard,
     writeClipboard,
     rebuildLedger,
-    openSessions,
+    openManager,
+    getDiagnostics,
+    testAgentHook,
+    rescanAgent,
+    installAgentHooks,
+    revealPath,
     scanSessions,
     deleteSessions,
     revealSession,

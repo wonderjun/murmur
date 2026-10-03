@@ -9,18 +9,20 @@
  * push 平面（0.41 实测 payload）：config.toml `[[hooks]]` 挂 19 事件 → ingest；
  *   恒带 session_id/cwd/client_type，无任何 usage 字段——token 台账只能靠 pull。
  * pull 平面保留：wire.jsonl 的 usage.record 是 token 唯一真源，另管 title
- *   （state.json）、历史回填与装 hook 前已跑会话的覆盖。
+ *   （state.json）、历史回填与装 hook 前已跑会话的覆盖；interaction.request
+ *   的 kind 细分（approval→permission.request / question→waiting(question)）
+ *   也走这里——hook 侧没有提问事件，提问等待只能靠 pull（≤5s 延迟）。
  */
 
 import { existsSync, readFileSync, readdirSync, statSync, watch } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { isHookInstalled, mergeTomlHooks, removeHookScript, tomlHookInstalled, unmergeTomlHooks } from '../../hooks/install';
+import { HOOKS_DIR, isHookInstalled, mergeTomlHooks, removeHookScript, tomlHookInstalled, unmergeTomlHooks } from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { fetchKimiQuota } from '../../quota/kimi';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteKimiSessions, loadSessionIndex, scanKimiSessions } from './files';
 
 /**
@@ -240,6 +242,15 @@ export function createKimiAdapter(): AgentAdapter {
         note: installed ? `${sessionCount} 个工作目录有会话` : '未发现 ~/.kimi-code',
       };
     },
+
+    dataSources() {
+      const out: DataSourceRef[] = [];
+      if (paths.sessions) out.push({ label: '会话存储', path: paths.sessions, kind: 'dir' });
+      if (paths.credentials) out.push({ label: '凭据', path: paths.credentials, kind: 'dir' });
+      return out;
+    },
+
+    hookTargets: () => [paths.hookConfig ?? '', join(HOOKS_DIR, 'kimi.sh')].filter(Boolean),
 
     async installHooks() {
       if (!paths.hookConfig) return { changed: false };

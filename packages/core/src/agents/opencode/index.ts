@@ -20,7 +20,7 @@ import { HOOK_MARKER } from '../../hooks/script';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { pick, type AgentAdapter } from '../base';
+import { pick, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteOpencodeSessions, scanOpencodeSessions } from './files';
 import { watchLegacyJson } from './legacy';
 
@@ -186,6 +186,14 @@ export function createOpencodeAdapter(): AgentAdapter {
         note: installed ? undefined : '未发现 ~/.local/share/opencode',
       };
     },
+
+    dataSources() {
+      const out: DataSourceRef[] = [{ label: '事件库', path: dbPath, kind: 'sqlite' }];
+      if (paths.credentials) out.push({ label: '凭据', path: paths.credentials, kind: 'file' });
+      return out;
+    },
+
+    hookTargets: () => [pluginPath],
 
     async installHooks() {
       const dir = paths.hookConfig;

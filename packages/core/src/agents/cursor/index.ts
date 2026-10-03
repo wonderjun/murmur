@@ -19,13 +19,13 @@
 import { existsSync, readdirSync, statSync, watch } from 'node:fs';
 import { join } from 'node:path';
 
-import { isHookInstalled, mergeJsonHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
+import { HOOKS_DIR, isHookInstalled, mergeJsonHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { readJsonFile } from '../../quota/common';
 import { fetchCursorQuota, hasCursorCredentials } from '../../quota/cursor';
 import type { AgentEvent, InstallInfo } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import {
   deleteCursorSessions,
   listTranscripts,
@@ -202,6 +202,15 @@ export function createCursorAdapter(): AgentAdapter {
         note: installed ? undefined : '未发现 ~/.cursor',
       };
     },
+
+    dataSources() {
+      const out: DataSourceRef[] = [];
+      if (paths.sessions) out.push({ label: '会话 transcript', path: paths.sessions, kind: 'dir' });
+      if (paths.credentials) out.push({ label: 'IDE 状态库', path: paths.credentials, kind: 'sqlite' });
+      return out;
+    },
+
+    hookTargets: () => [paths.hookConfig ?? '', join(HOOKS_DIR, 'cursor.sh')].filter(Boolean),
 
     async installHooks() {
       if (!paths.hookConfig) return { changed: false };

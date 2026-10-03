@@ -30,6 +30,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  HOOKS_DIR,
   isHookInstalled,
   mergeQoderHooks,
   qoderHooksRegistered,
@@ -40,7 +41,7 @@ import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { readJsonFile } from '../../quota/common';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { JsonlTailer, pick, serialScan, type AgentAdapter } from '../base';
+import { JsonlTailer, pick, serialScan, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteQoderSessions, scanQoderSessions, slugToPath } from './files';
 
 /** qoder hook 事件：生命周期 + 工具 + 审批 + 任务粒度全收，文件级噪音（FileChanged 等）不挂。 */
@@ -302,6 +303,15 @@ export function createQoderAdapter(): AgentAdapter {
         note: installed ? undefined : '未发现 ~/.qoder',
       };
     },
+
+    dataSources() {
+      const out: DataSourceRef[] = [];
+      if (paths.sessions) out.push({ label: '会话 transcript', path: paths.sessions, kind: 'dir' });
+      if (dbPath) out.push({ label: 'app 台账', path: dbPath, kind: 'sqlite' });
+      return out;
+    },
+
+    hookTargets: () => [paths.hookConfig ?? '', join(HOOKS_DIR, 'qoder.sh')].filter(Boolean),
 
     async installHooks() {
       if (!paths.hookConfig) return { changed: false };

@@ -14,13 +14,15 @@ import AnimatedNumber from "@/components/animated-number";
 import ChartTip from "@/components/chart-tip";
 import ModelLineChart from "@/components/model-line-chart";
 import Murmuration from "@/components/murmuration";
+import UsageRangePicker, { rangeBounds, rangeDayList, rangeLabel } from "@/components/usage-range";
 import { Button } from "@/components/ui/button";
 import { AGENT_META } from "@/lib/agent-meta";
 import { anchorTop } from "@/lib/chart-tip";
-import { fmtTokens } from "@/lib/format";
+import { dayStr, fmtTokens } from "@/lib/format";
 import { useMurmurStore } from "@/store/murmur";
 
 import type { ChartTipState } from "@/lib/chart-tip";
+import type { UsageRange } from "@/components/usage-range";
 import type { SyntheticEvent as ReactSyntheticEvent } from "react";
 import type { UsageDailyRow } from "../../shared/rpc";
 
@@ -100,7 +102,7 @@ export default function UsageView() {
   useEffect(() => {
     let alive = true;
     setStatus("loading");
-    usageDaily(HEAT_DAYS)
+    usageDaily({ days: HEAT_DAYS })
       .then((data) => {
         if (!alive) return;
         setRows(data);
@@ -133,7 +135,7 @@ export default function UsageView() {
       const week: HeatCell[] = [];
       for (let d = 0; d < 7; d++) {
         const ms = heatStart + (w * 7 + d) * dayMs;
-        const day = fmtDay(ms);
+        const day = dayStr(ms);
         const tokens = ms > todayMs ? 0 : (dayTotals.get(day) ?? 0);
         const lvl = tokens === 0 ? 0 : Math.min(4, Math.max(1, Math.ceil((tokens / max) * 4)));
         week.push({ day, tokens, color: HEAT_LEVELS[lvl] });
@@ -159,10 +161,37 @@ export default function UsageView() {
     setHeatTip(anchorTop(event, heatBox.current));
   }
 
-  /* ── 近 7 天按 agent ── */
-  const last7 = useMemo(() => {
+  /* ── 区间状态：默认近 7 天（初始化呈现与现状一致），02/03 图表随区间 ── */
+  const [range, setRange] = useState<UsageRange>({ kind: "preset", days: 7 });
+  const [extRows, setExtRows] = useState<UsageDailyRow[] | null>(null);
+  const { startDay, endDay } = rangeBounds(range);
+
+  // 自定义起点落在 70d 默认拉取窗之前才补拉；其余区间 client-side 过滤 rows。
+  useEffect(() => {
+    if (startDay >= dayStr(todayMs - (HEAT_DAYS - 1) * dayMs)) {
+      setExtRows(null);
+      return;
+    }
+    let alive = true;
+    usageDaily({ since: Date.parse(`${startDay}T00:00:00`) })
+      .then((rs) => {
+        if (alive) setExtRows(rs);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [startDay, usageDaily]);
+
+  const rangeRows = useMemo(
+    () => (extRows ?? rows).filter((r) => r.day >= startDay && r.day <= endDay),
+    [extRows, rows, startDay, endDay],
+  );
+
+  /* ── 区间按 agent 堆积柱（默认近 7 天）── */
+  const chartDays = useMemo(() => {
     const byAgent = new Map<string, Map<string, number>>();
-    for (const r of rows) {
+    for (const r of rangeRows) {
       if (!byAgent.has(r.day)) byAgent.set(r.day, new Map());
       const m = byAgent.get(r.day)!;
       m.set(r.agent, (m.get(r.agent) ?? 0) + r.tokens);
@@ -170,14 +199,12 @@ export default function UsageView() {
     const days: { day: string; label: string; segments: BarSegment[] }[] = [];
     let maxTotal = 1;
     const totals: number[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const ms = todayMs - i * dayMs;
-      const day = fmtDay(ms);
+    for (const day of rangeDayList(range)) {
       const m = byAgent.get(day);
       const total = m ? [...m.values()].reduce((a, b) => a + b, 0) : 0;
       totals.push(total);
       maxTotal = Math.max(maxTotal, total);
-      days.push({ day, label: i === 0 ? "今天" : day.slice(5), segments: [] });
+      days.push({ day, label: day === dayStr(todayMs) ? "今天" : day.slice(5), segments: [] });
     }
     days.forEach((d, i) => {
       const m = byAgent.get(d.day);
@@ -188,25 +215,31 @@ export default function UsageView() {
         .map(([agent, tokens]) => ({ agent, tokens, h: Math.max(2, (tokens / totals[i]) * hScale) }));
     });
     return days;
-  }, [rows]);
+  }, [rangeRows, range]);
 
-  const weekTokens = last7.reduce((s, d) => s + d.segments.reduce((a, b) => a + b.tokens, 0), 0);
+  const rangeTokens = chartDays.reduce((s, d) => s + d.segments.reduce((a, b) => a + b.tokens, 0), 0);
 
-  /* 图例明细：近 7 天各 agent 合计与占比。 */
+  /* hero「近 7 日」是固定语义，不吃区间筛选——独立从全窗 rows 算。 */
+  const week7Tokens = useMemo(
+    () => rows.filter((r) => r.day >= dayStr(todayMs - 6 * dayMs)).reduce((s, r) => s + r.tokens, 0),
+    [rows],
+  );
+
+  /* 图例明细：区间内各 agent 合计与占比。 */
   const agentLegend = useMemo(() => {
     const byAgent = new Map<string, number>();
-    for (const d of last7) for (const seg of d.segments) byAgent.set(seg.agent, (byAgent.get(seg.agent) ?? 0) + seg.tokens);
+    for (const d of chartDays) for (const seg of d.segments) byAgent.set(seg.agent, (byAgent.get(seg.agent) ?? 0) + seg.tokens);
     return [...byAgent.entries()]
-      .map(([agent, tokens]) => ({ agent, tokens, pct: weekTokens ? Math.round((tokens / weekTokens) * 100) : 0 }))
+      .map(([agent, tokens]) => ({ agent, tokens, pct: rangeTokens ? Math.round((tokens / rangeTokens) * 100) : 0 }))
       .sort((a, b) => b.tokens - a.tokens);
-  }, [last7, weekTokens]);
+  }, [chartDays, rangeTokens]);
 
-  /* ── 概览条：今日 / 近 7 日 / 近 10 周 / 活跃天数 ── */
+  /* ── 概览条：今日 / 近 7 日 / 近 10 周 / 活跃天数（固定语义，不吃区间）── */
   const overview = useMemo(() => {
-    const todayTokens = dayTotals.get(fmtDay(todayMs)) ?? 0;
+    const todayTokens = dayTotals.get(dayStr(todayMs)) ?? 0;
     const activeDays = [...dayTotals.values()].filter((v) => v > 0).length;
-    return { todayTokens, weekTokens, totalTokens, activeDays };
-  }, [dayTotals, weekTokens, totalTokens]);
+    return { todayTokens, weekTokens: week7Tokens, totalTokens, activeDays };
+  }, [dayTotals, week7Tokens, totalTokens]);
 
   /* ── 堆积柱瞬时悬浮 ── */
   const barBox = useRef<HTMLDivElement | null>(null);
@@ -219,15 +252,15 @@ export default function UsageView() {
     setBarTip(anchorTop(event, barBox.current));
   }
 
-  /* ── 近 7 天按模型（top6 + 其他），数据整形后交给 ModelLineChart ── */
-  const lineDays = useMemo(() => last7.map((d) => ({ day: d.day, label: d.label })), [last7]);
+  /* ── 区间按模型折线（top6 + 其他），数据整形后交给 ModelLineChart ── */
+  const lineDays = useMemo(() => chartDays.map((d) => ({ day: d.day, label: d.label })), [chartDays]);
 
   const lineSeries = useMemo(() => {
     const dayKeys = lineDays.map((d) => d.day);
     /* 模型名大小写不敏感归并（glm-5.3-flash / GLM-5.3-Flash 是同一模型）：
        key 取小写，展示名取组内累计量最大的原始变体。 */
     const byModel = new Map<string, { variants: Map<string, number>; days: Map<string, number> }>();
-    for (const r of rows) {
+    for (const r of rangeRows) {
       if (!dayKeys.includes(r.day)) continue;
       const raw = (r.model ?? "unknown").split("/").pop()!;
       const key = raw.toLowerCase();
@@ -261,7 +294,7 @@ export default function UsageView() {
       ...MODEL_LINE_STYLES[i % MODEL_LINE_STYLES.length],
       values: dayKeys.map((d) => t.m.get(d) ?? 0),
     }));
-  }, [rows, lineDays]);
+  }, [rangeRows, lineDays]);
 
   /* 入场序位：渲染顺序即 stagger 顺序 */
   let slot = 0;
@@ -382,18 +415,23 @@ export default function UsageView() {
             </div>
           </section>
 
-          {/* ── 近 7 天堆积柱（按 agent 分色）+ 明细图例 ── */}
+          {/* ── 区间选择器：只影响 02/03 图表；hero 与热力图是固定语义 ── */}
+          <div className="animate-enter" style={{ animationDelay: enterDelay() }}>
+            <UsageRangePicker value={range} onChange={setRange} />
+          </div>
+
+          {/* ── 区间堆积柱（按 agent 分色）+ 明细图例 ── */}
           <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: enterDelay() }}>
             <div className="mb-2 flex items-baseline justify-between">
               <span className="flex items-baseline gap-1.5">
                 <span className="font-mono text-micro text-faint">02</span>
-                <span className="text-detail font-semibold">近 7 天 · 按工具</span>
+                <span className="text-detail font-semibold">{rangeLabel(range)} · 按工具</span>
               </span>
-              <span className="font-mono text-micro tabular-nums text-faint">{fmtTokens(weekTokens)} 令牌</span>
+              <span className="font-mono text-micro tabular-nums text-faint">{fmtTokens(rangeTokens)} 令牌</span>
             </div>
             <div ref={barBox} className="relative">
               <div className="flex h-[84px] items-end gap-2">
-                {last7.map((d) => (
+                {chartDays.map((d) => (
                   <div key={d.day} className="flex flex-1 flex-col items-center gap-1">
                     <div className="flex w-full flex-col-reverse gap-px" style={{ height: "64px" }}>
                       {d.segments.map((seg) => (
@@ -440,11 +478,11 @@ export default function UsageView() {
             </div>
           </section>
 
-          {/* ── 近 7 天模型折线（准星 + 悬浮明细 + 峰值标注）── */}
+          {/* ── 区间模型折线（准星 + 悬浮明细 + 峰值标注）── */}
           <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: enterDelay() }}>
             <div className="mb-2 flex items-baseline gap-1.5">
               <span className="font-mono text-micro text-faint">03</span>
-              <span className="text-detail font-semibold">近 7 天 · 按模型</span>
+              <span className="text-detail font-semibold">{rangeLabel(range)} · 按模型</span>
             </div>
             <ModelLineChart days={lineDays} series={lineSeries} />
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
@@ -487,7 +525,3 @@ function segName(agent: string) {
   return AGENT_META[agent as keyof typeof AGENT_META]?.name ?? agent;
 }
 
-function fmtDay(ms: number) {
-  const d = new Date(ms);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}

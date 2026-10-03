@@ -18,10 +18,22 @@ import type { ByokCredential } from '../credentials';
 import type { Ledger } from '../ledger/db';
 import type { AgentEvent, AgentId, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
 
+/** adapter 自报的数据源条目（诊断探针目标）。 */
+export interface DataSourceRef {
+  /** 展示标签（如「会话存储」「任务库」）。 */
+  label: string;
+  path: string;
+  kind: 'file' | 'dir' | 'sqlite';
+}
+
 export interface AgentAdapter {
   id: AgentId;
   /** 探测安装态/版本/凭据/hook 是否已注入。 */
   detect(): Promise<InstallInfo>;
+  /** 诊断：pull 平面读取的数据源清单（路径/sqlite 探针目标）。 */
+  dataSources?(): DataSourceRef[];
+  /** 诊断：hook 安装触碰的配置文件清单（展示/Finder 定位用）。 */
+  hookTargets?(): string[];
   /** 注入 hook/插件（幂等）。返回是否有改动。 */
   installHooks(): Promise<{ changed: boolean }>;
   /** 卸载我方 hook/插件条目（保留他人条目），设置页「关闭上报」用。 */

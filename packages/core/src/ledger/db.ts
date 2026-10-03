@@ -160,6 +160,26 @@ export class Ledger {
     );
   }
 
+  /** 全部游标行（诊断页「最近扫描时间」数据源）。 */
+  allCursors(): { source: string; cursor: string; updatedAt: number }[] {
+    return this.db.query('SELECT source, cursor, updated_at AS updatedAt FROM cursors ORDER BY updated_at DESC').all() as {
+      source: string;
+      cursor: string;
+      updatedAt: number;
+    }[];
+  }
+
+  /** 某 sessionId 的台账事件条数（hook 链路自检的落库验证）。 */
+  sessionEventCount(sessionId: string): number {
+    const row = this.db.query('SELECT COUNT(*) n FROM events WHERE session_id = ?').get(sessionId) as { n: number };
+    return row.n;
+  }
+
+  /** 按 sessionId 前缀清事件（自检 marker 清场用）。 */
+  deleteSessionEvents(sessionIdLike: string): void {
+    this.db.run('DELETE FROM events WHERE session_id LIKE ?', [sessionIdLike]);
+  }
+
   /** 读/写 meta 键值（backfill epoch 等引擎内部标记）。 */
   getMeta(k: string): string | null {
     const row = this.db.query('SELECT v FROM meta WHERE k = ?').get(k) as { v: string } | null;

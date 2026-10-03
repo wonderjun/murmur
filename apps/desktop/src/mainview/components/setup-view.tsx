@@ -12,6 +12,7 @@ import type { AgentSnapshot, QuotaWindow } from "@core/types";
 
 export default function SetupView() {
   const snapshot = useMurmurStore((s) => s.snapshot);
+  const openManager = useMurmurStore((s) => s.openManager);
 
   const agents = useMemo(
     () =>
@@ -114,6 +115,15 @@ export default function SetupView() {
           );
         })}
       </div>
+
+      {/* 深查入口：诊断/链路自检/恢复操作都在管理台窗口 */}
+      <button
+        type="button"
+        onClick={() => void openManager("doctor")}
+        className="mx-auto text-meta text-faint transition-colors duration-fast hover:text-muted-foreground"
+      >
+        管理与诊断 →
+      </button>
     </div>
   );
 }

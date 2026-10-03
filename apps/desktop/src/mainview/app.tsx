@@ -4,15 +4,13 @@
  * `#/design` hash 进设计板预览组件。
  */
 
-import { Activity, BarChart3, Power, Settings, Settings2 } from "lucide-react";
+import { Activity, AppWindow, Power, Settings2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import ManagerApp from "@/components/manager-app";
 import MonitorView from "@/components/monitor-view";
 import MurmurHeader from "@/components/murmur-header";
-import SessionsView from "@/components/sessions-view";
-import SettingsView from "@/components/settings-view";
 import SetupView from "@/components/setup-view";
-import UsageView from "@/components/usage-view";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DesignBoard from "@/design/design-board";
 import { applyAppearance } from "@/lib/appearance";
@@ -22,13 +20,11 @@ import { useMurmurStore } from "@/store/murmur";
 
 import type { ComponentType } from "react";
 
-type ViewId = "live" | "usage" | "setup" | "settings";
+type ViewId = "live" | "setup";
 
 const NAV_ITEMS: { id: ViewId; label: string; icon: ComponentType<{ size?: number; strokeWidth?: number }> }[] = [
   { id: "live", label: "动态", icon: Activity },
-  { id: "usage", label: "用量", icon: BarChart3 },
   { id: "setup", label: "工具", icon: Settings2 },
-  { id: "settings", label: "设置", icon: Settings },
 ];
 
 const VIEW_LABEL: Record<ViewId, string> = Object.fromEntries(NAV_ITEMS.map((i) => [i.id, i.label])) as Record<
@@ -38,13 +34,14 @@ const VIEW_LABEL: Record<ViewId, string> = Object.fromEntries(NAV_ITEMS.map((i) 
 
 export default function App() {
   const isDesign = location.hash.startsWith("#/design");
-  // 独立窗口内容：会话文件管理页（views://…#/files 由第二 BrowserWindow 加载）。
-  const isSessions = location.hash.startsWith("#/files");
+  // 管理台窗口内容（views://…#/manage/<tab> 由第二 BrowserWindow 加载）。
+  const isManager = location.hash.startsWith("#/manage");
   const [view, setView] = useState<ViewId>("live");
 
   const snapshot = useMurmurStore((s) => s.snapshot);
   const refresh = useMurmurStore((s) => s.refresh);
   const quit = useMurmurStore((s) => s.quit);
+  const openManager = useMurmurStore((s) => s.openManager);
   const loadSettings = useMurmurStore((s) => s.loadSettings);
   const theme = useMurmurStore((s) => s.settingsSnap?.settings.theme ?? "system");
   const font = useMurmurStore((s) => s.settingsSnap?.settings.font ?? "");
@@ -60,7 +57,7 @@ export default function App() {
   useEffect(() => applyAppearance(theme, font), [theme, font]);
 
   if (isDesign) return <DesignBoard />;
-  if (isSessions) return <SessionsView />;
+  if (isManager) return <ManagerApp />;
 
   return (
     <div className="relative h-full bg-background">
@@ -77,9 +74,7 @@ export default function App() {
           }}
         >
           {view === "live" && <MonitorView />}
-          {view === "usage" && <UsageView />}
           {view === "setup" && <SetupView />}
-          {view === "settings" && <SettingsView />}
         </main>
       </ScrollArea>
 
@@ -124,7 +119,15 @@ export default function App() {
           </nav>
           <button
             type="button"
-            className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-stale/10 hover:text-stale"
+            className="ml-auto flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-raised hover:text-muted-foreground"
+            title="管理台"
+            onClick={() => void openManager("doctor")}
+          >
+            <AppWindow size={13} />
+          </button>
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-stale/10 hover:text-stale"
             title="退出 Murmur"
             onClick={quit}
           >

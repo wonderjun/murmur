@@ -13,7 +13,8 @@ import { MURMUR_HOME } from '../paths';
 import type { AgentId } from '../types';
 import { HOOK_MARKER, renderHookScript } from './script';
 
-const HOOKS_DIR = join(MURMUR_HOME, 'agent-hooks');
+/** hook 脚本落盘目录（~/.murmur/agent-hooks/<agent>.sh）；诊断面 hookTargets 引用。 */
+export const HOOKS_DIR = join(MURMUR_HOME, 'agent-hooks');
 
 /** 写出脚本并返回调用命令（含存在性自检 + stdin 兜底 cat，同 orca 风格）。 */
 export function writeHookScript(agent: AgentId, opts?: { stdoutAck?: boolean }): string {

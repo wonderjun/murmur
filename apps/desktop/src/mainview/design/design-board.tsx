@@ -7,6 +7,7 @@ import AgentIcon from "@/components/agent-icon";
 import AgentRow from "@/components/agent-row";
 import AnimatedNumber from "@/components/animated-number";
 import ChartTip from "@/components/chart-tip";
+import DoctorAgentCard from "@/components/doctor-agent-card";
 import ModelLineChart from "@/components/model-line-chart";
 import Murmuration from "@/components/murmuration";
 import MurmurMark from "@/components/murmur-mark";
@@ -17,7 +18,7 @@ import SwitchRow from "@/components/switch-row";
 import { AGENT_META } from "@/lib/agent-meta";
 import { cn } from "@/lib/utils";
 
-import type { AgentId, AgentSnapshot, AgentStatus } from "@core/types";
+import type { AgentDiagnostics, AgentId, AgentSnapshot, AgentStatus } from "@core/types";
 
 const STATUSES: AgentStatus[] = ["working", "waiting", "idle", "stale", "ended"];
 const AGENTS = Object.keys(AGENT_META) as AgentId[];
@@ -45,7 +46,46 @@ const DEMO_SERIES = [
 /* 与 usage-view 的 MODEL_LINE_STYLES 同序（真源在业务页），仅供图表系列展件演示线型。 */
 const CHART_DASHES: (string | undefined)[] = [undefined, undefined, "6 3", "2.5 2.5", "8 3 2.5 3", "1 2", "10 4"];
 
-const NAV_DEMO = ["动态", "用量", "工具", "设置"];
+const NAV_DEMO = ["动态", "工具"];
+
+/** 接入诊断卡展件：正常态 + 故障态各一（DoctorAgentCard 离线替身下按钮降级不炸）。 */
+const DEMO_DIAG_OK: AgentDiagnostics = {
+  agent: "kimi",
+  home: { label: "数据根", path: "~/.kimi-code", kind: "dir", exists: true, readable: true },
+  sources: [
+    { label: "会话存储", path: "~/.kimi-code/sessions", kind: "dir", exists: true, readable: true },
+    { label: "凭据", path: "~/.kimi-code/credentials", kind: "dir", exists: true, readable: true },
+  ],
+  hook: {
+    installed: true,
+    enabled: true,
+    targets: ["~/.kimi-code/config.toml", "~/.murmur/agent-hooks/kimi.sh"],
+    lastEventAt: Date.now() - 300_000,
+  },
+  pull: { active: true, lastScanAt: Date.now() - 90_000, sources: [{ name: "wire.jsonl", at: Date.now() - 90_000 }] },
+  spool: { pendingFiles: 0, bytes: 0 },
+  hint: "数据源正常——暂无活跃会话",
+};
+
+const DEMO_DIAG_BAD: AgentDiagnostics = {
+  agent: "zcode",
+  home: { label: "数据根", path: "~/.zcode", kind: "dir", exists: true, readable: true },
+  sources: [
+    {
+      label: "任务库",
+      path: "~/.zcode/v2/tasks-index.sqlite",
+      kind: "sqlite",
+      exists: true,
+      readable: true,
+      openable: false,
+      note: "无法只读打开（被占用或损坏）",
+    },
+  ],
+  hook: { installed: false, enabled: true, targets: ["~/.zcode/cli/config.json"], lastEventAt: null },
+  pull: { active: false, lastScanAt: null, sources: [] },
+  spool: { pendingFiles: 0, bytes: 0 },
+  hint: "hook 未注入——点「重新接入」或开启自动接入",
+};
 
 function demoAgent(agent: AgentId, status: AgentStatus): AgentSnapshot {
   return {
@@ -292,6 +332,14 @@ export default function DesignBoard() {
           <AgentRow agent={demoAgent("kimi", "working")} />
           <AgentRow agent={demoAgent("zcode", "waiting")} />
           <AgentRow agent={demoAgent("opencode", "idle")} />
+        </div>
+      </section>
+
+      <section>
+        <BoardHead>接入诊断卡（管理台 · 数据/push/pull 三面 + 链路自检，正常与故障态）</BoardHead>
+        <div className="grid max-w-[860px] gap-2.5 md:grid-cols-2">
+          <DoctorAgentCard diag={DEMO_DIAG_OK} onChanged={() => {}} />
+          <DoctorAgentCard diag={DEMO_DIAG_BAD} onChanged={() => {}} />
         </div>
       </section>
     </div>

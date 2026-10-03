@@ -30,13 +30,13 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { loadCredentials } from '../../credentials';
-import { devinHooksRegistered, mergeDevinHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
+import { HOOKS_DIR, devinHooksRegistered, mergeDevinHooks, removeHookScript, unmergeJsonHooks } from '../../hooks/install';
 import { BACKFILL_WINDOW_MS, type Ledger } from '../../ledger/db';
 import { agentPaths } from '../../paths';
 import { quotaFetch } from '../../quota/common';
 import { fetchDevinQuota, sniffDevinOrgId } from '../../quota/devin';
 import type { AgentEvent, InstallInfo, TokenUsage } from '../../types';
-import { pick, type AgentAdapter } from '../base';
+import { pick, type AgentAdapter, type DataSourceRef } from '../base';
 import { deleteDevinSessions, scanDevinSessions, toMs } from './files';
 
 /** devin hook 全事件（文档生命周期全集，一次挂齐）。 */
@@ -142,6 +142,14 @@ export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter
         note: installed ? undefined : '未发现 ~/.local/share/devin',
       };
     },
+
+    dataSources() {
+      const out: DataSourceRef[] = [{ label: '会话库', path: dbPath, kind: 'sqlite' }];
+      if (paths.credentials) out.push({ label: '凭据', path: paths.credentials, kind: 'file' });
+      return out;
+    },
+
+    hookTargets: () => [paths.hookConfig ?? '', join(HOOKS_DIR, 'devin.sh')].filter(Boolean),
 
     async installHooks() {
       if (!paths.hookConfig) return { changed: false };

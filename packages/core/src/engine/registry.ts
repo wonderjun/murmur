@@ -6,6 +6,9 @@
  * 对外输出 AppSnapshot 与变化通知。
  */
 
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { loadCredentials, maskKey, saveCredentials, type ByokStore } from '../credentials';
 import { startIngestServer, type IngestServer } from '../ingest/server';
 import { drainSpool } from '../ingest/spool';
@@ -21,7 +24,8 @@ import { createKimiAdapter } from '../agents/kimi';
 import { createOpencodeAdapter } from '../agents/opencode';
 import { createQoderAdapter } from '../agents/qoder';
 import { createZcodeAdapter } from '../agents/zcode';
-import type { AgentEvent, AgentId, AgentSnapshot, AppSnapshot, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
+import type { AgentEvent, AgentId, AgentSnapshot, AppSnapshot, DiagnosticsSnapshot, HookTestResult, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
+import { SELFTEST_PREFIX, assembleDiagnostics, runHookTest } from './diagnostics';
 import { STALE_AFTER_MS, StatusEngine } from './status-engine';
 
 /** quota 拉取间隔（额度变化慢，10 分钟足够）。 */
@@ -51,6 +55,10 @@ export class AgentRegistry {
   private readonly skipIngest: boolean;
   private installs = new Map<AgentId, InstallInfo>();
   private quotas = new Map<AgentId, QuotaSnapshot>();
+  /** push 平面活性：最近一次 hook 上报到达时刻（诊断页「最近上报」）。 */
+  private lastHookAt = new Map<AgentId, number>();
+  /** pull 平面故障：watch() 启动抛错的最近一次消息（诊断页展示）。 */
+  private watchErrors = new Map<AgentId, string>();
   private ingest: IngestServer | null = null;
   private unwatchers = new Map<AgentId, () => void>();
   private timers: ReturnType<typeof setInterval>[] = [];
@@ -147,6 +155,8 @@ export class AgentRegistry {
       }
     }
     const events = adapter?.translateHook?.(inner) ?? [];
+    // marker 会话不算真实上报——「最近上报」语义留给真 agent 事件。
+    if (events.length && !events[0].sessionId.startsWith(SELFTEST_PREFIX)) this.lastHookAt.set(agent, Date.now());
     for (const e of events) this.ingest_(spooledAt ? { ...e, at: Math.min(e.at, spooledAt) } : e);
   };
 
@@ -217,8 +227,10 @@ export class AgentRegistry {
     try {
       const off = await a.watch?.((e) => this.ingest_(e), this.ledger);
       if (off) this.unwatchers.set(a.id, off);
-    } catch {
-      // 单 adapter 失败不影响整体。
+      this.watchErrors.delete(a.id);
+    } catch (e) {
+      // 单 adapter 失败不影响整体；留诊断可见的错误面。
+      this.watchErrors.set(a.id, e instanceof Error ? e.message : String(e));
     }
   }
 
@@ -256,6 +268,11 @@ export class AgentRegistry {
   /** 按天 × agent × model 的 token 明细（用量页三图共用）。 */
   usageDaily(days: number) {
     return this.ledger.usageDaily(Date.now() - days * 86400_000);
+  }
+
+  /** 任意起点（ms epoch）的 token 明细（用量页区间筛选）。 */
+  usageDailySince(sinceMs: number) {
+    return this.ledger.usageDaily(sinceMs);
   }
 
   /**
@@ -457,22 +474,92 @@ export class AgentRegistry {
     await this.refreshQuotas();
   }
 
-  /** 给监听中且 hook 开启的已安装 agent 装 hook（幂等）。返回各 agent 是否改动。 */
-  async installAllHooks(): Promise<Record<AgentId, boolean>> {
-    const out = {} as Record<AgentId, boolean>;
+  /** 给监听中且 hook 开启的已安装 agent 装 hook（幂等）。返回各 agent 改动与触碰文件清单。 */
+  async installAllHooks(): Promise<Record<AgentId, { changed: boolean; files: string[] }>> {
+    const out = {} as Record<AgentId, { changed: boolean; files: string[] }>;
     for (const a of this.adapters) {
+      const files = a.hookTargets?.() ?? [];
       if (!this.isObserved(a.id) || !this.isHookEnabled(a.id) || !this.installs.get(a.id)?.installed) {
-        out[a.id] = false;
+        out[a.id] = { changed: false, files };
         continue;
       }
       try {
-        out[a.id] = (await a.installHooks()).changed;
+        out[a.id] = { changed: (await a.installHooks()).changed, files };
         this.installs.set(a.id, await a.detect());
       } catch {
-        out[a.id] = false;
+        out[a.id] = { changed: false, files };
       }
     }
+    this.notify();
     return out;
+  }
+
+  /** settings.json 尚未写过 = 首次启动（管理窗引导卡与自弹窗的信号）。 */
+  isFirstRun(): boolean {
+    return !existsSync(join(this.dataDir, 'settings.json'));
+  }
+
+  /** 接入诊断快照：重跑 detect 后组装三面实况（数据/push/pull）。 */
+  async diagnostics(): Promise<DiagnosticsSnapshot> {
+    await Promise.allSettled(
+      this.adapters.map(async (a) => {
+        try {
+          this.installs.set(a.id, await a.detect());
+        } catch {
+          // detect 失败保留旧态，诊断如实展示。
+        }
+      }),
+    );
+    this.notify();
+    return assembleDiagnostics({
+      adapters: this.adapters,
+      installs: this.installs,
+      isObserved: (id) => this.isObserved(id),
+      isHookEnabled: (id) => this.isHookEnabled(id),
+      hookLastEventAt: (id) => this.lastHookAt.get(id) ?? null,
+      watchActive: (id) => this.unwatchers.has(id),
+      watchError: (id) => this.watchErrors.get(id),
+      ledger: this.ledger,
+      quotas: this.quotas,
+      ingestEndpoint: this.ingestEndpoint(),
+      firstRun: this.isFirstRun(),
+    });
+  }
+
+  /** hook 链路自检（管理台「测试链路」按钮）：marker 走全真链路后清场。 */
+  testAgentHook(agent: AgentId): Promise<HookTestResult> {
+    return runHookTest({
+      agent,
+      adapter: this.adapters.find((a) => a.id === agent),
+      ledger: this.ledger,
+      translate: this.translateHook,
+      observed: this.isObserved(agent),
+      installed: Boolean(this.installs.get(agent)?.installed),
+    });
+  }
+
+  /** 单 agent 重扫：重启其 watcher（旧 watcher 先停），不清游标拾漏。 */
+  async rescanAgent(agent: AgentId): Promise<void> {
+    const a = this.adapters.find((x) => x.id === agent);
+    if (!a || !this.isObserved(agent) || !this.installs.get(agent)?.installed) return;
+    await this.startWatch(a);
+  }
+
+  /** 单 agent 装 hook + 重 detect；返回改动与触碰文件清单（管理台逐条接入）。 */
+  async installAgentHooks(agent: AgentId): Promise<{ changed: boolean; files: string[] }> {
+    const a = this.adapters.find((x) => x.id === agent);
+    const files = a?.hookTargets?.() ?? [];
+    if (!a || !this.isObserved(agent) || !this.isHookEnabled(agent) || !this.installs.get(agent)?.installed) {
+      return { changed: false, files };
+    }
+    try {
+      const { changed } = await a.installHooks();
+      this.installs.set(agent, await a.detect());
+      this.notify();
+      return { changed, files };
+    } catch {
+      return { changed: false, files };
+    }
   }
 
   /**
@@ -512,7 +599,10 @@ export class AgentRegistry {
           hookInstalled: false,
         },
         disabled,
-        sessions: disabled ? [] : sessions.filter((s) => s.agent === a.id),
+        // 自检 marker 会话不出快照——链路自检零污染约定。
+        sessions: disabled
+          ? []
+          : sessions.filter((s) => s.agent === a.id && !s.sessionId.startsWith(SELFTEST_PREFIX)),
         quota: disabled ? undefined : this.quotas.get(a.id),
         // BYOK 已配置状态（掩码预览）：停监听也保留——key 存在与否是事实陈述。
         byok:
@@ -529,7 +619,9 @@ export class AgentRegistry {
       overall: this.engine.overall(observed),
       generatedAt: Date.now(),
       // 停监听 agent 的 ended 残留照 sessions 同规过滤——隐藏会话却不藏它的尸体对不上。
-      recentlyEnded: this.engine.recentlyEnded(RECENTLY_ENDED_LIMIT).filter((s) => observed.has(s.agent)),
+      recentlyEnded: this.engine
+        .recentlyEnded(RECENTLY_ENDED_LIMIT)
+        .filter((s) => observed.has(s.agent) && !s.sessionId.startsWith(SELFTEST_PREFIX)),
     };
     this.snapshotCache = snap;
     return snap;

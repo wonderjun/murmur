@@ -170,6 +170,74 @@ export interface SessionDeleteResult {
   needsVacuum?: boolean;
 }
 
+/** 管理台窗口 tab（RPC openManager 与 webview managerNav 共用）。 */
+export type ManagerTab = 'doctor' | 'usage' | 'files' | 'settings';
+
+/** 单个路径探针结果：数据源/配置文件的存在性、可读性与 sqlite 可开性。 */
+export interface PathProbe {
+  /** 探针语义标签（数据源名/配置名），UI 直出。 */
+  label: string;
+  path: string;
+  kind: 'file' | 'dir' | 'sqlite';
+  exists: boolean;
+  readable: boolean;
+  /** kind=sqlite 时：只读打开是否成功（他人正在写的 WAL 库开不了即 false）。 */
+  openable?: boolean;
+  note?: string;
+}
+
+/** 单个 agent 的诊断实况：三面（数据源/push/pull）+ 提示一句话。 */
+export interface AgentDiagnostics {
+  agent: AgentId;
+  home: PathProbe;
+  sources: PathProbe[];
+  hook: {
+    installed: boolean;
+    /** 用户在设置里开了该 agent 的上报（settings.hooks 缺省 true）。 */
+    enabled: boolean;
+    /** hook 安装触碰的配置文件清单（展示/Finder 定位用）。 */
+    targets: string[];
+    /** 最近一次 hook 上报到达 ingest 的时刻；从未收到为 null。 */
+    lastEventAt: number | null;
+  };
+  pull: {
+    /** watcher 是否在跑（observed + installed 且有 watch 能力面）。 */
+    active: boolean;
+    /** 全部 pull 源游标的最新推进时间；无游标为 null。 */
+    lastScanAt: number | null;
+    /** watcher 启动抛错的最近一次消息（registry 记录）。 */
+    error?: string;
+    sources: { name: string; at: number }[];
+  };
+  spool: { pendingFiles: number; bytes: number };
+  quota?: { fetchedAt: number; error?: string };
+  /** 「为什么没数据」一句话提示（事实派生，措辞保守）。 */
+  hint: string;
+}
+
+/** 诊断快照（RPC getDiagnostics 响应）。 */
+export interface DiagnosticsSnapshot {
+  agents: AgentDiagnostics[];
+  ingest: { endpoint: string; ok: boolean };
+  /** settings.json 尚未写过 = 首次启动（引导卡信号）。 */
+  firstRun: boolean;
+  generatedAt: number;
+}
+
+/** hook 链路自检的单步结果。 */
+export interface HookTestStep {
+  name: string;
+  ok: boolean;
+  detail?: string;
+}
+
+/** hook 链路自检结果（RPC testAgentHook 响应）。 */
+export interface HookTestResult {
+  agent: AgentId;
+  ok: boolean;
+  steps: HookTestStep[];
+}
+
 /** 整个应用的渲染快照。 */
 export interface AppSnapshot {
   agents: AgentSnapshot[];

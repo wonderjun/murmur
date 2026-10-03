@@ -51,7 +51,7 @@ export default function SettingsView() {
   const installHooks = useMurmurStore((s) => s.installHooks);
   const rebuildLedger = useMurmurStore((s) => s.rebuildLedger);
   const openDataDir = useMurmurStore((s) => s.openDataDir);
-  const openSessions = useMurmurStore((s) => s.openSessions);
+  const openManager = useMurmurStore((s) => s.openManager);
 
   const agents = useMemo(
     () =>
@@ -371,7 +371,7 @@ export default function SettingsView() {
               <button
                 type="button"
                 className="flex items-center justify-between gap-3 text-left"
-                onClick={() => void openSessions()}
+                onClick={() => void openManager("files")}
               >
                 <div className="min-w-0 flex-1">
                   <p className="text-detail font-medium">会话文件</p>
