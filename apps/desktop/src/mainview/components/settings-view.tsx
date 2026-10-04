@@ -10,7 +10,7 @@ import Segmented from "@/components/segmented";
 import SwitchRow from "@/components/switch-row";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { AGENT_META, AGENT_ORDER, HOOK_IMPACT, OBSERVE_IMPACT } from "@/lib/agent-meta";
+import { AGENT_META, AGENT_ORDER, HOOK_IMPACT, OBSERVE_IMPACT, UNINSTALLED_HINT } from "@/lib/agent-meta";
 import { isFontAvailable } from "@/lib/appearance";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
@@ -102,7 +102,10 @@ export default function SettingsView() {
     [],
   );
 
+  /* 监听开关呈现语义：未安装视为关（registry 本就 installed+flag 双闸，未安装无事可观察）。
+     存储的 flag 保持缺省 true 不落 false——装好工具即自动开，无需手动回开。 */
   function observed(agent: AgentSnapshot) {
+    if (!agent.install.installed) return false;
     return snap ? snap.settings.agents[agent.agent] !== false : !agent.disabled;
   }
 
@@ -332,7 +335,7 @@ export default function SettingsView() {
                     </>
                   ) : (
                     <p className="mt-2.5 border-t border-hairline/60 pt-2.5 text-meta leading-relaxed text-muted-foreground">
-                      {OBSERVE_IMPACT}
+                      {agent.install.installed ? OBSERVE_IMPACT : UNINSTALLED_HINT}
                     </p>
                   )}
                 </article>

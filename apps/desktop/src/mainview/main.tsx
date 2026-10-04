@@ -125,7 +125,37 @@ if (location.search.includes("seed")) {
             costUsd: 0.03,
           })),
         },
+        {
+          agent: "devin",
+          disabled: false,
+          install: { installed: false, hasCredentials: false, homeDir: "~/.devin", hookInstalled: false },
+          sessions: [],
+        },
       ],
+    },
+    // 设置页离线桩：devin 未安装（监听开关应显关），codex hook 关（展示降级说明）；runtime 给 dev 典型值。
+    // settings 字面量不引 @core/settings 值——该模块拉 node:fs，进不了浏览器包。
+    settingsSnap: {
+      settings: {
+        launchAtLogin: false,
+        showDockIcon: false,
+        notifyOnWaiting: false,
+        autoInstallHooks: true,
+        theme: "system",
+        font: "",
+        agents: { kimi: true },
+        hooks: { codex: false },
+      },
+      runtime: {
+        dockIconVisible: false,
+        launchAtLogin: false,
+        canLaunchAtLogin: false,
+        version: "0.4.0",
+        channel: "dev",
+        dataDir: "~/.murmur",
+        ingestEndpoint: "127.0.0.1:54321",
+        firstRun: false,
+      },
     },
     // 离线桥的 usageDaily 一律 reject，会落错误态——seed 直接顶替数据源（忽略入参，92 天全量给足）。
     usageDaily: async () => seedUsageRows,

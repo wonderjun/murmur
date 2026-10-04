@@ -1,5 +1,5 @@
 /**
- * 用量视图：display hero（今日令牌数字当家）→ 01 热力图（foreground 单色阶，
+ * 用量视图：display hero（今日令牌数字当家）→ 01 自然年热力图（foreground 单色阶，
  * GitHub 式）→ 02 近 7 天按 agent 堆积柱 + 明细图例 → 03 近 7 天按模型折线。
  * 彩色纪律：热力图走中性色阶；agent 色只出现在「谁」语义的柱段与图例点。
  * 键盘/读屏：热力图格子与柱段 tabIndex+role=img 可聚焦，focus 与 hover 同出 ChartTip；
@@ -26,14 +26,23 @@ import type { UsageRange } from "@/components/usage-range";
 import type { SyntheticEvent as ReactSyntheticEvent } from "react";
 import type { UsageDailyRow } from "../../shared/rpc";
 
-const HEAT_DAYS = 70;
 const dayMs = 86400_000;
 
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 const todayMs = today.getTime();
-const mondayOffset = (today.getDay() + 6) % 7; // 周一=0
-const heatStart = todayMs - mondayOffset * dayMs - (Math.ceil(HEAT_DAYS / 7) - 1) * 7 * dayMs;
+const todayKey = dayStr(todayMs);
+
+/* 热力图窗口：自然年（1月1日–12月31日，周列日行，周一开头），未来日与无数据日同为空格。
+   台账初始化/回填窗口（core 70d）不变——年内没数据的天就是空格，不冒充有量。 */
+const HEAT_YEAR = today.getFullYear();
+const YEAR_START_MS = Date.parse(`${HEAT_YEAR}-01-01T00:00:00`);
+const YEAR_END_MS = Date.parse(`${HEAT_YEAR}-12-31T00:00:00`);
+const YEAR_START_DAY = dayStr(YEAR_START_MS);
+/** 年首列对齐周一：Jan 1 的星期偏移（周一=0），首列前置的上年尾日渲染为空占位。 */
+const GRID_START_MS = YEAR_START_MS - ((new Date(YEAR_START_MS).getDay() + 6) % 7) * dayMs;
+/** 默认拉取窗：365 天恒覆盖整个自然年（年初至多在 364 天前）。 */
+const FETCH_DAYS = 365;
 
 /* 热力图密度色阶：空档保持中性，有量后走 --heat 暖橙单色相递进——
    密度语义专属通道（既非状态也非「谁」），单色纪律不破。 */
@@ -102,7 +111,7 @@ export default function UsageView() {
   useEffect(() => {
     let alive = true;
     setStatus("loading");
-    usageDaily({ days: HEAT_DAYS })
+    usageDaily({ days: FETCH_DAYS })
       .then((data) => {
         if (!alive) return;
         setRows(data);
@@ -118,32 +127,39 @@ export default function UsageView() {
   }, [usageDaily, attempt]);
 
   const hasData = rows.some((r) => r.tokens > 0);
-  const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
+  /* hero 与热力图固定认自然年；区间图表仍用全量 rows（自定义区间可越年）。 */
+  const yearRows = useMemo(() => rows.filter((r) => r.day >= YEAR_START_DAY), [rows]);
+  const totalTokens = yearRows.reduce((s, r) => s + r.tokens, 0);
 
-  /* ── 热力图：weeks × 7 rows，右端对齐今天 ── */
+  /* ── 热力图：自然年 weeks × 7 rows，首列对齐周一 ── */
   const dayTotals = useMemo(() => {
     const m = new Map<string, number>();
-    for (const r of rows) m.set(r.day, (m.get(r.day) ?? 0) + r.tokens);
+    for (const r of yearRows) m.set(r.day, (m.get(r.day) ?? 0) + r.tokens);
     return m;
-  }, [rows]);
+  }, [yearRows]);
 
   const heatWeeks = useMemo(() => {
     const max = Math.max(...dayTotals.values(), 1);
-    const weeks: { cells: HeatCell[]; monthLabel: string }[] = [];
+    const weeks: { cells: (HeatCell | null)[]; monthLabel: string }[] = [];
     let prevMonth = -1;
-    for (let w = 0; w * 7 * dayMs + heatStart <= todayMs; w++) {
-      const week: HeatCell[] = [];
+    for (let w = 0; GRID_START_MS + w * 7 * dayMs <= YEAR_END_MS; w++) {
+      const week: (HeatCell | null)[] = [];
+      let month1st = -1;
       for (let d = 0; d < 7; d++) {
-        const ms = heatStart + (w * 7 + d) * dayMs;
+        const ms = GRID_START_MS + (w * 7 + d) * dayMs;
+        if (ms < YEAR_START_MS || ms > YEAR_END_MS) {
+          week.push(null);
+          continue;
+        }
         const day = dayStr(ms);
         const tokens = ms > todayMs ? 0 : (dayTotals.get(day) ?? 0);
         const lvl = tokens === 0 ? 0 : Math.min(4, Math.max(1, Math.ceil((tokens / max) * 4)));
+        if (new Date(ms).getDate() === 1) month1st = new Date(ms).getMonth();
         week.push({ day, tokens, color: HEAT_LEVELS[lvl] });
       }
-      /* 月份行：该周首日落进新月份才标，同一月内不重复 */
-      const month = new Date(heatStart + w * 7 * dayMs).getMonth();
-      const monthLabel = month !== prevMonth ? `${month + 1}月` : "";
-      prevMonth = month;
+      /* 月份行：列含某月 1 日才标（GitHub 惯例，跨月列落在 1 日所在列），同年内不重复 */
+      const monthLabel = month1st >= 0 && month1st !== prevMonth ? `${month1st + 1}月` : "";
+      if (month1st >= 0) prevMonth = month1st;
       weeks.push({ cells: week, monthLabel });
     }
     return weeks;
@@ -162,7 +178,7 @@ export default function UsageView() {
   }
 
   /* ── 区间状态：默认近 7 天（初始化呈现与现状一致），02/03 图表随区间。
-     自定义上限 1 个月 ⇒ startDay ≥ today-30，必落 70d 默认拉取窗内，client-side 过滤即可。 ── */
+     自定义上限 1 个月 ⇒ startDay ≥ today-30，必落 365d 默认拉取窗内，client-side 过滤即可。 ── */
   const [range, setRange] = useState<UsageRange>({ kind: "preset", days: 7 });
   const { startDay, endDay } = rangeBounds(range);
 
@@ -217,7 +233,7 @@ export default function UsageView() {
       .sort((a, b) => b.tokens - a.tokens);
   }, [chartDays, rangeTokens]);
 
-  /* ── 概览条：今日 / 近 7 日 / 近 10 周 / 活跃天数（固定语义，不吃区间）── */
+  /* ── 概览条：今日 / 近 7 日 / 今年 / 活跃天数（固定语义，不吃区间）── */
   const overview = useMemo(() => {
     const todayTokens = dayTotals.get(dayStr(todayMs)) ?? 0;
     const activeDays = [...dayTotals.values()].filter((v) => v > 0).length;
@@ -350,7 +366,7 @@ export default function UsageView() {
                 </span>
               </span>
               <span>
-                近 10 周
+                今年
                 <span className="ml-1.5 font-mono tabular-nums font-medium text-foreground">
                   {fmtTokens(overview.totalTokens)}
                 </span>
@@ -359,12 +375,12 @@ export default function UsageView() {
             </div>
           </section>
 
-          {/* ── 近 10 周热力图（周为列，日为行，GitHub 式；foreground 单色阶）── */}
+          {/* ── 自然年热力图（周为列，日为行，GitHub 式；foreground 单色阶；未来日空格）── */}
           <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: enterDelay() }}>
             <div className="mb-2 flex items-baseline justify-between">
               <span className="flex items-baseline gap-1.5">
                 <span className="font-mono text-micro text-faint">01</span>
-                <span className="text-detail font-semibold">近 10 周</span>
+                <span className="text-detail font-semibold">{HEAT_YEAR} 年</span>
               </span>
               <span className="flex items-center gap-1 font-mono text-micro text-faint">
                 少
@@ -375,10 +391,11 @@ export default function UsageView() {
               </span>
             </div>
             <div ref={heatBox} className="relative">
-              {/* 月份行：与周列对齐（左缩进 = 星期列宽 + 列距） */}
+              {/* 月份行：与周列对齐（左缩进 = 星期列宽 + 列距）；nowrap 溢出不裁——
+                  列宽 ~12px 装不下「10月」，右邻列的标签位恒为空 */}
               <div className="mb-1 flex gap-[3px] pl-[15px]">
                 {heatWeeks.map((week, wi) => (
-                  <span key={wi} className="flex-1 truncate font-mono text-micro leading-none text-faint">
+                  <span key={wi} className="min-w-0 flex-1 whitespace-nowrap font-mono text-micro leading-none text-faint">
                     {week.monthLabel}
                   </span>
                 ))}
@@ -397,20 +414,26 @@ export default function UsageView() {
                 </div>
                 {heatWeeks.map((week, wi) => (
                   <div key={wi} className="flex flex-1 flex-col gap-[3px]">
-                    {week.cells.map((cell) => (
-                      <span
-                        key={cell.day}
-                        role="img"
-                        aria-label={`${cell.day} ${fmtTokens(cell.tokens)} 令牌`}
-                        tabIndex={0}
-                        className="h-[11px] w-full rounded-[2.5px] transition-shadow duration-fast hover:ring-1 hover:ring-foreground/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
-                        style={{ background: cell.color }}
-                        onMouseEnter={(e) => onHeatEnter(e, cell)}
-                        onMouseLeave={() => setHeatTip(null)}
-                        onFocus={(e) => onHeatEnter(e, cell)}
-                        onBlur={() => setHeatTip(null)}
-                      />
-                    ))}
+                    {week.cells.map((cell, di) => {
+                      if (!cell) return <span key={`pad-${di}`} aria-hidden className="h-[11px] w-full" />;
+                      const future = cell.day > todayKey;
+                      return (
+                        <span
+                          key={cell.day}
+                          role={future ? undefined : "img"}
+                          aria-label={future ? undefined : `${cell.day} ${fmtTokens(cell.tokens)} 令牌`}
+                          tabIndex={future ? -1 : 0}
+                          className={`h-[11px] w-full rounded-[2.5px] transition-shadow duration-fast hover:ring-1 hover:ring-foreground/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40${
+                            future ? " pointer-events-none" : ""
+                          }`}
+                          style={{ background: cell.color }}
+                          onMouseEnter={(e) => onHeatEnter(e, cell)}
+                          onMouseLeave={() => setHeatTip(null)}
+                          onFocus={(e) => onHeatEnter(e, cell)}
+                          onBlur={() => setHeatTip(null)}
+                        />
+                      );
+                    })}
                   </div>
                 ))}
               </div>

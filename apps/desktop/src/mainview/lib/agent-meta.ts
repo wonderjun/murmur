@@ -34,6 +34,9 @@ export const HOOK_IMPACT: Record<AgentId, string> = {
 /** 关闭整个监听的后果说明（设置页主开关下展示）。 */
 export const OBSERVE_IMPACT = "停止读取该工具的本地数据：会话状态、用量、额度全部不再更新";
 
+/** 未安装工具的监听说明（设置页主开关下展示）：未安装视为关，装好后自动开始。 */
+export const UNINSTALLED_HINT = "未安装，暂不监听；装好后自动开始观察，无需手动开启";
+
 /** BYOK key 的获取入口提示（设置页输入行描述）；仅 install.supportsByok 的 agent 用得到。 */
 export const BYOK_KEY_SOURCE: Partial<Record<AgentId, string>> = {
   zcode: "z.ai / 智谱开放平台控制台",

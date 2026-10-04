@@ -96,7 +96,7 @@ Murmur 是常驻菜单栏的「状态伴侣」，质感来自**克制与一瞥�
 - **「栖枝」是签名元素**：`perch-strip.tsx`，两端渐隐的渐变枝 + 9px `data-agent` 状态点（bg-background 晕环压枝），状态切换 `hop` 鸟跳、入场按栖位错峰 55ms
 - **「椋鸟群」是签名时刻**：`murmuration.tsx`，26 点 seed 化伪随机 + drift 错峰游动 + 峰点琥珀，空态专用（动态页/用量页）；语义=「群鸟休憩」，与产品名同构
 - 动态页：尺规索引条（运行中/需处理/今日令牌 AnimatedNumber + 新鲜度）→ waiting hero（琥珀左边条 + `bg-waiting/[0.06]` + hero-breathe 光晕 + title 档标题）→ `01 · 正在发生` 分组列表（card 实体，`divide-y` hairline，AgentRow 无卡片壳、grid-rows 弹性展开）→ `02 · 已停止更新`
-- 用量页：概览 hero（`今日令牌` eyebrow + display 档 mono 数字 + 右列近 7 日/10 周/活跃天数陪跑）→ flat 编号栏目：`01 · 近 10 周` 热力图（**`--heat` 暖橙密度阶**，月份行 + 一三五日星期列，GitHub 式周列日行）→ `02 · 按工具` 堆积柱 + 图例 → `03 · 按模型` 折线（虚线格 + 准星 + 峰值图注 + `model-line-chart.tsx` 悬浮明细，浮卡 glass-overlay）
+- 用量页：概览 hero（`今日令牌` eyebrow + display 档 mono 数字 + 右列近 7 日/今年/活跃天数陪跑）→ flat 编号栏目：`01 · {年份}` 自然年热力图（**`--heat` 暖橙密度阶**，月份行 + 一三五日星期列，GitHub 式周列日行；无数据日与未来日同为空格，台账回填窗口不变）→ `02 · 按工具` 堆积柱 + 图例 → `03 · 按模型` 折线（虚线格 + 准星 + 峰值图注 + `model-line-chart.tsx` 悬浮明细，浮卡 glass-overlay）
 - 会话行：状态点 + 标题（detail）+ 元信息（model · 相对时间，meta）+ 右侧 token 计数（micro mono）
 - 空态：无边框盒子——居中 `Murmuration`（120px）+ body 档一句 + meta 说明
 - 预览页：`#/design` hash 进入 `design/design-board.tsx`，新组件先上板再进业务页
