@@ -1,10 +1,14 @@
-/** 模型用量折线：水平虚线格 + 竖直准星 + 悬浮明细卡（日期 + 当日各模型降序值）。
- *  交互契约：mousemove 取最近日，hover 点放大为空心环，明细卡瞬时跟随，右半区自动左翻。
- *  键盘/读屏：SVG 不做键盘交互，另出一组 sr-only 文本明细（每系列名称 + 7 日合计）。 */
+/** 模型用量折线：宽度自适应（ResizeObserver 实测宽 = viewBox 宽，SVG 坐标即 HTML 像素，准星明细卡定位随之精确）
+ *  + 水平虚线格 + 竖直准星 + 悬浮明细卡（日期 + 当日各模型降序值）。
+ *  轴字按容器宽度抽稀（末日必出、与前点过近则让位），30/92 天长区间不拥挤也不被 viewBox 信箱化居中。
+ *  交互契约：mousemove 取最近日，hover 点放大为空心环，明细卡瞬时跟随，右半区自动左翻，
+ *  图表贴窗底、卡放不下时锚到基线向上展开（tipBelowFits）。
+ *  键盘/读屏：SVG 不做键盘交互，另出一组 sr-only 文本明细（每系列名称 + 区间合计）。 */
 
-import { useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import ChartTip from "@/components/chart-tip";
+import { tipBelowFits } from "@/lib/chart-tip";
 
 import type { ChartTipState } from "@/lib/chart-tip";
 import type { MouseEvent as ReactMouseEvent } from "react";
@@ -28,36 +32,74 @@ const W = 320;
 const H = 128;
 const PAD_X = 10;
 const PAD_Y = 12;
+/** 轴字最小中心距（px）：mono 10px 的「09-08」约 30px 宽，低于该距离必须抽稀。 */
+const LABEL_MIN_GAP = 40;
 
 const WEEKDAYS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
 export default function ModelLineChart({ days, series }: { days: ModelLineDay[]; series: ModelLineSeries[] }) {
+  const boxEl = useRef<HTMLDivElement | null>(null);
   const svgEl = useRef<SVGSVGElement | null>(null);
+  const [measured, setMeasured] = useState<number | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  /* hover 时刻图表顶边在视口的位置：明细卡竖向翻转的空间判定依据。 */
+  const [chartTop, setChartTop] = useState<number | null>(null);
+
+  /* 宽度自适应：viewBox 宽取实测宽，首帧前 useLayoutEffect 已量好不闪 320 兜底；
+     clientWidth 取整避免小数尺寸与 ResizeObserver 来回抖动。 */
+  useLayoutEffect(() => {
+    const el = boxEl.current;
+    if (!el) return;
+    const measure = () => setMeasured(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const w = measured ?? W;
 
   const max = Math.max(1, ...series.flatMap((s) => s.values));
   const gridYs = [0.25, 0.5, 0.75].map((f) => PAD_Y + f * (H - PAD_Y * 2));
 
-  const x = (i: number) => PAD_X + (i * (W - PAD_X * 2)) / Math.max(1, days.length - 1);
+  const x = (i: number) => PAD_X + (i * (w - PAD_X * 2)) / Math.max(1, days.length - 1);
   const y = (v: number) => H - PAD_Y - (v / max) * (H - PAD_Y * 2);
 
-  // x/y 是纯函数（闭包 days/max），依赖表已覆盖。
+  // x/y 是纯函数（闭包 days/max/w），依赖表已覆盖。
   const drawn = useMemo(
     () =>
       series.map((s) => {
         const coords = s.values.map((v, i) => ({ x: x(i), y: y(v) }));
         return { ...s, coords, points: coords.map((c) => `${c.x},${c.y}`).join(" ") };
       }),
-    [series, days, max],
+    [series, days, max, w],
   );
+
+  /* 轴字抽稀：按可绘图宽均匀取点，末日必出；与前点中心距不足时末日让前点退位。
+     首点 start / 末点 end 锚点贴边，长标签不再被视口左右各裁 5px。 */
+  const labelIs = useMemo(() => {
+    if (!days.length) return [];
+    const every = Math.max(1, Math.ceil((days.length * LABEL_MIN_GAP) / Math.max(1, w - PAD_X * 2)));
+    const idx: number[] = [];
+    for (let i = 0; i < days.length; i += every) idx.push(i);
+    const last = days.length - 1;
+    if (idx[idx.length - 1] !== last) {
+      if (idx.length > 1 && x(last) - x(idx[idx.length - 1]) < LABEL_MIN_GAP - 6) idx.pop();
+      idx.push(last);
+    }
+    return idx;
+    // x 是纯函数（闭包 days/w），依赖表已覆盖。
+  }, [days, w]);
 
   function onMove(event: ReactMouseEvent<SVGSVGElement>) {
     const el = svgEl.current;
     if (!el || days.length < 2) return;
     const rect = el.getBoundingClientRect();
-    const relX = ((event.clientX - rect.left) / rect.width) * W;
-    const step = (W - PAD_X * 2) / (days.length - 1);
+    const relX = ((event.clientX - rect.left) / rect.width) * w;
+    const step = (w - PAD_X * 2) / (days.length - 1);
     setHoverIndex(Math.min(days.length - 1, Math.max(0, Math.round((relX - PAD_X) / step))));
+    const host = boxEl.current;
+    if (host) setChartTop(host.getBoundingClientRect().top);
   }
 
   /* 峰值标注：全系列最高点旁边落一枚小注，编辑版的「图注」 */
@@ -72,18 +114,6 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
     return best;
   }, [drawn]);
 
-  /** 准星过半区后明细卡翻到左侧，避免顶出面板。 */
-  const tipState: ChartTipState | null =
-    hoverIndex === null
-      ? null
-      : { x: x(hoverIndex), y: PAD_Y / 2, place: hoverIndex >= days.length / 2 ? "left" : "right" };
-
-  const hoverTitle = (() => {
-    if (hoverIndex === null) return "";
-    const d = new Date(days[hoverIndex].day + "T00:00:00");
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAYS[d.getDay()]}`;
-  })();
-
   const hoverRows =
     hoverIndex === null
       ? []
@@ -92,11 +122,27 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
           .filter((r) => r.value > 0)
           .sort((a, b) => b.value - a.value);
 
+  /** 明细卡落位：左右随准星翻边；下方视口空间放不下（图表贴窗底）时锚到基线向上展开。 */
+  const tipState: ChartTipState | null = (() => {
+    if (hoverIndex === null) return null;
+    const side = hoverIndex >= days.length / 2 ? "left" : "right";
+    if (chartTop !== null && !tipBelowFits(chartTop, hoverRows.length)) {
+      return { x: x(hoverIndex), y: H - PAD_Y, place: `${side}-up` as ChartTipState["place"] };
+    }
+    return { x: x(hoverIndex), y: PAD_Y / 2, place: side };
+  })();
+
+  const hoverTitle = (() => {
+    if (hoverIndex === null) return "";
+    const d = new Date(days[hoverIndex].day + "T00:00:00");
+    return `${d.getMonth() + 1}月${d.getDate()}日 ${WEEKDAYS[d.getDay()]}`;
+  })();
+
   return (
-    <div className="relative">
+    <div ref={boxEl} className="relative">
       <svg
         ref={svgEl}
-        viewBox={`0 0 ${W} ${H}`}
+        viewBox={`0 0 ${w} ${H}`}
         className="block h-[128px] w-full"
         onMouseMove={onMove}
         onMouseLeave={() => setHoverIndex(null)}
@@ -105,7 +151,7 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
           <line
             key={gy}
             x1={PAD_X}
-            x2={W - PAD_X}
+            x2={w - PAD_X}
             y1={gy}
             y2={gy}
             stroke="var(--hairline)"
@@ -113,26 +159,27 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
             strokeDasharray="3 3"
           />
         ))}
-        <line x1={PAD_X} x2={W - PAD_X} y1={H - PAD_Y} y2={H - PAD_Y} stroke="var(--hairline)" strokeWidth="1" />
+        <line x1={PAD_X} x2={w - PAD_X} y1={H - PAD_Y} y2={H - PAD_Y} stroke="var(--hairline)" strokeWidth="1" />
 
-        {days.map((d, i) => (
+        {labelIs.map((i) => (
           <text
-            key={d.day}
+            key={days[i].day}
             x={x(i)}
             y={H - 3}
-            textAnchor="middle"
+            textAnchor={i === 0 ? "start" : i === days.length - 1 ? "end" : "middle"}
             fontSize="10"
             fill="var(--faint)"
             style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}
           >
-            {d.label}
+            {days[i].label}
           </text>
         ))}
 
-        {/* 峰值图注：全局最高点上方落「峰 xM」，hover 时让位给准星明细 */}
+        {/* 峰值图注：全局最高点上方落「峰 xM」，hover 时让位给准星明细；
+            钳位留足文字半宽（~28px），窄图上不被左右缘裁字 */}
         {peak && hoverIndex === null && (
           <text
-            x={Math.min(Math.max(peak.x, PAD_X + 14), W - PAD_X - 14)}
+            x={Math.min(Math.max(peak.x, PAD_X + 28), w - PAD_X - 28)}
             y={Math.max(peak.y - 7, 9)}
             textAnchor="middle"
             fontSize="10"
@@ -183,10 +230,10 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
         )}
       </svg>
 
-      {/* 读屏兜底：每系列名称 + 7 日合计（SVG 交互不便键盘遍历，文本通道补齐） */}
+      {/* 读屏兜底：每系列名称 + 区间合计（SVG 交互不便键盘遍历，文本通道补齐） */}
       <div className="sr-only">
         {series.map((s) => (
-          <p key={s.name}>{`${s.name} 近 7 日合计 ${fmt(s.values.reduce((a, b) => a + b, 0))} 令牌`}</p>
+          <p key={s.name}>{`${s.name} 区间合计 ${fmt(s.values.reduce((a, b) => a + b, 0))} 令牌`}</p>
         ))}
       </div>
 

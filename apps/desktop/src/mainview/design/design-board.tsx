@@ -15,9 +15,11 @@ import PerchStrip from "@/components/perch-strip";
 import QuotaPill from "@/components/quota-pill";
 import StatusDot from "@/components/status-dot";
 import SwitchRow from "@/components/switch-row";
+import UsageRangePicker from "@/components/usage-range";
 import { AGENT_META } from "@/lib/agent-meta";
 import { cn } from "@/lib/utils";
 
+import type { UsageRange } from "@/components/usage-range";
 import type { AgentDiagnostics, AgentId, AgentSnapshot, AgentStatus } from "@core/types";
 
 const STATUSES: AgentStatus[] = ["working", "waiting", "idle", "stale", "ended"];
@@ -130,6 +132,12 @@ function demoAgent(agent: AgentId, status: AgentStatus): AgentSnapshot {
 
 function BoardHead({ children }: { children: string }) {
   return <h2 className="eyebrow mb-2.5 text-faint">{children}</h2>;
+}
+
+/* 日期区间展件：本地 state 驱动，验证 Popover 日历选区与 Segmented 联动。 */
+function UsageRangeDemo() {
+  const [range, setRange] = useState<UsageRange>({ kind: "preset", days: 7 });
+  return <UsageRangePicker value={range} onChange={setRange} />;
 }
 
 export default function DesignBoard() {
@@ -272,6 +280,13 @@ export default function DesignBoard() {
               ))}
             </div>
           </ChartTip>
+        </div>
+      </section>
+
+      <section>
+        <BoardHead>日期区间（用量自定义区间 · Popover + Calendar）</BoardHead>
+        <div className="rounded-item border border-hairline bg-card px-3 py-2.5 shadow-raised">
+          <UsageRangeDemo />
         </div>
       </section>
 

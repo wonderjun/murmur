@@ -4,13 +4,16 @@ import type { ReactNode } from "react";
 
 import type { ChartTipState } from "@/lib/chart-tip";
 
-/** 各锚位的位移表：top 系锚在元素上方居中/贴左/贴右，left/right 供折线准星左右翻转。 */
+/** 各锚位的位移表：top 系锚在元素上方居中/贴左/贴右，left/right 供折线准星左右翻转，
+    left-up/right-up 供下方空间不足时向上展开（锚点在基线，卡底抬到锚点上方）。 */
 const TRANSFORMS: Record<ChartTipState["place"], string> = {
   top: "translate(-50%, calc(-100% - 8px))",
   "top-left": "translate(-12%, calc(-100% - 8px))",
   "top-right": "translate(-88%, calc(-100% - 8px))",
   right: "translate(12px, 4px)",
   left: "translate(calc(-100% - 12px), 4px)",
+  "right-up": "translate(12px, calc(-100% - 8px))",
+  "left-up": "translate(calc(-100% - 12px), calc(-100% - 8px))",
 };
 
 export default function ChartTip({ tip, children }: { tip: ChartTipState | null; children?: ReactNode }) {

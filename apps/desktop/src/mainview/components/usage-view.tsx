@@ -8,7 +8,7 @@
  * 卡片只留给「可交互实体」（动态页会话组、工具页 agent 行）。
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import AnimatedNumber from "@/components/animated-number";
 import ChartTip from "@/components/chart-tip";
@@ -161,31 +161,14 @@ export default function UsageView() {
     setHeatTip(anchorTop(event, heatBox.current));
   }
 
-  /* ── 区间状态：默认近 7 天（初始化呈现与现状一致），02/03 图表随区间 ── */
+  /* ── 区间状态：默认近 7 天（初始化呈现与现状一致），02/03 图表随区间。
+     自定义上限 1 个月 ⇒ startDay ≥ today-30，必落 70d 默认拉取窗内，client-side 过滤即可。 ── */
   const [range, setRange] = useState<UsageRange>({ kind: "preset", days: 7 });
-  const [extRows, setExtRows] = useState<UsageDailyRow[] | null>(null);
   const { startDay, endDay } = rangeBounds(range);
 
-  // 自定义起点落在 70d 默认拉取窗之前才补拉；其余区间 client-side 过滤 rows。
-  useEffect(() => {
-    if (startDay >= dayStr(todayMs - (HEAT_DAYS - 1) * dayMs)) {
-      setExtRows(null);
-      return;
-    }
-    let alive = true;
-    usageDaily({ since: Date.parse(`${startDay}T00:00:00`) })
-      .then((rs) => {
-        if (alive) setExtRows(rs);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, [startDay, usageDaily]);
-
   const rangeRows = useMemo(
-    () => (extRows ?? rows).filter((r) => r.day >= startDay && r.day <= endDay),
-    [extRows, rows, startDay, endDay],
+    () => rows.filter((r) => r.day >= startDay && r.day <= endDay),
+    [rows, startDay, endDay],
   );
 
   /* ── 区间按 agent 堆积柱（默认近 7 天）── */
@@ -242,18 +225,46 @@ export default function UsageView() {
   }, [dayTotals, week7Tokens, totalTokens]);
 
   /* ── 堆积柱瞬时悬浮 ── */
-  const barBox = useRef<HTMLDivElement | null>(null);
+  /* callback ref 存节点：柱区随数据就绪才挂载（此前是骨架屏），空依赖 effect 会量空——
+     节点挂上时再观察，顺路喂柱轴字抽稀的容器宽。 */
+  const [barBox, setBarBox] = useState<HTMLDivElement | null>(null);
+  const [barWidth, setBarWidth] = useState(0);
+  useLayoutEffect(() => {
+    if (!barBox) return;
+    const measure = () => setBarWidth(barBox.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(barBox);
+    return () => ro.disconnect();
+  }, [barBox]);
   const [barTip, setBarTip] = useState<ChartTipState | null>(null);
   const [barSeg, setBarSeg] = useState<BarSegment | null>(null);
 
   function onBarEnter(event: ReactSyntheticEvent<HTMLElement>, seg: BarSegment) {
-    if (!barBox.current) return;
+    if (!barBox) return;
     setBarSeg(seg);
-    setBarTip(anchorTop(event, barBox.current));
+    setBarTip(anchorTop(event, barBox));
   }
 
   /* ── 区间按模型折线（top6 + 其他），数据整形后交给 ModelLineChart ── */
   const lineDays = useMemo(() => chartDays.map((d) => ({ day: d.day, label: d.label })), [chartDays]);
+
+  /* 柱轴字抽稀：与 03 折线同规——标签中心距不足 ~40px 就隔列取点，末日必出、过近让位。
+     barWidth 未量到（首帧前 useLayoutEffect 已量好）时全量兜底。 */
+  const barLabelIs = useMemo(() => {
+    const all = new Set(chartDays.map((_, i) => i));
+    if (!chartDays.length || !barWidth) return all;
+    const every = Math.max(1, Math.ceil((chartDays.length * 40) / barWidth));
+    const idx: number[] = [];
+    for (let i = 0; i < chartDays.length; i += every) idx.push(i);
+    const last = chartDays.length - 1;
+    if (idx[idx.length - 1] !== last) {
+      const col = barWidth / chartDays.length;
+      if (idx.length > 1 && (last - idx[idx.length - 1]) * col < 34) idx.pop();
+      idx.push(last);
+    }
+    return new Set(idx);
+  }, [chartDays, barWidth]);
 
   const lineSeries = useMemo(() => {
     const dayKeys = lineDays.map((d) => d.day);
@@ -429,10 +440,11 @@ export default function UsageView() {
               </span>
               <span className="font-mono text-micro tabular-nums text-faint">{fmtTokens(rangeTokens)} 令牌</span>
             </div>
-            <div ref={barBox} className="relative">
-              <div className="flex h-[84px] items-end gap-2">
-                {chartDays.map((d) => (
-                  <div key={d.day} className="flex flex-1 flex-col items-center gap-1">
+            <div ref={setBarBox} className="relative">
+              {/* gap-1：30 列时 8px 间隙在窄窗吃掉 232px，柱子变细条——4px 足够分列 */}
+              <div className="flex h-[84px] items-end gap-1">
+                {chartDays.map((d, i) => (
+                  <div key={d.day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
                     <div className="flex w-full flex-col-reverse gap-px" style={{ height: "64px" }}>
                       {d.segments.map((seg) => (
                         <div
@@ -449,7 +461,15 @@ export default function UsageView() {
                         />
                       ))}
                     </div>
-                    <span className="font-mono text-micro tabular-nums text-faint">{d.label}</span>
+                    {/* 抽稀不卸载：invisible 占位保持列等高，items-end 下柱底基线不跳；
+                        nowrap+center 让窄列里标签居中溢出而非折行（min-w-0 拆掉 min-content 约束） */}
+                    <span
+                      className={`w-full whitespace-nowrap text-center font-mono text-micro tabular-nums text-faint${
+                        barLabelIs.has(i) ? "" : " invisible"
+                      }`}
+                    >
+                      {d.label}
+                    </span>
                   </div>
                 ))}
               </div>

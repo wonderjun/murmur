@@ -15,6 +15,35 @@ import type { AgentStatus } from "@core/types";
 // 离线预览种子：?seed 注入仿真快照，浏览器/截图复现真实数据版面（dev 专用）。
 if (location.search.includes("seed")) {
   const now = Date.now();
+  /* seed 用量桩：确定性 sin-hash 92 天 × 7 模型行，峰值量级 ~400M 与真机台账同档。
+     只服务 02/03 图表与热力图的版面预览，字段取 UsageDailyRow 真形。 */
+  const SEED_MODELS: [agent: string, model: string, weight: number][] = [
+    ["kimi", "swe-2-max", 1.0],
+    ["kimi", "k3-256k", 0.5],
+    ["zcode", "glm-5.3-flash", 0.8],
+    ["codex", "gpt-5.6-terra", 0.7],
+    ["cursor", "kimi-for-coding", 0.6],
+    ["zcode", "grok-4.7", 0.15],
+    ["codex", "qwen3-max", 0.1],
+  ];
+  const seedHash = (n: number) => {
+    const x = Math.sin(n * 12.9898) * 43758.5453;
+    return x - Math.floor(x);
+  };
+  const pad2 = (n: number) => `${n}`.padStart(2, "0");
+  const seedDay = (t: number) => {
+    const d = new Date(t);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  };
+  const seedUsageRows = Array.from({ length: 92 * SEED_MODELS.length }, (_, k) => {
+    const d = Math.floor(k / SEED_MODELS.length);
+    const [agent, model, weight] = SEED_MODELS[k % SEED_MODELS.length];
+    const h1 = seedHash(d * 7 + model.length * 131 + 5);
+    const spike = seedHash(d * 13 + model.length * 57 + 11) > 0.88 ? 6 : 1;
+    const tokens = h1 < 0.22 ? 0 : Math.round(weight * 60e6 * (0.15 + h1) * spike);
+    return { day: seedDay(now - (91 - d) * 86400_000), agent, model, tokens, costUsd: tokens * 3e-6 };
+  }).filter((r) => r.tokens > 0);
+
   useMurmurStore.setState({
     loading: false,
     snapshot: {
@@ -98,6 +127,8 @@ if (location.search.includes("seed")) {
         },
       ],
     },
+    // 离线桥的 usageDaily 一律 reject，会落错误态——seed 直接顶替数据源（忽略入参，92 天全量给足）。
+    usageDaily: async () => seedUsageRows,
   });
 }
 

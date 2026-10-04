@@ -1,19 +1,27 @@
 /**
- * 用量区间选择器：预设 [近 7 天|近 30 天] + 自定义双日期（start≤end、≤92 天保护图表密度）。
- * 只出控件与区间几何——行过滤与超窗补拉由 usage-view 负责。
- * 日期输入走原生 type=date（真实窗口里的系统选择器），color-scheme 跟随主题。
+ * 用量区间选择器：预设 [近 7 天|近 30 天] + 自定义（触发按钮 + Popover 日历 mode=range）。
+ * 起止约束由日历保证——未来日恒禁选、起点选定后超 1 个月的日期禁选（excludeDisabled
+ * 防跨禁选日成段），不再有「无效区间」态；rangeBounds/rangeDayList/rangeLabel 供 usage-view。
+ * 区间上限 = 最长自然月 31 天：日粒度图表在月外失去可读性。
  */
 
-import { useState } from "react";
+import { CalendarRange } from "lucide-react";
+import { addDays } from "date-fns";
+import { useEffect, useMemo, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import Segmented from "@/components/segmented";
 import { dayStr } from "@/lib/format";
+
+import type { DateRange, Matcher } from "react-day-picker";
 
 export type UsageRange = { kind: "preset"; days: number } | { kind: "custom"; start: string; end: string };
 
 const dayMs = 86400_000;
-/** 自定义区间上限：日粒度图表在季度外失去可读性。 */
-const MAX_CUSTOM_DAYS = 92;
+/** 自定义区间上限：一个月取最长自然月 31 天，日粒度图表在月外失去可读性。 */
+const MAX_CUSTOM_DAYS = 31;
 
 /** 区间 → [起始日, 结束日]（YYYY-MM-DD，字典序即时间序）。 */
 export function rangeBounds(r: UsageRange): { startDay: string; endDay: string } {
@@ -41,6 +49,12 @@ export function rangeLabel(r: UsageRange): string {
   return `${r.start.slice(5).replace("-", "/")} – ${r.end.slice(5).replace("-", "/")}`;
 }
 
+/** Date → YYYY-MM-DD（本地时区；日历几何与 rangeBounds 同规）。 */
+function dayStrOf(date: Date): string {
+  const pad = (n: number) => `${n}`.padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 export default function UsageRangePicker({
   value,
   onChange,
@@ -49,31 +63,66 @@ export default function UsageRangePicker({
   onChange: (r: UsageRange) => void;
 }) {
   const today = dayStr(Date.now());
-  const [start, setStart] = useState(value.kind === "custom" ? value.start : "");
-  const [end, setEnd] = useState(value.kind === "custom" ? value.end : today);
+  const [open, setOpen] = useState(false);
+  /* 日历草稿：起点已选、终点未定的中间态；完成即 commit 并收起。 */
+  const [draft, setDraft] = useState<DateRange | undefined>(undefined);
+  const custom = value.kind === "custom" ? value : null;
 
-  const spanDays = start && end ? Math.round((Date.parse(`${end}T00:00:00`) - Date.parse(`${start}T00:00:00`)) / dayMs) + 1 : 0;
-  const valid = Boolean(start && end && start <= end && end <= today && spanDays <= MAX_CUSTOM_DAYS);
+  /* 打开时草稿同步当前区间：无历史自定义给近 7 天作初值（与切自定义的回落一致）。 */
+  useEffect(() => {
+    if (!open) return;
+    setDraft(
+      custom
+        ? { from: new Date(`${custom.start}T00:00:00`), to: new Date(`${custom.end}T00:00:00`) }
+        : { from: new Date(Date.now() - 6 * dayMs), to: new Date() },
+    );
+    // custom 在打开瞬间取值即可，不追变化。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  /* 禁选面：未来日恒禁；起点已定后，超出起点 +30 天的日子禁选（月上限）。 */
+  const disabled = useMemo<Matcher[]>(() => {
+    const matchers: Matcher[] = [{ after: new Date() }];
+    if (draft?.from) matchers.push({ after: addDays(draft.from, MAX_CUSTOM_DAYS - 1) });
+    return matchers;
+  }, [draft]);
+
+  /* 浏览起点限近 13 个月：再老的台账翻页无意义，防 nav 无界回溯。 */
+  const startMonth = useMemo(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 12, 1);
+    return d;
+  }, []);
+
+  function handleSelect(range: DateRange | undefined, triggerDate: Date) {
+    if (range?.from && range?.to) {
+      const start = dayStrOf(range.from);
+      const end = dayStrOf(range.to);
+      const span = Math.round((Date.parse(`${end}T00:00:00`) - Date.parse(`${start}T00:00:00`)) / dayMs) + 1;
+      // RDP 会把早于起点的点击并进既有区间（保旧终点），可产出 >1 个月的非法段——
+      // 此时把本次点击改作新起点重新草拟，日历上不出现非法选区。
+      if (span > MAX_CUSTOM_DAYS) {
+        setDraft({ from: triggerDate, to: undefined });
+        return;
+      }
+      // 日历禁选面已保证 start≤end≤today；此处同规兜底（程序化路径防越界）。
+      if (start <= end && end <= today) {
+        onChange({ kind: "custom", start, end });
+        setOpen(false);
+        return;
+      }
+    }
+    setDraft(range);
+  }
 
   function pick(seg: string) {
     if (seg === "custom") {
-      // 切到自定义：输入不合法就回落近 7 天作初值，不把无效区间 commit 出去。
-      const s = valid ? start : dayStr(Date.now() - 6 * dayMs);
-      const e = valid ? end : today;
-      setStart(s);
-      setEnd(e);
-      onChange({ kind: "custom", start: s, end: e });
+      // 切到自定义：无历史区间先 commit 近 7 天作初值，并直接展开日历。
+      if (!custom) onChange({ kind: "custom", start: dayStr(Date.now() - 6 * dayMs), end: today });
+      setOpen(true);
     } else {
+      setOpen(false);
       onChange({ kind: "preset", days: Number(seg) });
-    }
-  }
-
-  function commit(s: string, e: string) {
-    setStart(s);
-    setEnd(e);
-    // 与 valid 同规：start≤end≤today 且 ≤92d 才放行（手动键入也能越界，不止靠 max 属性）。
-    if (s && e && s <= e && e <= today && Math.round((Date.parse(`${e}T00:00:00`) - Date.parse(`${s}T00:00:00`)) / dayMs) + 1 <= MAX_CUSTOM_DAYS) {
-      onChange({ kind: "custom", start: s, end: e });
     }
   }
 
@@ -89,28 +138,26 @@ export default function UsageRangePicker({
         onChange={pick}
         label="用量区间"
       />
-      {value.kind === "custom" && (
-        <span className="flex items-center gap-1.5 font-mono text-micro text-muted-foreground">
-          <input
-            type="date"
-            value={start}
-            max={end || today}
-            onChange={(e) => commit(e.target.value, end)}
-            aria-label="起始日"
-            className="h-6 rounded border border-hairline bg-raised px-1.5 text-micro text-foreground"
-          />
-          <span className="text-faint">–</span>
-          <input
-            type="date"
-            value={end}
-            min={start || undefined}
-            max={today}
-            onChange={(e) => commit(start, e.target.value)}
-            aria-label="结束日"
-            className="h-6 rounded border border-hairline bg-raised px-1.5 text-micro text-foreground"
-          />
-          {!valid && <span className="text-stale">区间无效（≤92 天）</span>}
-        </span>
+      {custom && (
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="default" aria-label="自定义日期区间" className="gap-1.5">
+              <CalendarRange />
+              <span className="font-mono tabular-nums">{rangeLabel(value)}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-1" align="start">
+            <Calendar
+              mode="range"
+              selected={draft}
+              onSelect={handleSelect}
+              disabled={disabled}
+              excludeDisabled
+              startMonth={startMonth}
+              numberOfMonths={1}
+            />
+          </PopoverContent>
+        </Popover>
       )}
     </div>
   );
