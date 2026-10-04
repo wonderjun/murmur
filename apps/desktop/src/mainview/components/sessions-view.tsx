@@ -1,7 +1,7 @@
 /**
  * 会话文件管理页（管理台 files tab，#/manage/files）：跨 agent 盘点磁盘会话产物。
  *
- * 过滤按工具/项目；排序默认修改时间倒序（表头可切大小/创建/修改）；
+ * 过滤按工具/项目，头部规模合计跟随筛选联动；排序默认修改时间倒序（表头可切大小/创建/修改）；
  * 勾选批量删除——文件/目录进废纸篓（可恢复），「库内」行是数据库记录
  * 永久删（标 needsVacuum 时提示文件体积需压实才回收）。活跃会话禁删。
  * 行可 Tab 聚焦（role=checkbox，空格/回车勾选），Finder 按钮随行聚焦显形。
@@ -164,7 +164,8 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
   const selectedItems = filtered.filter((i) => selected.has(rowKey(i)));
   const selectedBytes = selectedItems.reduce((s, i) => s + i.sizeBytes, 0);
   const selectedDb = selectedItems.filter((i) => i.kind === "db").length;
-  const totalBytes = (items ?? []).reduce((s, i) => s + i.sizeBytes, 0);
+  /* 头部规模合计跟随当前筛选（联动）；扫时间是全量扫描时刻，不随筛选变。 */
+  const filteredBytes = filtered.reduce((s, i) => s + i.sizeBytes, 0);
 
   function onSort(k: SortKey) {
     if (k === sortKey) setSortDir((d) => (d === "desc" ? "asc" : "desc"));
@@ -238,7 +239,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
         </div>
         <div className="flex items-center gap-3">
           <p className="font-mono text-micro tabular-nums text-faint">
-            {items ? `${items.length} 项 · 共 ${fmtBytes(totalBytes)} · ${fmtFileTime(scannedAt)} 扫` : "…"}
+            {items ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)} · ${fmtFileTime(scannedAt)} 扫` : "…"}
           </p>
           <Button type="button" onClick={() => void rescan()} disabled={scanning}>
             <RefreshCw size={11} />
