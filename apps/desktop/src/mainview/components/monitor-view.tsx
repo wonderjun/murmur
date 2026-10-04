@@ -121,7 +121,7 @@ export default function MonitorView() {
           点击滚动到「正在发生」的对应行并展开（waiting 会话必在 01 分组里）。 */}
       {waitingSessions.length > 0 && (
         <section
-          className="animate-enter relative cursor-pointer overflow-hidden rounded-item border border-waiting/25 bg-waiting/[0.06] shadow-raised"
+          className="animate-enter relative cursor-pointer overflow-hidden rounded-item border border-waiting/25 bg-waiting/[0.06] shadow-raised focus-visible:-outline-offset-2 focus-visible:outline-2 focus-visible:outline-foreground/45"
           style={{ animationDelay: enterDelay() }}
           aria-live="polite"
           role="button"

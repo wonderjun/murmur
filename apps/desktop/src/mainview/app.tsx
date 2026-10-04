@@ -13,6 +13,7 @@ import MurmurHeader from "@/components/murmur-header";
 import SetupView from "@/components/setup-view";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import DesignBoard from "@/design/design-board";
+import { installAutoFocusGuard } from "@/lib/auto-focus-guard";
 import { applyAppearance } from "@/lib/appearance";
 import { waitingCount } from "@/lib/selectors";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,8 @@ export default function App() {
   useEffect(() => {
     void refresh();
     void loadSettings();
+    // 面板/管理台/设计板同吃首启初焦点问题（WKWebView 变 key 自动聚焦首个可聚焦元素）
+    installAutoFocusGuard();
   }, [refresh, loadSettings]);
 
   /* 外观在首帧应用：settings 未到时按 system 渲染，到达后纠正——面板隐藏加载，
