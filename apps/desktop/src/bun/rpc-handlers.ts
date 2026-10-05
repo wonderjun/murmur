@@ -54,6 +54,8 @@ export interface RpcHandlerDeps {
   registry: RpcRegistry;
   /** 设置页快照（含 Updater 版本实况），由主进程组装。 */
   settingsSnapshot: () => Promise<SettingsSnapshot>;
+  /** 设置变更广播：mutation 返回前把最新快照推给所有窗口（双窗主题/字体即时同步）。 */
+  pushSettings: (snap: SettingsSnapshot) => void;
   /** 用户家目录；revealPath 只放行其下的路径。 */
   homeDir: string;
   now?: () => number;
@@ -79,6 +81,13 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
   const { registry } = deps;
   const now = deps.now ?? Date.now;
 
+  /** 设置 mutation 统一出口：取最新快照 → 广播 → 返回给发起窗（自己也是收方，幂等）。 */
+  async function pushSettings(): Promise<SettingsSnapshot> {
+    const snap = await deps.settingsSnapshot();
+    deps.pushSettings(snap);
+    return snap;
+  }
+
   return {
     getSnapshot: () => registry.snapshot(),
     installHooks: () => registry.installAllHooks(),
@@ -100,19 +109,19 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
         // 实际态与意图不符（如 dev 无 bundle）时回写，设置存储与系统实况保持自洽。
         if (actual !== patch.launchAtLogin) await registry.updateSettings({ launchAtLogin: actual });
       }
-      return deps.settingsSnapshot();
+      return pushSettings();
     },
     setAgentHook: async ({ agent, enabled }) => {
       await registry.setAgentHook(agent, enabled);
-      return deps.settingsSnapshot();
+      return pushSettings();
     },
     setAgentObserved: async ({ agent, enabled }) => {
       await registry.setAgentObserved(agent, enabled);
-      return deps.settingsSnapshot();
+      return pushSettings();
     },
     setAgentKey: async ({ agent, apiKey, baseUrl }) => {
       await registry.setAgentKey(agent, apiKey, baseUrl);
-      return deps.settingsSnapshot();
+      return pushSettings();
     },
     readClipboard: () => ({ text: deps.readClipboard() }),
     writeClipboard: ({ text }) => {

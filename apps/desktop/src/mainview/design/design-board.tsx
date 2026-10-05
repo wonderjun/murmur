@@ -1,5 +1,6 @@
 /** 设计板：#/design 进入，token/组件状态矩阵先行验证视觉语言。
- *  焕新展件：六字阶 / 椋鸟群 / 数字转轮 / 编号导航 / 栖枝 / 玻璃浮卡。 */
+ *  「暮色栖木」P0 地基展件（天光/叠层/字阶新档/状态环）在 board-foundation，
+ *  其余展件：椋鸟群 / 数字转轮 / 编号导航 / 栖枝 / 玻璃浮卡。 */
 
 import { useState } from "react";
 
@@ -8,6 +9,7 @@ import AgentRow from "@/components/agent-row";
 import AnimatedNumber from "@/components/animated-number";
 import ChartTip from "@/components/chart-tip";
 import DoctorAgentCard from "@/components/doctor-agent-card";
+import { GroupList } from "@/components/group-list";
 import ModelLineChart from "@/components/model-line-chart";
 import Murmuration from "@/components/murmuration";
 import MurmurMark from "@/components/murmur-mark";
@@ -16,15 +18,17 @@ import QuotaPill from "@/components/quota-pill";
 import StatusDot from "@/components/status-dot";
 import SwitchRow from "@/components/switch-row";
 import UsageRangePicker from "@/components/usage-range";
+import BoardFoundation from "@/design/board-foundation";
+import { DEMO_DIAG_BAD, DEMO_DIAG_OK } from "@/design/demo-data";
 import { AGENT_META } from "@/lib/agent-meta";
 import { cn } from "@/lib/utils";
 
 import type { UsageRange } from "@/components/usage-range";
-import type { AgentDiagnostics, AgentId, AgentSnapshot, AgentStatus } from "@core/types";
+import type { AgentId, AgentSnapshot, AgentStatus } from "@core/types";
 
 const STATUSES: AgentStatus[] = ["working", "waiting", "idle", "stale", "ended"];
 const AGENTS = Object.keys(AGENT_META) as AgentId[];
-const SURFACES = ["--background", "--raised", "--card", "--muted", "--hairline", "--foreground", "--muted-foreground"];
+const SURFACES = ["--background", "--surface-1", "--surface-2", "--surface-3", "--overlay", "--hairline", "--glow", "--foreground", "--muted-foreground"];
 const CHART_TOKENS = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6", "--chart-7"];
 
 const DEMO_TIP_ROWS = [
@@ -49,45 +53,6 @@ const DEMO_SERIES = [
 const CHART_DASHES: (string | undefined)[] = [undefined, undefined, "6 3", "2.5 2.5", "8 3 2.5 3", "1 2", "10 4"];
 
 const NAV_DEMO = ["动态", "工具"];
-
-/** 接入诊断卡展件：正常态 + 故障态各一（DoctorAgentCard 离线替身下按钮降级不炸）。 */
-const DEMO_DIAG_OK: AgentDiagnostics = {
-  agent: "kimi",
-  home: { label: "数据根", path: "~/.kimi-code", kind: "dir", exists: true, readable: true },
-  sources: [
-    { label: "会话存储", path: "~/.kimi-code/sessions", kind: "dir", exists: true, readable: true },
-    { label: "凭据", path: "~/.kimi-code/credentials", kind: "dir", exists: true, readable: true },
-  ],
-  hook: {
-    installed: true,
-    enabled: true,
-    targets: ["~/.kimi-code/config.toml", "~/.murmur/agent-hooks/kimi.sh"],
-    lastEventAt: Date.now() - 300_000,
-  },
-  pull: { active: true, lastScanAt: Date.now() - 90_000, sources: [{ name: "wire.jsonl", at: Date.now() - 90_000 }] },
-  spool: { pendingFiles: 0, bytes: 0 },
-  hint: "数据源正常——暂无活跃会话",
-};
-
-const DEMO_DIAG_BAD: AgentDiagnostics = {
-  agent: "zcode",
-  home: { label: "数据根", path: "~/.zcode", kind: "dir", exists: true, readable: true },
-  sources: [
-    {
-      label: "任务库",
-      path: "~/.zcode/v2/tasks-index.sqlite",
-      kind: "sqlite",
-      exists: true,
-      readable: true,
-      openable: false,
-      note: "无法只读打开（被占用或损坏）",
-    },
-  ],
-  hook: { installed: false, enabled: true, targets: ["~/.zcode/cli/config.json"], lastEventAt: null },
-  pull: { active: false, lastScanAt: null, sources: [] },
-  spool: { pendingFiles: 0, bytes: 0 },
-  hint: "hook 未注入——点「重新接入」或开启自动接入",
-};
 
 function demoAgent(agent: AgentId, status: AgentStatus): AgentSnapshot {
   return {
@@ -140,6 +105,27 @@ function UsageRangeDemo() {
   return <UsageRangePicker value={range} onChange={setRange} />;
 }
 
+/* 接入诊断展件：GroupList 容器内正常/故障两张卡，单开手风琴（故障态默认展开）。 */
+function DoctorCardDemo() {
+  const [open, setOpen] = useState<AgentId | null>("zcode");
+  return (
+    <GroupList title="工具" className="max-w-[640px]">
+      <DoctorAgentCard
+        diag={DEMO_DIAG_OK}
+        onChanged={() => {}}
+        expanded={open === "kimi"}
+        onToggle={() => setOpen((p) => (p === "kimi" ? null : "kimi"))}
+      />
+      <DoctorAgentCard
+        diag={DEMO_DIAG_BAD}
+        onChanged={() => {}}
+        expanded={open === "zcode"}
+        onToggle={() => setOpen((p) => (p === "zcode" ? null : "zcode"))}
+      />
+    </GroupList>
+  );
+}
+
 export default function DesignBoard() {
   const [navDemo, setNavDemo] = useState(0);
   const [numDemo, setNumDemo] = useState(3);
@@ -153,11 +139,14 @@ export default function DesignBoard() {
         </p>
       </div>
 
+      <BoardFoundation />
+
       <section>
-        <BoardHead>字阶六档（micro 10 · meta 11 · detail 12 · body 13 · title 15 · display 22）</BoardHead>
-        <div className="rounded-item border border-hairline bg-card p-3.5 shadow-raised">
-          <p className="font-mono text-display font-semibold tabular-nums leading-none">128.4M</p>
-          <p className="mt-2 text-title font-semibold">3 个任务轮到你了</p>
+        <BoardHead>字阶七档（micro 10 · meta 11 · detail 12 · body 13 · title 15 · headline 26 · display 34）</BoardHead>
+        <div className="rounded-item bg-surface-1 p-3.5">
+          <p className="font-data text-display font-semibold tabular-nums leading-none">128.4M</p>
+          <p className="mt-2 text-headline font-semibold">3 个任务轮到你了</p>
+          <p className="mt-1 text-title font-semibold">正在发生</p>
           <p className="mt-1 text-body font-medium">重构 datasource 三层架构</p>
           <p className="mt-1 text-detail text-muted-foreground">detail · 次级行标题</p>
           <p className="mt-1 text-meta text-muted-foreground">meta · 副信息行 secondary label</p>
@@ -167,7 +156,7 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>椋鸟群（空态签名 · 群鸟游动 + 峰点琥珀）</BoardHead>
-        <div className="flex items-center gap-6 rounded-item border border-hairline bg-card px-3.5 py-4 shadow-raised">
+        <div className="flex items-center gap-6 rounded-item bg-surface-1 px-3.5 py-4">
           <Murmuration size={120} />
           <Murmuration size={72} className="text-muted-foreground" />
         </div>
@@ -175,14 +164,14 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>数字转轮（点按钮换值，新值上滑入场）</BoardHead>
-        <div className="flex items-center gap-4 rounded-item border border-hairline bg-card px-3.5 py-3 shadow-raised">
+        <div className="flex items-center gap-4 rounded-item bg-surface-1 px-3.5 py-3">
           <p className="text-meta text-muted-foreground">
             需处理
             <AnimatedNumber value={numDemo} className="ml-1 font-mono text-detail font-medium text-waiting" />
           </p>
           <button
             type="button"
-            className="rounded-md border border-hairline bg-raised px-2.5 py-1 text-meta font-medium text-muted-foreground transition-colors duration-fast hover:text-foreground"
+            className="rounded-md border border-hairline bg-surface-2 px-2.5 py-1 text-meta font-medium text-muted-foreground transition-colors duration-fast hover:text-foreground"
             onClick={() => setNumDemo((n) => (n + 1) % 10)}
           >
             换一个数
@@ -191,23 +180,29 @@ export default function DesignBoard() {
       </section>
 
       <section>
-        <BoardHead>底栏导航（pill 分段 · bg-muted 轨道 + 选中 bg-raised）</BoardHead>
-        <div className="glass-chrome flex items-center rounded-item border border-hairline px-3 py-2">
-          <nav className="flex items-center gap-0.5 rounded-full bg-muted p-0.5">
+        <BoardHead>底栏导航（文字 tab · 选中 2px 短下划线，waiting 时转琥珀）</BoardHead>
+        <div className="glass-chrome flex items-center rounded-item border-t border-hairline px-4 py-3">
+          <nav className="flex items-center gap-4">
             {NAV_DEMO.map((label, i) => (
               <button
                 key={label}
                 type="button"
                 className={cn(
-                  "flex items-center gap-1.5 rounded-full border px-3 py-1 text-meta font-medium transition-colors duration-fast",
-                  navDemo === i
-                    ? "border-hairline bg-raised text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
+                  "relative flex items-center gap-1.5 text-detail font-medium transition-colors duration-fast",
+                  navDemo === i ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
                 onClick={() => setNavDemo(i)}
               >
                 {label}
-                {i === 0 && <span className="font-mono text-micro tabular-nums text-waiting">3</span>}
+                {i === 0 && <span className="font-data text-micro tabular-nums text-waiting">3</span>}
+                {navDemo === i && (
+                  <span
+                    className={cn(
+                      "absolute inset-x-0 -bottom-[7px] h-[2px] rounded-full",
+                      i === 0 ? "bg-waiting" : "bg-foreground",
+                    )}
+                  />
+                )}
               </button>
             ))}
           </nav>
@@ -216,7 +211,7 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>栖枝（当前快照 · 9px 点 + 渐变枝 + 鸟跳）</BoardHead>
-        <div className="rounded-item border border-hairline bg-card px-3.5 py-3 shadow-raised">
+        <div className="rounded-item bg-surface-1 px-3.5 py-3">
           <PerchStrip />
         </div>
       </section>
@@ -260,7 +255,7 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>图表悬浮（玻璃浮卡 · 悬停试试，瞬时无延迟）</BoardHead>
-        <div className="relative h-[120px] rounded-item border border-hairline bg-card shadow-raised">
+        <div className="relative h-[120px] rounded-item bg-surface-1">
           <ChartTip tip={{ x: 80, y: 60, place: "top" }}>
             <p className="whitespace-nowrap text-meta">
               <span className="font-mono tabular-nums text-faint">09-11</span>
@@ -285,21 +280,21 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>日期区间（用量自定义区间 · Popover + Calendar）</BoardHead>
-        <div className="rounded-item border border-hairline bg-card px-3 py-2.5 shadow-raised">
+        <div className="rounded-item bg-surface-1 px-3 py-2.5">
           <UsageRangeDemo />
         </div>
       </section>
 
       <section>
         <BoardHead>模型折线（准星 + 明细卡 + 峰值标注）</BoardHead>
-        <div className="rounded-item border border-hairline bg-card px-3 py-2.5 shadow-raised">
+        <div className="rounded-item bg-surface-1 px-3 py-2.5">
           <ModelLineChart days={DEMO_DAYS} series={DEMO_SERIES} />
         </div>
       </section>
 
       <section>
         <BoardHead>设置开关</BoardHead>
-        <div className="flex max-w-[360px] flex-col gap-3 rounded-item border border-hairline bg-card p-3.5 shadow-raised">
+        <div className="flex max-w-[360px] flex-col gap-3 rounded-item bg-surface-1 p-3.5">
           <SwitchRow label="登录时启动" desc="登录 macOS 后自动打开 Murmur" checked={true} onCheckedChange={() => {}} />
           <SwitchRow label="「轮到你了」通知" desc="有待处理会话新增时发系统通知" checked={false} onCheckedChange={() => {}} />
           <SwitchRow label="禁用态" desc="未安装的工具不可开关" checked={false} disabled={true} onCheckedChange={() => {}} />
@@ -349,7 +344,7 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>分组列表样例（业务页同款容器）</BoardHead>
-        <div className="max-w-[360px] divide-y divide-hairline/60 overflow-hidden rounded-item border border-hairline bg-card shadow-raised">
+        <div className="max-w-[360px] divide-y divide-hairline/60 overflow-hidden rounded-item bg-surface-1">
           <AgentRow agent={demoAgent("kimi", "working")} />
           <AgentRow agent={demoAgent("zcode", "waiting")} />
           <AgentRow agent={demoAgent("opencode", "idle")} />
@@ -357,11 +352,8 @@ export default function DesignBoard() {
       </section>
 
       <section>
-        <BoardHead>接入诊断卡（管理台 · 数据/push/pull 三面 + 链路自检，正常与故障态）</BoardHead>
-        <div className="grid max-w-[860px] gap-2.5 md:grid-cols-2">
-          <DoctorAgentCard diag={DEMO_DIAG_OK} onChanged={() => {}} />
-          <DoctorAgentCard diag={DEMO_DIAG_BAD} onChanged={() => {}} />
-        </div>
+        <BoardHead>接入诊断行（管理台 · GroupRow + 展开块：数据/push/pull 三面 + 链路自检）</BoardHead>
+        <DoctorCardDemo />
       </section>
     </div>
   );

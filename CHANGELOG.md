@@ -2,6 +2,12 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [未发布]
+
+### Changed
+
+- 💄 UI 焕新「暮色栖木」：墨蓝黑底 + 琥珀天光、叠层表面取代描边卡、IBM Plex Mono 数据字体、面板刊头/栖枝/hero/底栏重排、管理台左侧边栏 + 分组列表、用量页拆分
+
 ## [0.1.1] - 2026-10-02
 
 ### Added

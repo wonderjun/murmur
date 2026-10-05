@@ -15,6 +15,7 @@ import { createCodexAdapter } from '../src/agents/codex';
 import { createCursorAdapter } from '../src/agents/cursor';
 import { createDevinAdapter } from '../src/agents/devin';
 import { createKimiAdapter } from '../src/agents/kimi';
+import { createMinimaxAdapter } from '../src/agents/minimax';
 import { createOpencodeAdapter } from '../src/agents/opencode';
 import { createQoderAdapter } from '../src/agents/qoder';
 import { createZcodeAdapter } from '../src/agents/zcode';
@@ -80,9 +81,19 @@ describe('deriveHint 优先级', () => {
       deriveHint(diag({ sources: [{ label: 's', path: '/x', kind: 'dir', exists: false, readable: false }] }), base),
     ).toContain('还没有本地数据');
     expect(deriveHint(diag({ pull: { active: true, lastScanAt: null, sources: [] } }), base)).toContain('尚未扫描');
-    expect(deriveHint(diag({ hook: { installed: false, enabled: true, targets: [], lastEventAt: null } }), base)).toContain('hook 未注入');
-    expect(deriveHint(diag({ hook: { installed: true, enabled: true, targets: [], lastEventAt: null } }), base)).toContain('尚未收到上报');
-    expect(deriveHint(diag({ hook: { installed: true, enabled: true, targets: [], lastEventAt: Date.now() } }), base)).toBe(
+    // hook 提示只在有 push 面（targets 非空）时进入；targets 空表 = 纯 pull agent。
+    const hookTargets = [join(dir, 'hooks.json')];
+    expect(deriveHint(diag({ hook: { installed: false, enabled: true, targets: hookTargets, lastEventAt: null } }), base)).toContain(
+      'hook 未注入',
+    );
+    expect(deriveHint(diag({ hook: { installed: true, enabled: true, targets: hookTargets, lastEventAt: null } }), base)).toContain(
+      '尚未收到上报',
+    );
+    expect(
+      deriveHint(diag({ hook: { installed: true, enabled: true, targets: hookTargets, lastEventAt: Date.now() } }), base),
+    ).toBe('数据源正常——暂无活跃会话');
+    // 纯 pull（targets 空表）的 agent 永不报 hook 异常——正常态直出。
+    expect(deriveHint(diag({ hook: { installed: false, enabled: true, targets: [], lastEventAt: null } }), base)).toBe(
       '数据源正常——暂无活跃会话',
     );
   });
@@ -107,12 +118,18 @@ describe('selfTestPayload × 各家 adapter', () => {
     createCursorAdapter(),
     createDevinAdapter(),
     createQoderAdapter(),
+    createMinimaxAdapter(),
   ];
 
   for (const a of adapters) {
     test(`${a.id} marker 能翻出 ≥1 条 sessionId 对齐的事件`, () => {
+      // 纯 pull agent（无 hook 面）自检不适用——断无 translateHook 即过。
+      if (!a.translateHook) {
+        expect(a.hookTargets?.() ?? []).toEqual([]);
+        return;
+      }
       const sid = `murmur-selftest:${a.id}`;
-      const events = a.translateHook?.(selfTestPayload(a.id as AgentId, sid)) ?? [];
+      const events = a.translateHook(selfTestPayload(a.id as AgentId, sid));
       expect(events.length).toBeGreaterThan(0);
       expect(events.every((e) => e.sessionId === sid)).toBe(true);
       // 台账腿要求 LEDGER_KINDS 成员——session.start 满足。

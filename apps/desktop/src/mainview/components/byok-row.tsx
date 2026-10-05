@@ -82,7 +82,7 @@ export default function ByokRow({ agent }: { agent: AgentSnapshot }) {
               "shrink-0 rounded-md border px-2.5 py-1 text-meta font-medium transition-colors duration-fast",
               armed
                 ? "border-accent bg-accent-soft text-foreground"
-                : "border-hairline bg-raised text-muted-foreground hover:text-foreground",
+                : "border-hairline bg-surface-1 text-muted-foreground hover:text-foreground",
             )}
             onClick={clear}
           >
@@ -102,12 +102,12 @@ export default function ByokRow({ agent }: { agent: AgentSnapshot }) {
               placeholder={placeholder}
               autoComplete="off"
               spellCheck={false}
-              className="h-7 min-w-0 flex-1 rounded-md border border-hairline bg-raised px-2 font-mono text-meta text-foreground outline-none transition-colors duration-fast placeholder:text-faint focus:border-foreground/30"
+              className="h-7 min-w-0 flex-1 rounded-md border border-hairline bg-surface-1 px-2 font-mono text-meta text-foreground outline-none transition-colors duration-fast placeholder:text-faint focus:border-foreground/30"
             />
             <button
               type="button"
               disabled={!key.trim()}
-              className="shrink-0 rounded-md border border-hairline bg-raised px-2.5 py-1 text-meta font-medium text-muted-foreground transition-colors duration-fast hover:text-foreground disabled:opacity-40"
+              className="shrink-0 rounded-md border border-hairline bg-surface-1 px-2.5 py-1 text-meta font-medium text-muted-foreground transition-colors duration-fast hover:text-foreground disabled:opacity-40"
               onClick={() => void save()}
             >
               保存

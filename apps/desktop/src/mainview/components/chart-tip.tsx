@@ -23,7 +23,7 @@ export default function ChartTip({ tip, children }: { tip: ChartTipState | null;
       className="pointer-events-none absolute z-30 animate-tip-in"
       style={{ left: tip.x, top: tip.y, transform: TRANSFORMS[tip.place] }}
     >
-      <div className="glass-overlay rounded-item border border-hairline px-2.5 py-2 shadow-overlay">{children}</div>
+      <div className="glass-overlay rounded-item border border-hairline px-2.5 py-2 shadow-float">{children}</div>
     </div>
   );
 }

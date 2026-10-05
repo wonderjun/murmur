@@ -6,7 +6,7 @@
 ![Version](https://img.shields.io/badge/version-0.1.1-green.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)
 
-<!-- TODO: 截图 <img src="docs/screenshot.png" width="392" /> -->
+<img src="docs/screenshot.png" width="392" />
 
 **纯观察者**：只读本地数据、无遥测、退出即全停。质感来自克制——只做状态呈现，不碰你的数据，不增功能噪音。
 
@@ -73,6 +73,8 @@ bun run typecheck:desktop  # 桌面端类型检查
 # Murmur (English)
 
 A menu-bar status companion for AI coding agents — **a pure observer**: reads only local data, zero telemetry, everything stops on quit.
+
+<img src="docs/screenshot.png" width="392" />
 
 ## What it does
 

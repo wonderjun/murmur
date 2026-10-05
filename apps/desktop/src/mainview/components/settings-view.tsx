@@ -1,38 +1,28 @@
-/** 设置视图：通用（自启/Dock/通知）+ 外观（主题/字体）+ 每 agent 监听与 hook 两级开关 + 数据 + 关于。
- *  栏目是 flat 地面（编号 eyebrow + 上 hairline）；agent 行是实体卡（.setup-row + data-agent）。 */
+/** 设置视图：通用（自启/Dock/通知/自动接入）+ 外观（主题/字体）+ 工具两级开关 + 数据 + 关于。
+ *  管理台内容基本单元是 GroupList/GroupRow（surface-1 叠层 + hairline 分隔）；
+ *  agent 行彩色品牌砖（管理台保留彩砖），行可点展开挂 hook/BYOK 子项。 */
 
-import { FolderOpen, HardDrive } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import ByokRow from "@/components/byok-row";
+import { GroupList, GroupRow } from "@/components/group-list";
+import PageHead from "@/components/page-head";
 import Segmented from "@/components/segmented";
-import SwitchRow from "@/components/switch-row";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { AGENT_META, AGENT_ORDER, HOOK_IMPACT, OBSERVE_IMPACT, UNINSTALLED_HINT } from "@/lib/agent-meta";
 import { isFontAvailable } from "@/lib/appearance";
-import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
 import type { MurmurSettings, ThemePreference } from "@core/settings";
-import type { AgentSnapshot } from "@core/types";
+import type { AgentId, AgentSnapshot } from "@core/types";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "system", label: "跟随系统" },
   { value: "dark", label: "深色" },
   { value: "light", label: "浅色" },
 ];
-
-/** 栏目头：编号（mono micro）+ 名称（eyebrow 语义），flat 栏目的统一开场。 */
-function SectionHead({ index, title }: { index: string; title: string }) {
-  return (
-    <h2 className="eyebrow flex items-baseline gap-1.5 text-faint">
-      <span className="font-mono">{index}</span>
-      {title}
-    </h2>
-  );
-}
 
 /** 长操作的一行结果反馈：成功「已完成」/失败带 error.message，3 秒淡出。 */
 interface OpResult {
@@ -69,6 +59,9 @@ export default function SettingsView() {
   const [rebuildPending, setRebuildPending] = useState(false);
   const [reinstallResult, setReinstallResult] = useState<OpResult | null>(null);
   const [rebuildResult, setRebuildResult] = useState<OpResult | null>(null);
+
+  // 「工具」分组手风琴：单开。
+  const [openAgent, setOpenAgent] = useState<AgentId | null>(null);
 
   useEffect(() => {
     if (!reinstallResult && !rebuildResult) return;
@@ -179,18 +172,11 @@ export default function SettingsView() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
-      <section className="setup-intro animate-enter">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <p className="eyebrow text-faint">设置</p>
-            <h1 className="mt-1 text-title font-semibold">偏好</h1>
-          </div>
-        </div>
-        <p className="mt-2 max-w-[310px] text-meta leading-relaxed text-muted-foreground">
-          Murmur 只做状态呈现。这里控制它怎么启动、怎么出现、观察哪些工具。
-        </p>
-      </section>
+    <div className="flex flex-col">
+      <PageHead
+        title="设置"
+        meta="Murmur 只做状态呈现。这里控制它怎么启动、怎么出现、观察哪些工具。"
+      />
 
       {!snap ? (
         settingsError ? (
@@ -205,56 +191,54 @@ export default function SettingsView() {
           <div className="text-meta text-faint">设置读取中…</div>
         )
       ) : (
-        <>
-          {/* 01 通用 */}
-          <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: "40ms" }}>
-            <SectionHead index="01" title="通用" />
-            <div className="mt-3 flex flex-col gap-3">
-              <SwitchRow
-                label="登录时启动"
-                desc={snap.runtime.canLaunchAtLogin ? "登录 macOS 后自动打开 Murmur" : "仅打包版本可用"}
-                checked={snap.runtime.launchAtLogin}
-                disabled={!snap.runtime.canLaunchAtLogin}
-                onCheckedChange={(v) => save({ launchAtLogin: v })}
-              />
-              <SwitchRow
-                label="在 Dock 中显示"
-                desc="关闭后只保留菜单栏图标，应用不出现在 Dock 与 Cmd-Tab"
-                checked={snap.runtime.dockIconVisible}
-                onCheckedChange={(v) => save({ showDockIcon: v })}
-              />
-              <SwitchRow
-                label="「轮到你了」通知"
-                desc="有待处理会话新增时发系统通知；面板打开时不发"
-                checked={snap.settings.notifyOnWaiting}
-                onCheckedChange={(v) => save({ notifyOnWaiting: v })}
-              />
-            </div>
-          </section>
-
-          {/* 02 外观 */}
-          <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: "80ms" }}>
-            <SectionHead index="02" title="外观" />
-            <div className="mt-3 flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-detail font-medium text-foreground">主题</p>
-                  <p className="mt-0.5 text-meta leading-relaxed text-muted-foreground">跟随系统，或固定深色/浅色</p>
-                </div>
-                <Segmented
-                  options={THEME_OPTIONS}
-                  value={snap.settings.theme}
-                  onChange={(v) => void save({ theme: v })}
-                  label="主题"
+        <div className="flex flex-col gap-7">
+          <GroupList title="通用">
+            <GroupRow
+              label="登录时启动"
+              desc={snap.runtime.canLaunchAtLogin ? "登录 macOS 后自动打开 Murmur" : "仅打包版本可用"}
+              control={
+                <Switch
+                  checked={snap.runtime.launchAtLogin}
+                  disabled={!snap.runtime.canLaunchAtLogin}
+                  onCheckedChange={(v: boolean) => void save({ launchAtLogin: v })}
                 />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <label htmlFor="setting-font" className="text-detail font-medium text-foreground">
-                    界面字体
-                  </label>
-                  <p className="mt-0.5 text-meta leading-relaxed text-muted-foreground">{fontHint}</p>
-                </div>
+              }
+            />
+            <GroupRow
+              label="显示 Dock 图标"
+              desc="关闭后只保留菜单栏图标，应用不出现在 Dock 与 Cmd-Tab"
+              control={
+                <Switch checked={snap.runtime.dockIconVisible} onCheckedChange={(v: boolean) => void save({ showDockIcon: v })} />
+              }
+            />
+            <GroupRow
+              label="「轮到你了」通知"
+              desc="有待处理会话新增时发系统通知；面板打开时不发"
+              control={
+                <Switch checked={snap.settings.notifyOnWaiting} onCheckedChange={(v: boolean) => void save({ notifyOnWaiting: v })} />
+              }
+            />
+            <GroupRow
+              label="启动时自动接入 hook"
+              desc="给已安装且被监听的工具补齐上报配置；关闭后仍可在下方逐个开"
+              control={
+                <Switch checked={snap.settings.autoInstallHooks} onCheckedChange={(v: boolean) => void save({ autoInstallHooks: v })} />
+              }
+            />
+          </GroupList>
+
+          <GroupList title="外观">
+            <GroupRow
+              label="主题"
+              desc="跟随系统，或固定深色/浅色"
+              control={
+                <Segmented options={THEME_OPTIONS} value={snap.settings.theme} onChange={(v) => void save({ theme: v })} label="主题" />
+              }
+            />
+            <GroupRow
+              label={<label htmlFor="setting-font">界面字体</label>}
+              desc={fontHint}
+              control={
                 <input
                   id="setting-font"
                   aria-label="界面字体名"
@@ -263,156 +247,133 @@ export default function SettingsView() {
                   placeholder="SF / 苹方"
                   spellCheck={false}
                   autoComplete="off"
-                  className="w-[130px] shrink-0 rounded-md border border-hairline bg-raised px-2 py-1 text-right font-mono text-meta text-foreground outline-none transition-colors duration-fast placeholder:text-faint focus:border-foreground/30"
+                  className="w-[130px] shrink-0 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-right font-data text-meta text-foreground outline-none transition-colors duration-fast placeholder:text-faint focus:border-foreground/30"
                 />
-              </div>
-            </div>
-          </section>
+              }
+            />
+          </GroupList>
 
-          {/* 03 监听：自动接入开关 + 各工具实体卡 */}
-          <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: "120ms" }}>
-            <div className="flex items-center justify-between">
-              <SectionHead index="03" title="监听" />
-              <button
-                type="button"
-                disabled={reinstallPending}
-                className="text-meta font-medium text-foreground underline decoration-foreground/25 underline-offset-[3px] transition-colors duration-fast hover:decoration-foreground/60 disabled:pointer-events-none disabled:opacity-50"
-                onClick={reinstallAll}
-              >
-                {reinstallPending ? "接入中…" : "全部重新接入"}
-              </button>
-            </div>
-            {reinstallResult && (
-              <p className={cn("mt-1 text-meta", reinstallResult.ok ? "text-muted-foreground" : "text-destructive")}>
-                {reinstallResult.ok ? "已完成" : `接入失败：${reinstallResult.message}`}
-              </p>
-            )}
-            <div className="mt-3">
-              <SwitchRow
-                label="启动时自动接入 hook"
-                desc="给已安装且被监听的工具补齐上报配置；关闭后仍可在下方逐个开"
-                checked={snap.settings.autoInstallHooks}
-                onCheckedChange={(v) => save({ autoInstallHooks: v })}
-              />
-            </div>
-            <div className="mt-3 flex flex-col gap-2">
-              {agents.map((agent) => (
-                <article key={agent.agent} className="setup-row" data-agent={agent.agent}>
-                  <div className="flex items-center gap-3">
-                    <AgentIcon agent={agent.agent} size={28} />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-body font-semibold">{AGENT_META[agent.agent].name}</span>
-                        {agent.install.version && (
-                          <span className="font-mono text-micro text-faint">{agent.install.version}</span>
-                        )}
-                      </div>
-                      <p className="mt-0.5 text-meta text-muted-foreground">{observeStatus(agent)}</p>
-                    </div>
+          <GroupList title="工具">
+            {agents.map((agent) => {
+              const open = openAgent === agent.agent;
+              return (
+                <GroupRow
+                  key={agent.agent}
+                  leading={<AgentIcon agent={agent.agent} size={24} />}
+                  label={
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-semibold">{AGENT_META[agent.agent].name}</span>
+                      {agent.install.version && (
+                        <span className="font-data text-micro tabular-nums text-faint">{agent.install.version}</span>
+                      )}
+                    </span>
+                  }
+                  desc={agent.install.installed ? observeStatus(agent) : UNINSTALLED_HINT}
+                  control={
                     <Switch
                       checked={observed(agent)}
                       disabled={!agent.install.installed}
                       onCheckedChange={(v: boolean) => setAgentObserved(agent.agent, v)}
                     />
-                  </div>
-
+                  }
+                  expanded={open}
+                  onClick={() => setOpenAgent(open ? null : agent.agent)}
+                >
                   {observed(agent) ? (
-                    <>
-                      <div className="mt-2.5 flex items-center justify-between gap-3 border-t border-hairline/60 pl-9 pt-2.5">
-                        <div className="min-w-0 flex-1">
-                          <p className="text-meta text-muted-foreground">实时上报 hook</p>
-                          <p className="mt-0.5 text-micro text-faint">{hookStatus(agent)}</p>
-                        </div>
-                        <Switch checked={hookOn(agent)} onCheckedChange={(v: boolean) => setAgentHook(agent.agent, v)} />
-                      </div>
-                      {!hookOn(agent) && (
-                        <p className="mt-1.5 pl-9 text-meta leading-relaxed text-muted-foreground">
-                          {HOOK_IMPACT[agent.agent]}
-                        </p>
+                    <div className="flex flex-col">
+                      {HOOK_IMPACT[agent.agent] !== undefined ? (
+                        <>
+                          <div className="flex items-center justify-between py-1.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="text-meta text-muted-foreground">hook 上报</p>
+                              <p className="mt-0.5 text-micro text-faint">{hookStatus(agent)}</p>
+                            </div>
+                            <Switch checked={hookOn(agent)} onCheckedChange={(v: boolean) => setAgentHook(agent.agent, v)} />
+                          </div>
+                          {!hookOn(agent) && (
+                            <p className="py-1 text-micro leading-relaxed text-faint">{HOOK_IMPACT[agent.agent]}</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="py-1 text-micro leading-relaxed text-faint">纯本地轮询——该工具没有 hook 上报面</p>
                       )}
-                      {/* BYOK：凭据加密不可读的工具（zcode 等）在此自填 API Key 拉额度 */}
                       {agent.install.supportsByok && <ByokRow agent={agent} />}
-                    </>
+                    </div>
                   ) : (
-                    <p className="mt-2.5 border-t border-hairline/60 pt-2.5 text-meta leading-relaxed text-muted-foreground">
+                    <p className="py-1 text-meta leading-relaxed text-muted-foreground">
                       {agent.install.installed ? OBSERVE_IMPACT : UNINSTALLED_HINT}
                     </p>
                   )}
-                </article>
-              ))}
-            </div>
-          </section>
+                </GroupRow>
+              );
+            })}
+          </GroupList>
 
-          {/* 04 数据 */}
-          <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: "160ms" }}>
-            <SectionHead index="04" title="数据" />
-            <div className="mt-3 flex flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-detail font-medium">本地台账</p>
-                  <p className="mt-0.5 text-meta text-muted-foreground">清空事件与用量后由各工具本地数据全量重扫</p>
-                </div>
-                <button
-                  type="button"
+          <GroupList title="数据">
+            <GroupRow
+              label="数据目录"
+              desc={<span className="font-data text-micro">{snap.runtime.dataDir}</span>}
+              control={
+                <Button size="sm" onClick={() => void openDataDir()}>
+                  打开
+                </Button>
+              }
+            />
+            <GroupRow
+              label="重新接入全部工具"
+              desc={
+                reinstallResult
+                  ? reinstallResult.ok
+                    ? "已完成"
+                    : `接入失败：${reinstallResult.message}`
+                  : "按当前监听设置重装各工具的上报 hook"
+              }
+              control={
+                <Button size="sm" disabled={reinstallPending} onClick={() => void reinstallAll()}>
+                  {reinstallPending ? "接入中…" : "重新接入"}
+                </Button>
+              }
+            />
+            <GroupRow
+              label="重建台账"
+              desc={
+                rebuildResult
+                  ? rebuildResult.ok
+                    ? "已完成"
+                    : `重建失败：${rebuildResult.message}`
+                  : "清空事件与用量后由各工具本地数据全量重扫"
+              }
+              control={
+                <Button
+                  size="sm"
+                  variant={rebuildArmed ? "destructive" : "destructiveSoft"}
                   disabled={rebuildPending}
-                  className={cn(
-                    "shrink-0 rounded-md border px-2.5 py-1 text-meta font-medium transition-colors duration-fast disabled:pointer-events-none disabled:opacity-50",
-                    rebuildArmed
-                      ? "border-foreground/40 bg-foreground/10 text-foreground"
-                      : "border-hairline bg-raised text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={rebuild}
+                  onClick={() => void rebuild()}
                 >
-                  {rebuildPending ? "重建中…" : rebuildArmed ? "再点一次确认" : "重建"}
-                </button>
-              </div>
-              {rebuildResult && (
-                <p className={cn("-mt-1 text-meta", rebuildResult.ok ? "text-muted-foreground" : "text-destructive")}>
-                  {rebuildResult.ok ? "已完成" : `重建失败：${rebuildResult.message}`}
-                </p>
-              )}
-              <button
-                type="button"
-                className="flex items-center justify-between gap-3 text-left"
-                onClick={() => void openManager("files")}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-detail font-medium">会话文件</p>
-                  <p className="mt-0.5 text-meta text-muted-foreground">盘点各工具的会话产物，批量清理（进废纸篓）</p>
-                </div>
-                <HardDrive size={13} className="shrink-0 text-faint" />
-              </button>
-              <button
-                type="button"
-                className="flex items-center justify-between gap-3 text-left"
-                onClick={() => void openDataDir()}
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-detail font-medium">数据目录</p>
-                  <p className="mt-0.5 truncate font-mono text-micro text-faint">{snap.runtime.dataDir}</p>
-                </div>
-                <FolderOpen size={13} className="shrink-0 text-faint" />
-              </button>
-            </div>
-          </section>
+                  {rebuildPending ? "重建中…" : rebuildArmed ? "确认重建" : "重建"}
+                </Button>
+              }
+            />
+          </GroupList>
 
-          {/* 05 关于 */}
-          <section className="animate-enter border-t border-hairline pt-3" style={{ animationDelay: "200ms" }}>
-            <SectionHead index="05" title="关于" />
-            <div className="mt-3 flex flex-col gap-1.5">
-              <div className="flex items-center justify-between text-meta">
-                <span className="text-muted-foreground">版本</span>
-                <span className="select-text font-mono tabular-nums text-faint">
-                  {snap.runtime.version} · {snap.runtime.channel}
+          <GroupList title="关于">
+            <GroupRow
+              label="版本"
+              control={
+                <span className="select-text font-data text-meta tabular-nums text-faint">
+                  v{snap.runtime.version} · {snap.runtime.channel}
                 </span>
-              </div>
-              <div className="flex items-center justify-between text-meta">
-                <span className="text-muted-foreground">上报端点</span>
-                <span className="select-text font-mono tabular-nums text-faint">{snap.runtime.ingestEndpoint}</span>
-              </div>
-            </div>
-          </section>
-        </>
+              }
+            />
+            <GroupRow
+              label="上报端点"
+              control={
+                <span className="select-text font-data text-meta tabular-nums text-faint">{snap.runtime.ingestEndpoint}</span>
+              }
+            />
+            <GroupRow label="接入诊断 →" desc="逐工具的数据面探针与链路自检" onClick={() => void openManager("doctor")} />
+          </GroupList>
+        </div>
       )}
     </div>
   );

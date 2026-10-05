@@ -1,9 +1,10 @@
 /**
  * 会话文件管理页（管理台 files tab，#/manage/files）：跨 agent 盘点磁盘会话产物。
  *
- * 过滤按工具/项目，头部规模合计跟随筛选联动；排序默认修改时间倒序（表头可切大小/创建/修改）；
- * 勾选批量删除——文件/目录进废纸篓（可恢复），「库内」行是数据库记录
- * 永久删（标 needsVacuum 时提示文件体积需压实才回收）。活跃会话禁删。
+ * PageHead 标题 + 规模 meta（跟随筛选联动）+ 刷新/删除 actions；surface-1
+ * 容器内 sticky 表头 + ScrollArea 行列表。勾选批量删除——文件/目录进废纸篓
+ * （可恢复），「库内」行是数据库记录永久删（标 needsVacuum 时提示文件体积需
+ * 压实才回收）。活跃会话禁删（checkbox disabled + 「活跃」琥珀标）。
  * 行可 Tab 聚焦（role=checkbox，空格/回车勾选），Finder 按钮随行聚焦显形。
  */
 
@@ -12,6 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import Murmuration from "@/components/murmuration";
+import PageHead from "@/components/page-head";
 import Segmented from "@/components/segmented";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -24,7 +26,7 @@ import { useMurmurStore } from "@/store/murmur";
 
 import type { AgentId, StoredSession } from "@core/types";
 
-type SortKey = "modifiedAt" | "createdAt" | "sizeBytes" | "title";
+type SortKey = "modifiedAt" | "sizeBytes" | "title";
 type SortDir = "asc" | "desc";
 
 /** 行选择键：agent:id 复合（id 跨 agent 可能撞名）。 */
@@ -60,7 +62,7 @@ function SortHead({
       type="button"
       onClick={() => onSort(k)}
       className={cn(
-        "flex items-center gap-0.5 text-left text-micro font-medium transition-colors duration-fast",
+        "flex items-center gap-0.5 text-left text-micro font-semibold transition-colors duration-fast",
         active ? "text-foreground" : "text-faint hover:text-muted-foreground",
         className,
       )}
@@ -72,7 +74,9 @@ function SortHead({
   );
 }
 
-const GRID = "grid grid-cols-[26px_26px_minmax(0,1fr)_132px_64px_82px_82px_26px] items-center gap-x-2";
+/* 列宽：860 窗内为标题列挤到 ≥230px（~20 汉字）——chk 28/图标 24/项目 96/
+   大小 64/修改 80/Finder 28，列距 gap-x-1.5；标题 flex-1 min-w-0 truncate。 */
+const GRID = "grid grid-cols-[28px_24px_minmax(0,1fr)_96px_64px_80px_28px] items-center gap-x-1.5";
 
 export default function SessionsView({ embedded }: { embedded?: boolean }) {
   const scanSessions = useMurmurStore((s) => s.scanSessions);
@@ -224,32 +228,40 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
     }
   }
 
-  const headCell = "text-micro font-medium text-faint";
+  const headCell = "text-micro font-semibold text-faint";
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col">
       {/* 顶部拖拽条：独立窗时给 hiddenInset 红绿灯让位；管理台嵌入态由外壳出 chrome。 */}
       {!embedded && <div className="h-8 shrink-0" />}
 
-      {/* 头行：标题 + 规模合计 + 重扫 */}
-      <header className="flex items-end justify-between gap-3 px-4 pb-3">
-        <div>
-          <p className="eyebrow text-faint">Murmur</p>
-          <h1 className="mt-0.5 text-title font-semibold">会话文件</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <p className="font-mono text-micro tabular-nums text-faint">
-            {items ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)} · ${fmtFileTime(scannedAt)} 扫` : "…"}
-          </p>
-          <Button type="button" onClick={() => void rescan()} disabled={scanning}>
-            <RefreshCw size={11} />
-            重扫
-          </Button>
-        </div>
-      </header>
+      <PageHead
+        title="会话文件"
+        meta={items ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)} · 扫描于 ${fmtFileTime(scannedAt)}` : "扫描中…"}
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="icon"
+              title="重新扫描"
+              aria-label="重新扫描"
+              disabled={scanning}
+              onClick={() => void rescan()}
+            >
+              <RefreshCw size={14} />
+            </Button>
+            {selectedItems.length > 0 && (
+              <Button variant={armed ? "destructive" : "destructiveSoft"} disabled={deleting} onClick={() => void doDelete()}>
+                <Trash2 size={11} />
+                {deleting ? "删除中…" : armed ? "确认删除" : `删除 ${selectedItems.length} 项`}
+              </Button>
+            )}
+          </>
+        }
+      />
 
-      {/* 工具行：工具/项目过滤 */}
-      <div className="flex items-center gap-3 border-b border-hairline px-4 pb-2.5">
+      {/* 筛选行：工具分段 + 项目下拉（联动收窄）；窄窗允许折行，下拉保持右对齐 */}
+      <div className="flex flex-wrap items-center gap-3 pb-3">
         <Segmented
           options={[{ value: "all" as const, label: "全部" }, ...agents.map((a) => ({ value: a, label: AGENT_META[a].name }))]}
           value={agentFilter}
@@ -257,7 +269,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
           label="按工具过滤"
         />
         <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="ml-auto w-55" aria-label="按项目过滤">
+          <SelectTrigger className="ml-auto w-55 max-w-full" aria-label="按项目过滤">
             <SelectValue placeholder="全部项目" />
           </SelectTrigger>
           <SelectContent>
@@ -271,125 +283,127 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
         </Select>
       </div>
 
-      {/* 表头 */}
-      <div className={cn(GRID, "border-b border-hairline px-4 py-1.5")}>
-        <Checkbox
-          checked={allSelected ? true : someSelected ? "indeterminate" : false}
-          onCheckedChange={toggleAll}
-          disabled={!selectable.length}
-        />
-        <span className={headCell}>工具</span>
-        <SortHead label="会话" k="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-        <span className={headCell}>项目</span>
-        <SortHead label="大小" k="sizeBytes" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="justify-end" />
-        <SortHead label="创建" k="createdAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-        <SortHead label="修改" k="modifiedAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-        <span />
+      {/* 表容器：surface-1 叠层。横滚层在 ScrollArea 外（overflow-x-auto 若放 viewport
+          内会截胡 sticky 表头的滚动容器），内层 min-w 520px 保列宽可横滚；
+          sticky 表头 + 行列表共用 ScrollArea 的纵向滚动区 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-item bg-surface-1">
+        <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
+          <div className="flex h-full min-w-[520px] flex-col">
+            <ScrollArea className="min-h-0 flex-1">
+          {items === null && scanning ? (
+            <div className="flex flex-col gap-2 p-4">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="h-9 animate-pulse rounded-item bg-surface-2" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* 表头（sticky）：激活列前景色 + 方向箭头 */}
+              <div className={cn(GRID, "sticky top-0 z-10 h-9 bg-surface-2 px-3")}>
+                <Checkbox
+                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                  onCheckedChange={toggleAll}
+                  disabled={!selectable.length}
+                />
+                {/* 图标列表头：须占住 grid 格（sr-only 是 absolute 会让后续列左移一格），用 overflow 裁掉文字 */}
+                <span className={cn(headCell, "overflow-hidden text-transparent select-none")} aria-label="工具">
+                  工具
+                </span>
+                <SortHead label="会话" k="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                <span className={headCell}>项目</span>
+                <SortHead label="大小" k="sizeBytes" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="justify-end" />
+                <SortHead label="修改" k="modifiedAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="justify-end" />
+                <span />
+              </div>
+
+              {filtered.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 px-3 py-16">
+                  <Murmuration size={120} />
+                  <p className="text-body text-muted-foreground">没有会话产物</p>
+                  <p className="text-meta text-faint">接入的 CLI 跑过会话后会出现在这里</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-hairline/60">
+                  {filtered.map((i) => {
+                    const k = rowKey(i);
+                    const checked = selected.has(k);
+                    return (
+                      <div
+                        key={k}
+                        role="checkbox"
+                        aria-checked={checked}
+                        aria-disabled={i.active || undefined}
+                        tabIndex={i.active ? -1 : 0}
+                        className={cn(
+                          GRID,
+                          "group h-10 cursor-pointer px-3 transition-colors duration-fast focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground/45",
+                          checked ? "bg-surface-3/60" : "hover:bg-surface-2 focus-visible:bg-surface-2",
+                          i.active && "opacity-60",
+                        )}
+                        onClick={() => toggleOne(i)}
+                        onKeyDown={(e) => {
+                          // 行内 Checkbox 等子控件的按键不抢，只认落在行身的 Space/Enter。
+                          if (e.target !== e.currentTarget) return;
+                          if (e.key === " " || e.key === "Enter") {
+                            e.preventDefault();
+                            toggleOne(i);
+                          }
+                        }}
+                      >
+                        <Checkbox
+                          checked={checked}
+                          disabled={i.active}
+                          onCheckedChange={() => toggleOne(i)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <AgentIcon agent={i.agent} size={18} />
+                        <div className="flex min-w-0 items-center gap-1.5">
+                          <span className="select-text truncate text-detail text-foreground" title={i.title ?? i.id}>
+                            {i.title || i.id}
+                          </span>
+                          {i.kind === "db" && <span className="shrink-0 text-micro text-faint">库内</span>}
+                          {i.active && <span className="shrink-0 text-micro text-waiting">活跃</span>}
+                        </div>
+                        <span className="select-text truncate text-meta text-muted-foreground" title={i.project}>
+                          {projectName(i.project)}
+                        </span>
+                        <span className="text-right font-data text-meta tabular-nums text-muted-foreground">
+                          {fmtBytes(i.sizeBytes)}
+                        </span>
+                        <span className="text-right font-data text-meta tabular-nums text-faint">
+                          {fmtFileTime(i.modifiedAt)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="在 Finder 中显示"
+                          className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void revealSession(i.agent, i.id);
+                          }}
+                        >
+                          <FolderSearch size={12} />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+            </ScrollArea>
+          </div>
+        </div>
       </div>
 
-      {/* 行列表 */}
-      <ScrollArea className="min-h-0 flex-1">
-        {items === null && scanning ? (
-          <div className="space-y-2 p-4">
-            {[0, 1, 2, 3].map((i) => (
-              <div key={i} className="h-9 animate-pulse rounded-item bg-raised" />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 pb-16">
-            <Murmuration size={120} />
-            <p className="text-body text-muted-foreground">没有会话产物</p>
-            <p className="text-meta text-faint">接入的 CLI 跑过会话后会出现在这里</p>
-          </div>
-        ) : (
-          <div>
-            {filtered.map((i) => {
-              const k = rowKey(i);
-              const checked = selected.has(k);
-              return (
-                <div
-                  key={k}
-                  role="checkbox"
-                  aria-checked={checked}
-                  aria-disabled={i.active || undefined}
-                  tabIndex={i.active ? -1 : 0}
-                  className={cn(
-                    GRID,
-                    "group cursor-pointer border-b border-hairline/40 px-4 py-2 transition-colors duration-fast focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground/45",
-                    checked ? "bg-raised" : "hover:bg-raised/60 focus-visible:bg-raised/60",
-                    i.active && "opacity-60",
-                  )}
-                  onClick={() => toggleOne(i)}
-                  onKeyDown={(e) => {
-                    if (e.key === " " || e.key === "Enter") {
-                      e.preventDefault();
-                      toggleOne(i);
-                    }
-                  }}
-                >
-                  <Checkbox
-                    checked={checked}
-                    disabled={i.active}
-                    onCheckedChange={() => toggleOne(i)}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <AgentIcon agent={i.agent} size={16} />
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <span className="select-text truncate text-detail text-foreground" title={i.title ?? i.id}>
-                      {i.title || i.id}
-                    </span>
-                    {i.kind === "db" && (
-                      <span className="shrink-0 rounded bg-muted px-1 py-px font-mono text-micro text-faint">库内</span>
-                    )}
-                    {i.active && (
-                      <span className="shrink-0 font-mono text-micro text-faint">活跃</span>
-                    )}
-                  </div>
-                  <span className="select-text truncate text-meta text-muted-foreground" title={i.project}>
-                    {projectName(i.project)}
-                  </span>
-                  <span className="text-right font-mono text-micro tabular-nums text-muted-foreground">
-                    {fmtBytes(i.sizeBytes)}
-                  </span>
-                  <span className="font-mono text-micro tabular-nums text-faint">{fmtFileTime(i.createdAt)}</span>
-                  <span className="font-mono text-micro tabular-nums text-faint">{fmtFileTime(i.modifiedAt)}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    title="在 Finder 中显示"
-                    className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void revealSession(i.agent, i.id);
-                    }}
-                  >
-                    <FolderSearch size={12} />
-                  </Button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </ScrollArea>
-
-      {/* 底栏：选择汇总 + 删除 */}
-      <footer className="flex items-center gap-3 border-t border-hairline px-4 py-2.5">
-        <p className="text-meta text-muted-foreground">
-          {selectedItems.length
-            ? `已选 ${selectedItems.length} 项 · ${fmtBytes(selectedBytes)}${selectedDb ? ` · 含 ${selectedDb} 项库内记录（永久删）` : ""}`
-            : (notice ?? "勾选会话后可批量删除，文件类进废纸篓")}
-        </p>
-        {notice && selectedItems.length > 0 && <p className="truncate text-meta text-faint">{notice}</p>}
-        <Button
-          variant={armed ? "destructive" : "destructiveSoft"}
-          disabled={!selectedItems.length || deleting}
-          onClick={() => void doDelete()}
-          className="ml-auto"
-        >
-          <Trash2 size={11} />
-          {deleting ? "删除中…" : armed ? "再点一次确认删除" : `删除 ${selectedItems.length || ""} 项`}
-        </Button>
-      </footer>
+      {/* 尾行：选择汇总 / 操作回报（删除按钮已上提至 PageHead actions） */}
+      <p className="pt-2.5 text-meta text-muted-foreground">
+        {selectedItems.length
+          ? `已选 ${selectedItems.length} 项 · ${fmtBytes(selectedBytes)}${selectedDb ? ` · 含 ${selectedDb} 项库内记录（永久删）` : ""}`
+          : (notice ?? "勾选会话后可批量删除，文件类进废纸篓")}
+        {notice && selectedItems.length > 0 && <span className="ml-2 text-faint">{notice}</span>}
+      </p>
     </div>
   );
 }

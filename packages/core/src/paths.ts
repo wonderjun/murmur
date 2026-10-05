@@ -108,6 +108,23 @@ export function agentPaths(agent: AgentId): AgentPaths {
         hookConfig: process.env.MURMUR_DEVIN_CONFIG ?? join(appData, 'devin', 'config.json'),
       };
     }
+    case 'minimax': {
+      // MiniMax Code IDE（mcode/mavis，OpenCode fork 的 Electron 壳）：数据根 ~/.minimax，
+      // 官方整体搬迁 env 是 MINIMAX_DATA_DIR（旧名 MAVIS_DATA_DIR）。
+      // v2/sqlite/runtime-state.sqlite 是唯一真源：local_runtime_sessions 会话注册表、
+      // local_runtime_turn_ingress turn 生命周期、local_runtime_token_usage 请求级计量。
+      // auth/prod/<region>/<clientId>/auth.json 是 OAuth 凭据（audience agent-backend，
+      // 只认 mavis 网关——billing 端点要 web cookie，quota 面缺席）。
+      // 官方明示 hooks/plugins 非公开能力面 → 无 hookConfig，pull-only。
+      const dir =
+        process.env.MURMUR_MINIMAX_HOME ?? process.env.MINIMAX_DATA_DIR ?? process.env.MAVIS_DATA_DIR ?? join(home, '.minimax');
+      return {
+        home: dir,
+        sessions: join(dir, 'v2'),
+        credentials: join(dir, 'auth'),
+        hookConfig: null,
+      };
+    }
     case 'qoder': {
       // 新「Qoder」桌面产品（com.qoder.app）：Electron 壳 + 内嵌 qodercli runtime，
       // 与 qodercli/旧 IDE 共用 ~/.qoder 数据根（官方 QODER_CONFIG_DIR 可整体搬迁）。

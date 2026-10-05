@@ -34,7 +34,7 @@ export default function QuotaPill({ window: w }: { window: QuotaWindow }) {
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border border-hairline bg-raised px-2.5 py-1 font-mono text-micro leading-none",
+        "inline-flex items-center gap-1.5 rounded-full bg-surface-3 px-2.5 py-1 font-mono text-micro leading-none",
         danger ? "text-stale" : warn ? "text-foreground" : "text-muted-foreground",
       )}
       title={title}

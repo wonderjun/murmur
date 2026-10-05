@@ -93,12 +93,28 @@ async function settingsSnapshot(): Promise<SettingsSnapshot> {
   };
 }
 
-const rpc = BrowserView.defineRPC<MurmurRPC>({
-  maxRequestTime: 15000,
-  handlers: {
-    requests: createRpcHandlers({
+/** 每窗一份 defineRPC 实例：rpc 对象只持一条 transport，BrowserView 构造时
+    setTransport 会把它改绑到自己的 webview——两窗共享一个 rpc 会让所有推送
+    只落到最后创建的窗口（管理窗一开，面板推送即被吞；其 dispose 还会把共享
+    transport 换成 no-op，推送永久失联）。 */
+function makeViewRpc() {
+  return BrowserView.defineRPC<MurmurRPC>({
+    maxRequestTime: 15000,
+    handlers: {
+      requests: createRpcHandlers({
       registry,
       settingsSnapshot,
+      // 设置变更广播：面板与管理窗各自独立 JS context，mutation 只在发起窗
+      // 生效——推给所有窗，另一窗的 applyAppearance/开关态才跟得上。
+      pushSettings: (snap) => {
+        for (const win of [panel, managerWin]) {
+          try {
+            win?.webview.rpc?.send.settings(snap);
+          } catch {
+            // 页面尚未加载完成时忽略推送失败。
+          }
+        }
+      },
       homeDir: process.env.HOME ?? "",
       hidePanel: () => {
         panel.hide();
@@ -109,7 +125,7 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
       },
       applyDockIcon,
       setLaunchAtLogin,
-      // 显式签名：否则 openManagerWindow ↔ managerWin ↔ typeof rpc 形成推断环。
+      // 显式签名：否则 openManagerWindow ↔ managerWin ↔ ViewRpc 形成推断环。
       openManager: (tab: ManagerTab): void => {
         openManagerWindow(tab);
       },
@@ -121,10 +137,12 @@ const rpc = BrowserView.defineRPC<MurmurRPC>({
         Utils.showItemInFolder(MURMUR_HOME);
       },
       quit: quitMurmur,
-    }),
-    messages: {},
-  },
-});
+      }),
+      messages: {},
+    },
+  });
+}
+type ViewRpc = ReturnType<typeof makeViewRpc>;
 
 const url = await resolveMainViewUrl();
 
@@ -138,7 +156,7 @@ function managerViewUrl(tab: ManagerTab): string {
  * popover 失焦即收起的语义不适用于「检查→切换→验证」的管理任务；
  * 已开时聚焦并送 managerNav 切 tab，不重建窗口。
  */
-let managerWin: BrowserWindow<typeof rpc> | null = null;
+let managerWin: BrowserWindow<ViewRpc> | null = null;
 function openManagerWindow(tab: ManagerTab) {
   if (managerWin) {
     managerWin.show();
@@ -149,10 +167,10 @@ function openManagerWindow(tab: ManagerTab) {
     }
     return;
   }
-  managerWin = new BrowserWindow<typeof rpc>({
+  managerWin = new BrowserWindow<ViewRpc>({
     title: "Murmur 管理",
     url: managerViewUrl(tab),
-    rpc,
+    rpc: makeViewRpc(),
     titleBarStyle: "hiddenInset",
     styleMask: { Closable: true, Miniaturizable: true, Resizable: true },
     // 缺省 x/y → 系统居中。
@@ -163,11 +181,11 @@ function openManagerWindow(tab: ManagerTab) {
   });
 }
 
-const panel = new BrowserWindow<typeof rpc>({
+const panel = new BrowserWindow<ViewRpc>({
   // 标题必须为空：Titled 窗口的标题文字会画在面板顶部（2026-09 实测）。
   title: "",
   url,
-  rpc,
+  rpc: makeViewRpc(),
   hidden: true,
   // hiddenInset = Titled + FullSizeContentView（SDK 自动补），即"标准窗口几何 +
   // 全尺寸内容"：macOS 26 只对标准窗口套系统圆角+阴影。titleBarStyle:"hidden"
@@ -243,6 +261,7 @@ const AGENT_NAMES: Record<string, string> = {
   cursor: "Cursor",
   devin: "Devin",
   qoder: "Qoder",
+  minimax: "MiniMax Code",
 };
 
 // 「轮到你了」通知：waiting 集合（sessionId+reason 键）只增才发——同会话从

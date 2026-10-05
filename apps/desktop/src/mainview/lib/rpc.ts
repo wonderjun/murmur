@@ -13,10 +13,14 @@ import Electrobun, { Electroview } from "electrobun/view";
 
 import type { AppSnapshot, ManagerTab } from "@core/types";
 
-import type { MurmurRPC } from "../../shared/rpc";
+import type { MurmurRPC, SettingsSnapshot } from "../../shared/rpc";
 
 /** 创建真实桥接视图（仅在 electrobun webview 内调用，桥缺失时构造会抛错）。 */
-function createView(onSnapshot: (s: AppSnapshot) => void, onManagerNav: (tab: ManagerTab) => void) {
+function createView(
+  onSnapshot: (s: AppSnapshot) => void,
+  onManagerNav: (tab: ManagerTab) => void,
+  onSettings: (s: SettingsSnapshot) => void,
+) {
   const rpc = Electroview.defineRPC<MurmurRPC>({
     maxRequestTime: 15000,
     handlers: {
@@ -24,6 +28,7 @@ function createView(onSnapshot: (s: AppSnapshot) => void, onManagerNav: (tab: Ma
       messages: {
         snapshot: (s) => onSnapshot(s),
         managerNav: (m) => onManagerNav(m.tab),
+        settings: (s) => onSettings(s),
       },
     },
   });
@@ -43,14 +48,15 @@ function createOfflineView(): MurmurView {
   return { rpc: { request, messages: {} } } as unknown as MurmurView;
 }
 
-/** 获取（首次创建）Electroview 单例；onSnapshot/onManagerNav 订阅主进程推送。 */
+/** 获取（首次创建）Electroview 单例；onSnapshot/onManagerNav/onSettings 订阅主进程推送。 */
 export function useRpc(
   onSnapshot: (s: AppSnapshot) => void,
   onManagerNav: (tab: ManagerTab) => void = () => {},
+  onSettings: (s: SettingsSnapshot) => void = () => {},
 ): MurmurView {
   if (!instance) {
     const bridged = typeof window !== "undefined" && Boolean((window as { __electrobun?: unknown }).__electrobun);
-    instance = bridged ? createView(onSnapshot, onManagerNav) : createOfflineView();
+    instance = bridged ? createView(onSnapshot, onManagerNav, onSettings) : createOfflineView();
   }
   return instance;
 }

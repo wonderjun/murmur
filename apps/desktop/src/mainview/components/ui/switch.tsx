@@ -24,7 +24,8 @@ function Switch({ className, ...props }: ComponentProps<typeof SwitchPrimitive.R
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className="block h-[14px] w-[14px] translate-x-[2px] rounded-full bg-foreground shadow-raised transition-transform duration-fast data-[state=checked]:translate-x-[14px] data-[state=checked]:bg-background"
+        // CUSTOMIZED: 滑块阴影退场（shadow-raised 已删），叠层语言不留投影
+        className="block h-[14px] w-[14px] translate-x-[2px] rounded-full bg-foreground transition-transform duration-fast data-[state=checked]:translate-x-[14px] data-[state=checked]:bg-background"
       />
     </SwitchPrimitive.Root>
   );

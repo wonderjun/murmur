@@ -1,83 +1,34 @@
-/** agent 行：折叠头（徽标 + 摘要 + 聚合态旗标）+ 展开会话明细 + 额度窗格。
- *  自身不带卡片壳——分组容器（monitor-view / 设计板）提供 border/bg/分隔。
+/** agent 行：折叠头（mono 徽标状态环 + 摘要）+ 展开会话明细 + 额度窗格。
+ *  自身不带卡片壳——分组容器（monitor-view / 设计板）提供叠层面与分隔。
  *  展开走 grid-template-rows 0fr↔1fr 过渡（无测量）+ ease-spring 弹性；
- *  外部经 expandSignal 请求展开（waiting hero 点击定位），DOM 锚
+ *  外部经 expandSignal 请求展开（waiting hero 定位），DOM 锚
  *  data-agent-row / data-session 供滚动定位，不引入路由。
- *  定位行走 revealSession（查主进程 lastSessionScan 缓存，miss 返回 false
- *  时行内提示，不静默）与 writeClipboard 复制 cwd。 */
+ *  会话动作（Finder 定位 / 复制路径）走 useSessionActions：行内提示 3 秒淡出。 */
 
 import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import StatusDot from "@/components/status-dot";
+import StatusRing from "@/components/status-ring";
 import { AGENT_META } from "@/lib/agent-meta";
 import { fmtQuotaHeadline, fmtTokens, relAgo } from "@/lib/format";
 import { sessionStatusText, sessionTimeline } from "@/lib/status-text";
+import { useSessionActions } from "@/lib/use-session-actions";
 import { cn } from "@/lib/utils";
-import { useMurmurStore } from "@/store/murmur";
 
 import type { AgentSnapshot, AgentStatus, SessionSnapshot } from "@core/types";
 
 const STATUS_ORDER: AgentStatus[] = ["waiting", "working", "stale", "idle", "ended"];
 
-const STATUS_LABEL: Record<AgentStatus, string> = {
-  waiting: "待处理",
-  working: "工作中",
-  stale: "已停止更新",
-  idle: "空闲",
-  ended: "已结束",
-};
-
-const STATUS_TONE: Record<AgentStatus, string> = {
-  waiting: "bg-waiting/12 text-waiting",
-  working: "bg-working/10 text-working",
-  stale: "bg-stale/10 text-stale",
-  idle: "bg-muted text-muted-foreground",
-  ended: "bg-muted text-faint",
-};
-
-/** 行内提示：定位 miss（未找到磁盘产物）或复制成功，3 秒自动淡出。 */
-interface RowHint {
-  sessionId: string;
-  kind: "miss" | "copied";
-}
-
 export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot; expandSignal?: number }) {
   const [expanded, setExpanded] = useState(true);
-  const [hint, setHint] = useState<RowHint | null>(null);
-  const revealSession = useMurmurStore((s) => s.revealSession);
-  const writeClipboard = useMurmurStore((s) => s.writeClipboard);
+  const { reveal, copyCwd, hint } = useSessionActions();
 
   // waiting hero 点击定位：外部信号递增即展开（已展开则保持）。
   useEffect(() => {
     if (expandSignal) setExpanded(true);
   }, [expandSignal]);
-
-  // 提示行 3 秒淡出；同会话再次操作会以新引用重置计时。
-  useEffect(() => {
-    if (!hint) return;
-    const t = setTimeout(() => setHint(null), 3000);
-    return () => clearTimeout(t);
-  }, [hint]);
-
-  async function reveal(session: SessionSnapshot) {
-    try {
-      const ok = await revealSession(agent.agent, session.sessionId);
-      setHint(ok ? null : { sessionId: session.sessionId, kind: "miss" });
-    } catch {
-      // 离线预览无桥必 reject；真桥下也按 miss 提示，不静默。
-      setHint({ sessionId: session.sessionId, kind: "miss" });
-    }
-  }
-
-  function copyCwd(session: SessionSnapshot) {
-    if (!session.cwd) return;
-    // 真桥 clipboardWriteText 无失败通路；离线预览无桥必 reject，静默即可。
-    writeClipboard(session.cwd)
-      .then(() => setHint({ sessionId: session.sessionId, kind: "copied" }))
-      .catch(() => {});
-  }
 
   const name = AGENT_META[agent.agent].name;
   const sessions = useMemo(() => [...agent.sessions].sort((a, b) => b.lastEventAt - a.lastEventAt), [agent.sessions]);
@@ -95,29 +46,22 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
     <article data-agent={agent.agent} data-agent-row={agent.agent}>
       <button
         type="button"
-        className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-fast hover:bg-foreground/[0.03]"
+        className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-fast hover:bg-surface-2"
         aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
       >
-        <AgentIcon agent={agent.agent} size={28} />
+        <StatusRing status={primaryStatus} size={28}>
+          <AgentIcon agent={agent.agent} variant="mono" size={28} />
+        </StatusRing>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="text-body font-semibold">{name}</span>
             {sessions.length > 1 && (
-              <span className="font-mono text-micro tabular-nums text-faint">{sessions.length} 个任务</span>
+              <span className="font-data text-micro tabular-nums text-faint">{sessions.length} 个任务</span>
             )}
           </div>
           <p className="mt-0.5 truncate text-meta text-muted-foreground">{summary}</p>
         </div>
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-micro font-semibold",
-            STATUS_TONE[primaryStatus],
-          )}
-        >
-          <StatusDot status={primaryStatus} size={6} hasSrText={false} />
-          {STATUS_LABEL[primaryStatus]}
-        </span>
         <ChevronDown
           size={13}
           className={cn("shrink-0 text-faint transition-transform duration-normal", expanded && "rotate-180")}
@@ -137,21 +81,33 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
               <div
                 key={session.sessionId}
                 data-session={session.sessionId}
-                className="select-text border-b border-hairline/60 px-3.5 py-2.5 last:border-b-0"
+                className="group select-text border-b border-hairline/60 px-3.5 py-2.5 last:border-b-0"
               >
                 <div className="flex items-start gap-2.5">
-                  <StatusDot status={session.status} size={7} className="mt-[5px]" />
+                  <StatusDot status={session.status} size={6} className="mt-[5px]" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-detail font-medium leading-snug">{session.title || "未命名任务"}</span>
-                      <span className="shrink-0 font-mono text-micro tabular-nums text-faint">
+                      <span className="min-w-0 truncate text-detail font-medium" title={session.title || "未命名任务"}>
+                        {session.title || "未命名任务"}
+                      </span>
+                      <span className="shrink-0 font-data text-micro tabular-nums text-faint">
                         {elapsed(session.startedAt)}
                       </span>
                     </div>
-                    {/* 定位行：cwd（悬浮全路径）+ 复制 + Finder 定位 */}
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
+                      <span className="min-w-0 truncate">{modelName(session.model)}</span>
+                      <span className="min-w-0 truncate">{sessionStatusText(session)}</span>
+                      {session.status === "waiting" && (
+                        <span className="text-waiting">等了 {relAgo(session.statusAt)}</span>
+                      )}
+                      <span className="ml-auto font-data text-micro tabular-nums">
+                        {fmtTokens(tokens(session))} 令牌
+                      </span>
+                    </div>
+                    {/* 定位行：cwd + 复制/Finder——动作默认隐身，hover/focus 行才浮出 */}
                     <div className="mt-1 flex items-center gap-2">
                       <span
-                        className="min-w-0 truncate font-mono text-micro text-faint"
+                        className="min-w-0 truncate font-data text-micro text-faint"
                         title={session.cwd ?? undefined}
                       >
                         {compactPath(session.cwd)}
@@ -159,7 +115,7 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
                       {session.cwd && (
                         <button
                           type="button"
-                          className="shrink-0 text-micro text-faint transition-colors duration-fast hover:text-foreground"
+                          className="shrink-0 text-micro text-faint opacity-0 transition-[opacity,color] duration-fast hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
                           onClick={() => copyCwd(session)}
                         >
                           复制路径
@@ -167,7 +123,7 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
                       )}
                       <button
                         type="button"
-                        className="ml-auto shrink-0 text-micro text-faint transition-colors duration-fast hover:text-foreground"
+                        className="ml-auto shrink-0 text-micro text-faint opacity-0 transition-[opacity,color] duration-fast hover:text-foreground group-hover:opacity-100 group-focus-within:opacity-100"
                         onClick={() => void reveal(session)}
                       >
                         在 Finder 显示
@@ -178,19 +134,9 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
                         {hint.kind === "miss" ? "未找到磁盘产物" : "路径已复制"}
                       </p>
                     )}
-                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-meta text-muted-foreground">
-                      <span>{modelName(session.model)}</span>
-                      <span>{sessionStatusText(session)}</span>
-                      {session.status === "waiting" && (
-                        <span className="text-waiting">等了 {relAgo(session.statusAt)}</span>
-                      )}
-                      <span className="ml-auto font-mono text-micro tabular-nums">
-                        {fmtTokens(tokens(session))} 令牌
-                      </span>
-                    </div>
                     {/* 轻量时间线：发起 / 最近工具调用 / 等待开始（缺项不渲染） */}
                     {sessionTimeline(session).length > 0 && (
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-micro tabular-nums text-faint">
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-data text-micro tabular-nums text-faint">
                         {sessionTimeline(session).map((m) => (
                           <span key={m.label}>
                             {m.label} {relAgo(m.at)}
@@ -204,11 +150,11 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
             ))}
 
             {quotaWindows.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 border-t border-hairline/60 bg-raised/60 px-3.5 py-2.5">
+              <div className="flex flex-wrap gap-1.5 border-t border-hairline/60 bg-surface-2/60 px-3.5 py-2.5">
                 {quotaWindows.map((w) => (
                   <span
                     key={w.label}
-                    className="rounded-full border border-hairline px-2 py-0.5 font-mono text-micro tabular-nums text-muted-foreground"
+                    className="rounded-full bg-surface-3 px-2 py-0.5 font-data text-micro tabular-nums text-muted-foreground"
                   >
                     <span className="font-sans">{w.label}</span> {fmtQuotaHeadline(w)}
                   </span>

@@ -15,6 +15,7 @@ import { scanCodexSessions, deleteCodexSessions } from '../src/agents/codex/file
 import { scanCursorSessions, deleteCursorSessions } from '../src/agents/cursor/files';
 import { scanDevinSessions, deleteDevinSessions } from '../src/agents/devin/files';
 import { scanKimiSessions, deleteKimiSessions } from '../src/agents/kimi/files';
+import { scanMinimaxSessions, deleteMinimaxSessions } from '../src/agents/minimax/files';
 import { scanOpencodeSessions, deleteOpencodeSessions } from '../src/agents/opencode/files';
 import { scanQoderSessions, deleteQoderSessions } from '../src/agents/qoder/files';
 import { scanZcodeSessions, deleteZcodeSessions } from '../src/agents/zcode/files';
@@ -34,6 +35,7 @@ const ENV_KEYS = [
   'MURMUR_OPENCODE_DATA',
   'MURMUR_DEVIN_DATA',
   'MURMUR_QODER_HOME',
+  'MURMUR_MINIMAX_HOME',
 ] as const;
 const saved = new Map<string, string | undefined>();
 
@@ -48,6 +50,7 @@ beforeEach(() => {
   process.env.MURMUR_OPENCODE_DATA = join(ROOT, 'opencode');
   process.env.MURMUR_DEVIN_DATA = join(ROOT, 'devin');
   process.env.MURMUR_QODER_HOME = join(ROOT, 'qoder');
+  process.env.MURMUR_MINIMAX_HOME = join(ROOT, 'minimax');
 });
 
 afterEach(() => {
@@ -272,6 +275,38 @@ describe('会话产物盘点', () => {
     expect(trashed.join()).toContain(sid);
   });
 
+  test('minimax：日期目录产物盘点，sqlite 只读补标题/目录；删除=目录进篓', async () => {
+    const home = join(ROOT, 'minimax');
+    const dir = join(home, 'v2', 'sessions', '2026', '10', '05', '11-19-33-985-session_abc');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'manifest.json'), JSON.stringify({ sessionId: 'mvs_abc', createdAtMs: 1111 }));
+    writeFileSync(join(dir, 'messages.jsonl'), '{"x":1}\n'.repeat(10));
+
+    mkdirSync(join(home, 'v2', 'sqlite'), { recursive: true });
+    const db = new Database(join(home, 'v2', 'sqlite', 'runtime-state.sqlite'), { create: true });
+    db.exec(`CREATE TABLE local_runtime_sessions(session_id TEXT PRIMARY KEY, title TEXT, workspace_dir TEXT)`);
+    db.run("INSERT INTO local_runtime_sessions VALUES('mvs_abc','minimax 会话','/tmp/mp')");
+    db.close();
+
+    const items = await scanMinimaxSessions();
+    expect(items).toHaveLength(1);
+    const s = items[0];
+    expect(s.id).toBe('mvs_abc');
+    expect(s.title).toBe('minimax 会话');
+    expect(s.project).toBe('/tmp/mp');
+    expect(s.kind).toBe('dir');
+    expect(s.createdAt).toBe(1111);
+    expect(s.sizeBytes).toBeGreaterThan(0);
+
+    const res = await deleteMinimaxSessions(['mvs_abc'], trash);
+    expect(res[0].ok).toBe(true);
+    expect(trashed[0]).toContain('11-19-33-985-session_abc');
+    // 库行不动（runtime 本体在写，只读纪律）。
+    const db2 = new Database(join(home, 'v2', 'sqlite', 'runtime-state.sqlite'), { readonly: true });
+    expect((db2.query('SELECT COUNT(*) n FROM local_runtime_sessions').get() as { n: number }).n).toBe(1);
+    db2.close();
+  });
+
   test('目录不存在 → 空列表而非报错', async () => {
     expect(await scanKimiSessions()).toHaveLength(0);
     expect(await scanCodexSessions()).toHaveLength(0);
@@ -280,6 +315,7 @@ describe('会话产物盘点', () => {
     expect(await scanOpencodeSessions()).toHaveLength(0);
     expect(await scanDevinSessions()).toHaveLength(0);
     expect(await scanQoderSessions()).toHaveLength(0);
+    expect(await scanMinimaxSessions()).toHaveLength(0);
     expect(existsSync(ROOT)).toBe(true);
   });
 });

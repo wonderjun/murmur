@@ -1,4 +1,4 @@
-/** 分段选择器：bg-muted 轨道 + 选中 bg-raised + hairline 描边，与底栏 tabs 同视觉语言。
+/** 分段选择器：bg-surface-3 轨道 + 选中 bg-surface-1 + hairline 描边，与底栏 tabs 同视觉语言。
  *  键盘契约（radiogroup 惯例）：roving tabindex（选中项可 Tab，其余 -1），
  *  左右/上下方向键循环切换并选中，Home/End 跳首尾。 */
 
@@ -51,7 +51,7 @@ export default function Segmented<T extends string>({
 
   return (
     <div
-      className="flex items-center gap-0.5 rounded-full bg-muted p-0.5"
+      className="flex max-w-full items-center gap-0.5 rounded-full bg-surface-3 p-0.5"
       role="radiogroup"
       aria-label={label}
       onKeyDown={onKeyDown}
@@ -67,9 +67,9 @@ export default function Segmented<T extends string>({
           aria-checked={opt.value === value}
           tabIndex={opt.value === value ? 0 : -1}
           className={cn(
-            "rounded-full border px-2.5 py-0.5 text-meta font-medium transition-colors duration-fast",
+            "whitespace-nowrap rounded-full border px-2.5 py-0.5 text-meta font-medium transition-colors duration-fast",
             opt.value === value
-              ? "border-hairline bg-raised text-foreground"
+              ? "border-hairline bg-surface-1 text-foreground"
               : "border-transparent text-muted-foreground hover:text-foreground",
           )}
           onClick={() => onChange(opt.value)}

@@ -12,7 +12,7 @@ import type { ThemePreference } from "@core/settings";
 
 const SYSTEM_DARK = window.matchMedia("(prefers-color-scheme: dark)");
 const SANS_FALLBACK = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif';
-const MONO_FALLBACK = 'ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace';
+const MONO_FALLBACK = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace';
 
 /** 字体名净化：剔引号/分号/花括号防 CSS 值注入，逗号也不收（只认单字体名）。 */
 function sanitizeFontName(raw: string): string {

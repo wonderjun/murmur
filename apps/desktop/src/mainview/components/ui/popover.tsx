@@ -1,6 +1,6 @@
 /**
  * shadcn Popover 的 murmur 版（radix-ui 底层）：content 走 glass-overlay 浮层材料
- * （与 ChartTip 浮卡同族），rounded-item + hairline + shadow-overlay，无彩色。
+ * （与 ChartTip 浮卡同族），rounded-item + hairline + shadow-float，无彩色。
  * CUSTOMIZED: 全量 token 化改写（默认 palette → murmur 语义 token），细节见 ../CUSTOMIZATIONS.md。
  */
 
@@ -27,7 +27,8 @@ function PopoverContent({
         align={align}
         sideOffset={sideOffset}
         className={cn(
-          "glass-overlay z-50 w-72 rounded-item border border-hairline p-1 text-foreground shadow-overlay outline-none",
+          // CUSTOMIZED: shadow-overlay 别名退场，浮层直走 shadow-float
+          "glass-overlay z-50 w-72 rounded-item border border-hairline p-1 text-foreground shadow-float outline-none",
           className,
         )}
         {...props}

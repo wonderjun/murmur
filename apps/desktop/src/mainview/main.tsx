@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./app";
 import "./app.css";
+import { SEED_DIAG_AGENTS, seedStoredSessions } from "./design/demo-data";
 import { useMurmurStore } from "./store/murmur";
 
 import type { AgentStatus } from "@core/types";
@@ -159,6 +160,14 @@ if (location.search.includes("seed")) {
     },
     // 离线桥的 usageDaily 一律 reject，会落错误态——seed 直接顶替数据源（忽略入参，92 天全量给足）。
     usageDaily: async () => seedUsageRows,
+    // 管理台离线桩：诊断七家全景（zcode 需检查）+ 会话文件 14 条混合盘点。
+    getDiagnostics: async () => ({
+      firstRun: false,
+      generatedAt: now,
+      ingest: { endpoint: "127.0.0.1:54321", ok: true },
+      agents: SEED_DIAG_AGENTS,
+    }),
+    scanSessions: async () => ({ items: seedStoredSessions(now), scannedAt: now }),
   });
 }
 

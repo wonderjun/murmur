@@ -121,8 +121,11 @@ export function deriveHint(diag: AgentDiagnostics, ctx: { observed: boolean; ins
     Date.now() - diag.pull.lastScanAt > CURSOR_STALE_MS &&
     diag.sources.some((s) => s.exists && freshMtime(s.path));
   if (stalled) return '扫描可能停滞——试试「重扫」或重建台账';
-  if (diag.hook.enabled && !diag.hook.installed) return 'hook 未注入——点「重新接入」或开启自动接入';
-  if (diag.hook.enabled && diag.hook.installed && diag.hook.lastEventAt === null) {
+  // 无 push 面的 agent（hookTargets 空表，如 minimax）永不进 hook 提示分支。
+  if (diag.hook.targets.length > 0 && diag.hook.enabled && !diag.hook.installed) {
+    return 'hook 未注入——点「重新接入」或开启自动接入';
+  }
+  if (diag.hook.targets.length > 0 && diag.hook.enabled && diag.hook.installed && diag.hook.lastEventAt === null) {
     return 'hook 已注入但尚未收到上报（codex 需在 /hooks 信任条目；其余重启该工具）';
   }
   return '数据源正常——暂无活跃会话';

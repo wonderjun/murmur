@@ -1,27 +1,39 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource/ibm-plex-mono/latin-400.css";
+@import "@fontsource/ibm-plex-mono/latin-500.css";
+@import "@fontsource/ibm-plex-mono/latin-600.css";
+
+/* 管理台窄窗断点（viewport 宽，只管 #/manage 组件——面板 392px 会命中 tight，
+   因此 mid:/tight: 只允许出现在 manager 组件上，面板共用件不得使用）。
+   mid = 侧栏塌陷为图标栏；tight = 页头/内容紧凑排布。 */
+@custom-variant mid (@media (max-width: 700px));
+@custom-variant tight (@media (max-width: 560px));
 
 /*
- * Murmur 视觉唯一真源：Vercel 式单色基调，暗/亮双主题（<html data-theme> 切换，
- * 缺省回落深色）。表面三层 background → raised → card 递进，hairline 分层。
+ * Murmur 视觉唯一真源：「暮色栖木」——深墨蓝黑底 + 琥珀天光，暗/亮双主题
+ * （<html data-theme> 切换，缺省回落深色）。表面不靠描边靠叠层：
+ * background → surface-1/2/3 是前景色的半透明叠层，hairline 只做分隔。
  * UI chrome 全中性：--accent 在 root 等于 --foreground，交互只走灰阶反相；
  * 彩色只有三种语义——status（什么状态）、agent accent（谁）与 heat（用量密度）；
  * 图表系列位 --chart-1..7 是 --heat 暖橙 ramp（用量密度语义的延伸：折线画的就是用量），
  * 与热力图同族；系列区分靠色阶 + dash 双编码（dash 映射在 usage-view）。
- * waiting 琥珀与 murmur-mark 峰点同族：峰点琥珀 = 轮到你了。
+ * --glow 琥珀天光与 murmur-mark 峰点同族：峰点琥珀 = 轮到你了。
  */
 
 @theme inline {
   --color-background: var(--background);
-  --color-raised: var(--raised);
-  --color-card: var(--card);
-  --color-muted: var(--muted);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  /* 过渡别名（P4 删）：raised/card/muted 映射到叠层三档 */
   --color-overlay: var(--overlay);
   --color-hairline: var(--hairline);
   --color-foreground: var(--foreground);
   --color-muted-foreground: var(--muted-foreground);
   --color-faint: var(--faint);
   --color-accent: var(--accent);
+  --color-glow: var(--glow);
   --color-working: var(--status-working);
   --color-waiting: var(--status-waiting);
   --color-idle: var(--status-idle);
@@ -36,13 +48,17 @@
   --color-agent-cursor: var(--agent-cursor);
   --color-agent-devin: var(--agent-devin);
   --color-agent-qoder: var(--agent-qoder);
+  --color-agent-minimax: var(--agent-minimax);
   --color-heat: var(--heat);
-  --radius-item: 8px;
+  --radius-item: 12px;
+  --radius-row: 8px;
   --font-sans: var(--font-sans-stack);
   --font-mono: var(--font-mono-stack);
-  /* 字阶六档（焕新定案）：消灭 0.5px 微差，层级靠落差不靠灰度。
+  --font-data: var(--font-data-stack);
+  /* 字阶七档（焕新定案）：消灭 0.5px 微差，层级靠落差不靠灰度。
      micro 计数/轴/胶囊 · meta 副信息 · detail 次级行标题 · body 正文/主行
-     · title 版题/刊头头条 · display hero 数字（一律 mono + tabular-nums） */
+     · title 版题/刊头头条 · headline 版块大题 · display hero 数字
+     （headline/display 一律 mono/data + tabular-nums） */
   --text-micro: 10px;
   --text-meta: 11px;
   --text-detail: 12px;
@@ -50,15 +66,18 @@
   --text-title: 15px;
   --text-title--line-height: 1.3;
   --text-title--letter-spacing: -0.01em;
-  --text-display: 22px;
-  --text-display--line-height: 1.1;
-  --text-display--letter-spacing: -0.02em;
-  --shadow-raised: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 1px 2px rgb(0 0 0 / 0.32);
-  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.3);
+  --text-headline: 26px;
+  --text-headline--line-height: 1.15;
+  --text-headline--letter-spacing: -0.02em;
+  --text-display: 34px;
+  --text-display--line-height: 1.05;
+  --text-display--letter-spacing: -0.025em;
+  /* 实体卡阴影退场；阴影只给浮层（--shadow-float 在双主题块定义） */
   --transition-duration-fast: 120ms;
   --transition-duration-normal: 200ms;
   --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
   --animate-breathe: breathe 2.6s ease-in-out infinite;
+  --animate-ring-breathe: ring-breathe 2.6s ease-in-out infinite;
   --animate-attention: attention 1.8s ease-out infinite;
   --animate-tip-in: tip-in 120ms ease-out both;
   --animate-enter: enter 200ms cubic-bezier(0.32, 0.72, 0, 1) both;
@@ -66,6 +85,8 @@
   --animate-num-in: num-in 160ms ease-out both;
   --animate-drift: drift var(--drift-dur, 8s) ease-in-out var(--drift-delay, 0s) infinite;
   --animate-hero-breathe: hero-breathe 4.5s ease-in-out infinite;
+  --animate-dawn: dawn 6s ease-in-out infinite;
+  --animate-land: land 480ms cubic-bezier(0.32, 0.72, 0, 1) both;
 
   @keyframes tip-in {
     from { opacity: 0; }
@@ -75,6 +96,12 @@
   @keyframes breathe {
     0%, 100% { opacity: 0.55; transform: scale(1); }
     50% { opacity: 1; transform: scale(1.16); }
+  }
+
+  /* 状态环呼吸：breathe 的不透明度版（环不缩放，只起伏） */
+  @keyframes ring-breathe {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
   }
 
   @keyframes attention {
@@ -114,56 +141,77 @@
     0%, 100% { opacity: 0.45; }
     50% { opacity: 1; }
   }
+
+  /* 天光 live 态：琥珀光晕慢呼吸（安静态不呼吸，恒亮） */
+  @keyframes dawn {
+    0%, 100% { opacity: 0.55; }
+    50% { opacity: 1; }
+  }
+
+  /* 落位：新行自上方 4px 落下回弹——栖鸟落枝 */
+  @keyframes land {
+    0% { transform: translateY(-4px); opacity: 0; }
+    70% { transform: translateY(1px); opacity: 1; }
+    100% { transform: translateY(0); }
+  }
 }
 
 /* 主题无关的基础变量：字体栈可被设置页自定义字体覆盖（appearance.ts 写
-   --font-sans-stack / --font-mono-stack，prepend 到系统栈前，缺失自然回退）。 */
+   --font-sans-stack / --font-mono-stack，prepend 到系统栈前，缺失自然回退）。
+   --font-data-stack 是数据字形栈（面板数字/计数），与 mono 同捆 IBM Plex Mono。 */
 :root {
   --font-sans-stack: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Segoe UI", sans-serif;
-  --font-mono-stack: ui-monospace, "SF Mono", "Geist Mono", Menlo, monospace;
+  --font-mono-stack: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-data-stack: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   /* skill 契约的动效时长：组件用 duration-fast / duration-normal（由 @theme 生成） */
   --motion-fast: 120ms;
   --motion-normal: 200ms;
   /* 玻璃 chrome 覆盖层高度：刊头/底栏 absolute 浮于滚动区之上，
      main 用 padding 让位——改动刊头内容后同步校此值 */
   --chrome-top: 114px;
-  --chrome-bottom: 46px;
+  --chrome-bottom: 44px;
 }
 
-/* ── 深色：近黑底 + 灰阶递进，accent=前景色（单色交互） ── */
+/* ── 深色「暮色」：墨蓝黑底 + 前景半透明叠层，accent=前景色（单色交互） ── */
 :root,
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --background: #0a0a0a;
-  --raised: #141414;
-  --card: #1a1a1a;
-  --muted: #242424;
-  --overlay: #242428;
-  --hairline: rgba(255, 255, 255, 0.1);
-  --foreground: #ededed;
-  --muted-foreground: #a1a1a1;
-  --faint: #6e6e6e;
+  --background: oklch(0.17 0.018 262);
+  --foreground: oklch(0.93 0.012 80);
+  /* 表面叠层：前景色的透明叠层，档位靠堆叠不靠描边 */
+  --surface-1: color-mix(in oklab, var(--foreground) 4%, transparent);
+  --surface-2: color-mix(in oklab, var(--foreground) 7%, transparent);
+  --surface-3: color-mix(in oklab, var(--foreground) 11%, transparent);
+  --overlay: oklch(0.25 0.02 262);
+  --hairline: color-mix(in oklab, var(--foreground) 9%, transparent);
+  --muted-foreground: color-mix(in oklab, var(--foreground) 64%, transparent);
+  --faint: color-mix(in oklab, var(--foreground) 40%, transparent);
   --accent: var(--foreground);
-  --status-working: #4cc38a;
-  --status-waiting: #f5a524;
-  --status-waiting-glow: rgba(245, 165, 36, 0.3);
-  --status-idle: #525252;
-  --status-stale: #e5484d;
-  --status-ended: #404040;
+  /* 天光：琥珀 = 轮到你了；dawn-quiet/dawn-live 两条 utility 即静默/live 两档强度 */
+  --glow: oklch(0.78 0.16 70);
+  --status-working: oklch(0.74 0.14 160);
+  --status-waiting: oklch(0.80 0.16 70);
+  --status-waiting-glow: color-mix(in oklab, var(--status-waiting) 35%, transparent);
+  --status-idle: oklch(0.48 0.012 262);
+  --status-stale: oklch(0.66 0.19 22);
+  --status-ended: oklch(0.40 0.012 262);
   /* 破坏性操作色：与 status 红同色相，语义独立（删除确认态专用，不进状态色）。 */
   --destructive: var(--status-stale);
   --destructive-foreground: #fff;
-  --agent-kimi: #a78bfa;
-  --agent-zcode: #6e8cfb;
-  --agent-opencode: #3fa97f;
-  --agent-codex: #c9cdd6;
-  --agent-cursor: #d9a55f;
+  /* agent accent：旧 hex 原值转 oklch 后整体降饱和约 10%（色相不变） */
+  --agent-kimi: oklch(0.709 0.143 293.5);
+  --agent-zcode: oklch(0.670 0.151 270.0);
+  --agent-opencode: oklch(0.662 0.105 163.6);
+  --agent-codex: oklch(0.848 0.012 266.7);
+  --agent-cursor: oklch(0.756 0.096 73.2);
   /* devin：珊瑚朱——Cognition/Devin 品牌暖色，与 cursor 琥珀/zcode 蓝拉开色相。 */
-  --agent-devin: #f0765c;
+  --agent-devin: oklch(0.703 0.140 33.4);
   /* qoder：芽绿——Qoder 品牌绿，比 opencode 的翡翠绿更偏黄提亮度。 */
-  --agent-qoder: #9ccc65;
-  /* 热力图密度色：暖橙单色相 ramp（用量密度语义，非「谁」非状态） */
-  --heat: #f0763f;
+  --agent-qoder: oklch(0.789 0.128 129.8);
+  /* minimax：品红——官方 #F23F5D 品牌玫红降饱和，与 devin 珊瑚（h≈33）拉开色相。 */
+  --agent-minimax: oklch(0.660 0.190 14.0);
+  /* 热力图密度色：暖橙单色相 ramp（用量密度语义，非「谁」非状态），#f0763f 等价 oklch */
+  --heat: oklch(0.699 0.165 43.2);
   /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
      浅档透明度低，系列区分另有 dash 双编码兜底 */
   --chart-1: var(--heat);
@@ -173,37 +221,41 @@
   --chart-5: color-mix(in oklab, var(--heat) 28%, transparent);
   --chart-6: color-mix(in oklab, var(--heat) 21%, transparent);
   --chart-7: color-mix(in oklab, var(--heat) 16%, transparent);
+  --shadow-float: 0 16px 40px rgb(0 0 0 / 0.45), 0 2px 8px rgb(0 0 0 / 0.3);
 }
 
-/* ── 浅色：近白底 + 灰阶递进；状态/agent 色加深保证对比度 ── */
+/* ── 浅色「晨光」：暖白纸底 + 前景半透明叠层；状态/agent 色加深保证对比度 ── */
 :root[data-theme="light"] {
   color-scheme: light;
-  --background: #fafafa;
-  --raised: #f2f2f2;
-  --card: #ffffff;
-  --muted: #ebebeb;
+  --background: oklch(0.965 0.008 80);
+  --foreground: oklch(0.22 0.02 262);
+  --surface-1: color-mix(in oklab, var(--foreground) 3.5%, transparent);
+  --surface-2: color-mix(in oklab, var(--foreground) 6%, transparent);
+  --surface-3: color-mix(in oklab, var(--foreground) 9%, transparent);
   --overlay: #ffffff;
-  --hairline: rgba(0, 0, 0, 0.08);
-  --foreground: #171717;
-  --muted-foreground: #666666;
-  --faint: #a1a1a1;
+  --hairline: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --muted-foreground: color-mix(in oklab, var(--foreground) 62%, transparent);
+  --faint: color-mix(in oklab, var(--foreground) 42%, transparent);
   --accent: var(--foreground);
-  --status-working: #30a46c;
-  --status-waiting: #ad5700;
-  --status-waiting-glow: rgba(173, 87, 0, 0.25);
-  --status-idle: #9c9c9c;
-  --status-stale: #d93036;
-  --status-ended: #b8b8b8;
+  --glow: oklch(0.72 0.15 65);
+  --status-working: oklch(0.58 0.14 160);
+  /* waiting 琥珀压到 L=0.55：对底色对比度 4.6:1（0.58 档只有 4.05，不合格） */
+  --status-waiting: oklch(0.55 0.15 60);
+  --status-waiting-glow: color-mix(in oklab, var(--status-waiting) 30%, transparent);
+  --status-idle: oklch(0.70 0.01 262);
+  --status-stale: oklch(0.55 0.2 24);
+  --status-ended: oklch(0.78 0.01 262);
   --destructive: var(--status-stale);
   --destructive-foreground: #fff;
-  --agent-kimi: #7c3aed;
-  --agent-zcode: #2563eb;
-  --agent-opencode: #1f8a5f;
-  --agent-codex: #525252;
-  --agent-cursor: #b07d2b;
-  --agent-devin: #d4553d;
-  --agent-qoder: #558b2f;
-  --heat: #e8542a;
+  --agent-kimi: oklch(0.541 0.247 293.0);
+  --agent-zcode: oklch(0.546 0.215 262.9);
+  --agent-opencode: oklch(0.564 0.115 161.0);
+  --agent-codex: oklch(0.439 0.000 89.9);
+  --agent-cursor: oklch(0.627 0.114 75.1);
+  --agent-devin: oklch(0.611 0.165 32.7);
+  --agent-qoder: oklch(0.579 0.137 134.7);
+  --agent-minimax: oklch(0.575 0.210 14.0);
+  --heat: oklch(0.640 0.191 36.1);
   /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
      浅档透明度低，系列区分另有 dash 双编码兜底 */
   --chart-1: var(--heat);
@@ -213,8 +265,7 @@
   --chart-5: color-mix(in oklab, var(--heat) 28%, transparent);
   --chart-6: color-mix(in oklab, var(--heat) 21%, transparent);
   --chart-7: color-mix(in oklab, var(--heat) 16%, transparent);
-  --shadow-raised: 0 1px 2px rgb(0 0 0 / 0.05);
-  --shadow-overlay: 0 12px 32px rgb(0 0 0 / 0.12), 0 2px 8px rgb(0 0 0 / 0.06);
+  --shadow-float: 0 16px 40px rgb(30 30 60 / 0.14), 0 2px 8px rgb(0 0 0 / 0.06);
 }
 
 html,
@@ -260,6 +311,7 @@ a:focus-visible {
 /* 圆角与阴影由系统对标准窗口（Titled + FullSizeContentView）裁切，webview 铺满即可 */
 #app {
   position: relative;
+  overflow: hidden;
   border: 1px solid var(--hairline);
   background: var(--background);
 }
@@ -290,13 +342,37 @@ a:focus-visible {
 
 @utility accent-solid {
   background: var(--accent);
-  color: var(--card);
+  color: var(--background);
+}
+
+/* 浮层阴影 utility：值在 [data-theme] 主题块，@theme inline 无法引用主题变量 */
+@utility shadow-float {
+  box-shadow: var(--shadow-float);
+}
+
+/* 天光两档：quiet 静默环境光、live 有 waiting 时的活光（配 animate-dawn 呼吸）。
+   强度本是 --glow-quiet/--glow-live 两枚 token，因 color-mix 百分比不能 calc
+   变量而固化为两条 utility 的字面百分比（暗 7%/22%，与双主题共用）。 */
+@utility dawn-quiet {
+  background: radial-gradient(
+    ellipse 70% 55% at 10% -5%,
+    color-mix(in oklab, var(--glow) 7%, transparent),
+    transparent 70%
+  );
+}
+
+@utility dawn-live {
+  background: radial-gradient(
+    ellipse 70% 55% at 10% -5%,
+    color-mix(in oklab, var(--glow) 22%, transparent),
+    transparent 70%
+  );
 }
 
 /* 浮层专属玻璃：chrome 级（吸顶刊头/底栏）与 overlay 级（浮卡）两档。
    混合比本身已够暗——backdrop-filter 失效时仍可读，天然优雅降级。 */
 @utility glass-chrome {
-  background: color-mix(in oklab, var(--background) 72%, transparent);
+  background: color-mix(in oklab, var(--background) 60%, transparent);
   -webkit-backdrop-filter: blur(16px) saturate(1.7);
   backdrop-filter: blur(16px) saturate(1.7);
 }
@@ -308,11 +384,9 @@ a:focus-visible {
 }
 
 .setup-row {
-  border: 1px solid var(--hairline);
   border-radius: var(--radius-item);
-  background: var(--card);
-  box-shadow: var(--shadow-raised);
-  padding: 13px 14px;
+  background: var(--surface-1);
+  padding: 14px 16px;
 }
 
 .quota-strip {

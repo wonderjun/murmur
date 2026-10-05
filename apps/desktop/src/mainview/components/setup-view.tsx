@@ -46,7 +46,10 @@ export default function SetupView() {
           return (
             <article key={agent.agent} className="setup-row animate-enter" data-agent={agent.agent} style={{ animationDelay: `${i * 45 + 40}ms` }}>
               <div className="flex items-center gap-3">
-                <AgentIcon agent={agent.agent} size={30} />
+                {/* 单色字形栖在叠层圆托上——工具页不收彩色品牌砖 */}
+                <span className="inline-flex size-8 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
+                  <AgentIcon agent={agent.agent} variant="mono" size={28} />
+                </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="text-body font-semibold">{AGENT_META[agent.agent].name}</span>
@@ -64,16 +67,20 @@ export default function SetupView() {
                 </span>
               </div>
 
-              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-hairline/60 pt-2.5 text-meta text-muted-foreground">
-                <span>
-                  <b className="font-normal text-faint">安装</b> {agent.install.installed ? "已发现" : "未发现"}
-                </span>
-                <span>
-                  <b className="font-normal text-faint">来源</b> {sourceLabel(agent)}
-                </span>
-                <span>
-                  <b className="font-normal text-faint">额度</b> {quotaLabel(agent)}
-                </span>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-hairline/60 pt-2.5">
+                <div>
+                  <p className="text-micro text-faint">安装</p>
+                  <p className="mt-0.5 text-meta text-foreground">{agent.install.installed ? "已发现" : "未发现"}</p>
+                </div>
+                <div>
+                  <p className="text-micro text-faint">来源</p>
+                  <p className="mt-0.5 text-meta text-foreground">{sourceLabel(agent)}</p>
+                </div>
+                {/* 额度文案可能带错误细节，长文本跨两列 */}
+                <div className="col-span-2">
+                  <p className="text-micro text-faint">额度</p>
+                  <p className="mt-0.5 text-meta text-foreground">{quotaLabel(agent)}</p>
+                </div>
               </div>
 
               {agent.quota?.windows.length ? (
@@ -82,17 +89,17 @@ export default function SetupView() {
                     <div key={w.label} className="quota-window">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-meta font-medium text-foreground">{w.label}</span>
-                        <span className={cn("font-mono text-meta tabular-nums", quotaTone(w.usedPct))}>
+                        <span className={cn("font-data text-meta tabular-nums", quotaTone(w.usedPct))}>
                           {fmtQuotaHeadline(w)}
                         </span>
                       </div>
-                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-foreground/10">
+                      <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-surface-3">
                         <span
                           className={cn("block h-full rounded-full transition-[width]", quotaBar(w.usedPct))}
                           style={{ width: `${Math.min(w.usedPct, 100)}%` }}
                         />
                       </div>
-                      <div className="mt-1 flex items-center justify-between gap-2 font-mono text-micro text-faint">
+                      <div className="mt-1 flex items-center justify-between gap-2 font-data text-micro text-faint">
                         <span>{fmtQuotaAmount(w)}</span>
                         <span>{resetText(w)}</span>
                       </div>

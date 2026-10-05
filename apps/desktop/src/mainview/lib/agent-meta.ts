@@ -13,15 +13,17 @@ export const AGENT_META: Record<AgentId, { name: string; abbr: string }> = {
   cursor: { name: "Cursor", abbr: "⌘" },
   devin: { name: "Devin", abbr: "D" },
   qoder: { name: "Qoder", abbr: "Q" },
+  minimax: { name: "MiniMax Code", abbr: "M" },
 };
 
-export const AGENT_ORDER: AgentId[] = ["kimi", "zcode", "opencode", "codex", "cursor", "devin", "qoder"];
+export const AGENT_ORDER: AgentId[] = ["kimi", "zcode", "opencode", "codex", "cursor", "devin", "qoder", "minimax"];
 
 /**
  * 关闭 hook 上报的降级说明（设置页开关下展示）：push 平面撤掉后退回 pull 轮询，
  * token 台账不受影响（用量本来就走 pull）。
+ * Partial：缺条目 = 该 agent 无 push 面（如 minimax），设置页据此不渲染 hook 开关行。
  */
-export const HOOK_IMPACT: Record<AgentId, string> = {
+export const HOOK_IMPACT: Partial<Record<AgentId, string>> = {
   kimi: "关闭后退回 wire.jsonl 轮询：状态与「轮到你了」提示延迟数秒，用量统计不受影响",
   zcode: "关闭后丢失审批与实时回合结束信号，退回任务表轮询",
   opencode: "关闭后退回 2s 事件表轮询，实时性略降",

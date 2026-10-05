@@ -48,7 +48,7 @@ const { ok } = await rpc.rpc.request.fooBar({ agent });
 ## 规则
 
 1. **禁止任何一端离开契约写实现**——electrobun 的泛型让双端编译期对齐；缺 handler 或签名不符会在 `bun run typecheck:desktop` 直接报错。
-2. **request vs message 分工**：问答式（拉数据/触发动作/等结果）走 `bun.requests`；主进程主动推（`snapshot` 全量广播）走 `webview.messages`。现状 messages 只有 snapshot 一条，新增推送先想能不能并入快照。
+2. **request vs message 分工**：问答式（拉数据/触发动作/等结果）走 `bun.requests`；主进程主动推走 `webview.messages`（现有 `snapshot` 全量实况 / `managerNav` 切 tab / `settings` 设置变更广播——后两者是低频事件通道，不并入快照）。新增推送先想能不能并入快照或复用现有通道。
 3. response 尽量小且可序列化（electrobun 走 JSON 桥）；大 payload 考虑分页或让 webview 再拉。
 4. **BYOK 凭据永不进 RPC**：key 只进 `credentials.json`（0600），对外一律 maskKey 掩码——`setAgentKey` 只收不回传（见 settings 禁区）。
 5. webview **禁摸 `window.electrobun` / 裸建 RPC**——`useRpc` 单例自带无桥离线降级（设计板预览靠它），绕过单例 = 预览白屏。

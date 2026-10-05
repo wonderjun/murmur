@@ -74,6 +74,7 @@ describe("createRpcHandlers", () => {
       cursor: { changed: false, files: [] },
       devin: { changed: false, files: [] },
       qoder: { changed: false, files: [] },
+      minimax: { changed: false, files: [] },
     });
     expect(handlers.hidePanel({})).toEqual({ ok: true });
     expect(deps.hidden).toBe(true);
@@ -86,6 +87,8 @@ describe("createRpcHandlers", () => {
     expect(await handlers.getSettings({})).toBe(settings);
     const patch: Partial<MurmurSettings> = { showDockIcon: true, launchAtLogin: true, theme: "dark" };
     expect(await handlers.updateSettings({ patch })).toBe(settings);
+    // 设置变更广播：面板/管理窗双 context 靠 push 同步（主题/字体即时生效）。
+    expect(deps.settingsPushed).toEqual([settings]);
     expect(registry.patches).toEqual([patch, { launchAtLogin: false }]);
     expect(deps.dock).toEqual([true]);
     expect(deps.launch).toEqual([true]);
@@ -94,6 +97,8 @@ describe("createRpcHandlers", () => {
     expect(registry.hooks).toEqual([{ agent: "kimi", enabled: false }]);
     expect(await handlers.setAgentObserved({ agent: "codex", enabled: true })).toBe(settings);
     expect(registry.observed).toEqual([{ agent: "codex", enabled: true }]);
+    // 每个 mutation 各推一次：updateSettings + 这两个累计 3 次广播。
+    expect(deps.settingsPushed).toEqual([settings, settings, settings]);
 
     expect(handlers.readClipboard({})).toEqual({ text: "pasted" });
     expect(handlers.writeClipboard({ text: "cwd" })).toEqual({ ok: true });
@@ -126,7 +131,7 @@ describe("createRpcHandlers", () => {
   });
 
   test("BYOK apiKey 只进 registry，不出现在 response", async () => {
-    const { handlers, registry, settings } = harness();
+    const { handlers, registry, settings, deps } = harness();
     const response = await handlers.setAgentKey({
       agent: "zcode",
       apiKey: API_KEY,
@@ -138,6 +143,8 @@ describe("createRpcHandlers", () => {
     const cleared = await handlers.setAgentKey({ agent: "zcode", apiKey: null });
     expect(cleared).toBe(settings);
     expect(registry.keys[1]).toEqual({ agent: "zcode", apiKey: null, baseUrl: undefined });
+    // apiKey 的响应回了发起窗，但广播载荷也绝不能带明文——推流同受约束。
+    expect(JSON.stringify(deps.settingsPushed)).not.toContain(API_KEY);
   });
 
   test("revealPath 只把家目录内路径交给 callback", () => {
@@ -187,6 +194,8 @@ interface FakeDeps {
   tabs: ManagerTab[];
   openedDataDir: boolean;
   quit: boolean;
+  /** pushSettings 广播捕获：settings mutation 必须推一遍最新快照。 */
+  settingsPushed: SettingsSnapshot[];
 }
 
 interface KeyCall {
@@ -226,6 +235,7 @@ function harness(): Harness {
       cursor: { changed: false, files: [] },
       devin: { changed: false, files: [] },
       qoder: { changed: false, files: [] },
+      minimax: { changed: false, files: [] },
     }),
     refreshQuotas: async () => {},
     usageDailySince: (sinceMs) => [
@@ -278,11 +288,13 @@ function harness(): Harness {
     tabs: [],
     openedDataDir: false,
     quit: false,
+    settingsPushed: [],
   };
   const moveToTrash = (path: string) => path.endsWith(".jsonl");
   const handlers = createRpcHandlers({
     registry,
     settingsSnapshot: async () => settings,
+    pushSettings: (snap) => deps.settingsPushed.push(snap),
     homeDir: HOME,
     now: () => NOW,
     hidePanel: () => {

@@ -77,6 +77,8 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
   const rpc = useRpc(
     (s) => set({ snapshot: s, loading: false }),
     (tab) => set({ managerNav: { tab, at: Date.now() } }),
+    // 其他窗口改设置（主题/字体/开关）→ 本窗同步，applyAppearance 随 settingsSnap 重跑。
+    (s) => set({ settingsSnap: s }),
   );
 
   async function refresh() {

@@ -18,13 +18,7 @@ import { MURMUR_HOME } from '../paths';
 import { fallbackQuota, unavailable } from '../quota/common';
 import { flagEnabled, loadSettings, saveSettings, type MurmurSettings } from '../settings';
 import type { AgentAdapter } from '../agents/base';
-import { createCodexAdapter } from '../agents/codex';
-import { createCursorAdapter } from '../agents/cursor';
-import { createDevinAdapter } from '../agents/devin';
-import { createKimiAdapter } from '../agents/kimi';
-import { createOpencodeAdapter } from '../agents/opencode';
-import { createQoderAdapter } from '../agents/qoder';
-import { createZcodeAdapter } from '../agents/zcode';
+import { defaultAdapters } from '../agents/default';
 import type { AgentEvent, AgentId, AgentSnapshot, AppSnapshot, DiagnosticsSnapshot, HookTestResult, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
 import { SELFTEST_PREFIX, assembleDiagnostics, runHookTest } from './diagnostics';
 import { STALE_AFTER_MS, StatusEngine } from './status-engine';
@@ -38,7 +32,7 @@ const RECENTLY_ENDED_LIMIT = 8;
 /** 台账保留清扫周期（events/quota/cursors 只进不出，每日压实一次）。 */
 const PRUNE_INTERVAL_MS = 24 * 3600_000;
 
-/** AgentRegistry 组装选项：全部可省，缺省即生产形态（7 家真 adapter + MURMUR_HOME 数据面 + ingest 服务）。 */
+/** AgentRegistry 组装选项：全部可省，缺省即生产形态（8 家真 adapter + MURMUR_HOME 数据面 + ingest 服务）。 */
 export interface RegistryOptions {
   /** 测试注入：替换默认 adapter 集（fake 边界，不探测真机目录）。 */
   adapters?: AgentAdapter[];
@@ -78,15 +72,7 @@ export class AgentRegistry {
   constructor(opts: RegistryOptions = {}) {
     this.dataDir = opts.dataDir ?? MURMUR_HOME;
     this.skipIngest = opts.skipIngest ?? false;
-    this.adapters = opts.adapters ?? [
-      createKimiAdapter(),
-      createZcodeAdapter(),
-      createOpencodeAdapter(),
-      createCodexAdapter(),
-      createCursorAdapter(),
-      createDevinAdapter(),
-      createQoderAdapter(),
-    ];
+    this.adapters = opts.adapters ?? defaultAdapters();
     this.settings = loadSettings(this.dataDir);
     this.byok = loadCredentials(this.dataDir);
     this.ledger = new Ledger(this.dataDir);

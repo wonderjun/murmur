@@ -16,7 +16,8 @@ function Checkbox({ className, ...props }: ComponentProps<typeof CheckboxPrimiti
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-hairline bg-raised outline-none transition-colors duration-fast",
+        // CUSTOMIZED: 底改 surface-1 叠层（raised 别名已退场）
+        "peer flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-hairline bg-surface-1 outline-none transition-colors duration-fast",
         "hover:border-foreground/60 data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=indeterminate]:border-foreground data-[state=indeterminate]:bg-foreground",
         "disabled:cursor-not-allowed disabled:opacity-40",
         className,

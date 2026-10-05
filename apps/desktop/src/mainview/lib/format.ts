@@ -52,6 +52,17 @@ export function relAgo(ms: number | null | undefined): string {
   return `${Math.floor(h / 24)}天前`;
 }
 
+/** 会话事件年龄（秒级颗粒：<10s 刚刚 / <60s N秒前 / <60m N分钟前 / 更久 N小时前）。
+ *  与 relAgo 不同口径——动态页「等了 x」「没有更新」需要秒级读数。 */
+export function fmtAge(at: number): string {
+  const seconds = Math.max(0, Math.floor((Date.now() - at) / 1000));
+  if (seconds < 10) return "刚刚";
+  if (seconds < 60) return `${seconds}秒前`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}分钟前`;
+  return `${Math.floor(minutes / 60)}小时前`;
+}
+
 /** YYYY-MM-DD（本地时区）——台账 day 键与区间几何共用。 */
 export function dayStr(ms: number): string {
   const d = new Date(ms);

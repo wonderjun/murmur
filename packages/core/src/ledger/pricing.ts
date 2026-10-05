@@ -25,6 +25,10 @@ const PRICES: Record<string, Price> = {
   // Moonshot
   'kimi-for-coding': { input: 0.6, output: 2.5 },
   'kimi-k2': { input: 0.6, output: 2.5 },
+  // MiniMax（官方 paygo 标准档；>512k 长上下文档不另建——价表按模糊匹配，宁缺毋滥）
+  'minimax-m3': { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.375 },
+  'minimax-m2.7': { input: 0.3, output: 1.2, cacheRead: 0.06, cacheWrite: 0.375 },
+  'minimax-m2': { input: 0.3, output: 1.2, cacheRead: 0.03, cacheWrite: 0.375 },
   // Google
   'gemini-2.5-pro': { input: 1.25, output: 10 },
   'gemini-2.5-flash': { input: 0.3, output: 2.5 },

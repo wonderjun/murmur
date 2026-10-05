@@ -37,16 +37,17 @@ function Calendar({
         ...formatters,
       }}
       classNames={{
+        /* CUSTOMIZED: hover 统一走 surface-2 叠层（raised 别名已退场） */
         root: cn("[--cell-size:1.75rem] [--cell-radius:0.375rem]", defaultClassNames.root),
         months: cn("relative flex flex-col", defaultClassNames.months),
         month: cn("flex w-full flex-col", defaultClassNames.month),
         nav: cn("absolute inset-x-0 top-0 flex w-full items-center justify-between", defaultClassNames.nav),
         button_previous: cn(
-          "size-(--cell-size) select-none rounded-md p-0 text-faint outline-none hover:bg-raised hover:text-foreground aria-disabled:opacity-50",
+          "size-(--cell-size) select-none rounded-md p-0 text-faint outline-none hover:bg-surface-2 hover:text-foreground aria-disabled:opacity-50",
           defaultClassNames.button_previous,
         ),
         button_next: cn(
-          "size-(--cell-size) select-none rounded-md p-0 text-faint outline-none hover:bg-raised hover:text-foreground aria-disabled:opacity-50",
+          "size-(--cell-size) select-none rounded-md p-0 text-faint outline-none hover:bg-surface-2 hover:text-foreground aria-disabled:opacity-50",
           defaultClassNames.button_next,
         ),
         month_caption: cn(
@@ -129,7 +130,7 @@ function CalendarDayButton({
       data-range-middle={modifiers.range_middle}
       className={cn(
         "relative isolate z-10 flex aspect-square w-full min-w-(--cell-size) select-none flex-col items-center justify-center gap-1 rounded-(--cell-radius) font-mono text-detail tabular-nums leading-none text-muted-foreground outline-none transition-colors duration-fast",
-        "hover:bg-raised hover:text-foreground",
+        "hover:bg-surface-2 hover:text-foreground",
         "focus-visible:ring-2 focus-visible:ring-foreground/40",
         "data-[selected-single=true]:bg-foreground data-[selected-single=true]:text-background data-[selected-single=true]:hover:bg-foreground",
         "data-[range-start=true]:rounded-l-(--cell-radius) data-[range-start=true]:bg-foreground data-[range-start=true]:text-background",

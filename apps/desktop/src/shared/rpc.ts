@@ -109,6 +109,8 @@ export type MurmurRPC = {
       snapshot: AppSnapshot;
       /** 管理台窗口已开时的切 tab 指令（openManager 重开同窗用）。 */
       managerNav: { tab: ManagerTab };
+      /** 设置变更广播：任一窗口的 mutation 落库后推给所有窗口（面板要即时换主题/字体）。 */
+      settings: SettingsSnapshot;
     };
   }>;
 };

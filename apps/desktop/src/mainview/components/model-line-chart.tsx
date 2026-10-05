@@ -222,7 +222,7 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
               cx={p.x}
               cy={p.y}
               r={i === hoverIndex ? 4 : 1.8}
-              fill={i === hoverIndex ? "var(--card)" : s.color}
+              fill={i === hoverIndex ? "var(--surface-2)" : s.color}
               stroke={i === hoverIndex ? s.color : "none"}
               strokeWidth={i === hoverIndex ? 1.8 : 0}
             />
