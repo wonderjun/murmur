@@ -9,7 +9,7 @@
 
 import type { AgentId, ManagerTab } from "../../../../packages/core/src/index";
 import type { MurmurSettings } from "../../../../packages/core/src/settings";
-import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
+import type { MurmurRPC, SettingsSnapshot, UpdateSnapshot } from "../shared/rpc";
 import type { FocusAppResult } from "./focus-app";
 
 /** bun.requests 的单方法实现：入参与返回值钉死在契约上。 */
@@ -76,6 +76,12 @@ export interface RpcHandlerDeps {
   /** 文件类会话产物进废纸篓。 */
   moveToTrash: (path: string) => boolean;
   openDataDir: () => void;
+  /** 更新相位实况（updates.ts 维护；晚开的管理窗挂载补读）。 */
+  updateState: () => Promise<UpdateSnapshot>;
+  /** 触发远端 update.json 比对。 */
+  checkUpdate: () => Promise<UpdateSnapshot>;
+  /** 受理更新：下载+换包异步推进，结果走 updateStatus 推送。 */
+  applyUpdate: () => Promise<{ ok: boolean; error?: string }>;
   quit: () => void;
 }
 
@@ -174,6 +180,9 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
       deps.openDataDir();
       return { ok: true };
     },
+    getUpdateState: () => deps.updateState(),
+    checkUpdate: () => deps.checkUpdate(),
+    applyUpdate: () => deps.applyUpdate(),
     quitApp: () => {
       deps.quit();
       return { ok: true };

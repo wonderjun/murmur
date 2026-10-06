@@ -41,6 +41,7 @@
 - **BYOK**：本地凭据不可读的 agent（如 zcode）支持自填 API Key，存 `~/.murmur/credentials.json`（0600），对外只显示掩码
 - **会话文件管理**（管理台 tab）：盘点各 CLI 的磁盘会话产物，按工具/项目过滤、批量清理——文件进废纸篓可恢复，库内行事务删除
 - **外观**：「暮色栖木」墨蓝黑底 + 琥珀天光，IBM Plex Mono 数据字体；跟随系统/暗/亮主题，自定义字体
+- **应用内更新**：启动静默检查 + 设置页手动检查，「更新并重启」一键换包（直取 GitHub Releases，dev 构建不触网）
 - **两级开关**：监听总闸 + hook 上报独立开关，卸载 hook 只摘除自己的条目，不碰共存工具的注入
 
 ## 隐私与安全
@@ -106,6 +107,7 @@ Supports **8 agents** — Kimi Code, ZCode, OpenCode, Codex, Cursor, Devin, Qode
 - BYOK API keys for agents whose local credentials are encrypted (`~/.murmur/credentials.json`, mode 0600, masked in UI)
 - Session file manager (Manager tab): inventory, filter, and batch-clean CLI session artifacts (files → Trash, DB rows → transactional delete)
 - "Dusk Perch" design — ink-dark surfaces + amber light, IBM Plex Mono data font; dark/light/system theme and custom font
+- In-app updates: silent check at launch + manual check in settings; "Update & restart" swaps the bundle straight from GitHub Releases (dev builds never hit the network)
 - Two-level switches: observe gate + hook reporting toggle; hook uninstall only removes Murmur's own entries
 
 ## Privacy

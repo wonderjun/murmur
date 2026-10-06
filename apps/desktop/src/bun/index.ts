@@ -22,6 +22,7 @@ import type { AppSnapshot, ManagerTab } from "../../../../packages/core/src/inde
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
 import { createFocusApp } from "./focus-app";
 import { createRpcHandlers } from "./rpc-handlers";
+import { createUpdateService } from "./updates";
 import {
   appBundlePath,
   applyDockIcon,
@@ -154,6 +155,9 @@ function makeViewRpc() {
       openDataDir: () => {
         Utils.showItemInFolder(MURMUR_HOME);
       },
+      updateState: updates.state,
+      checkUpdate: updates.check,
+      applyUpdate: updates.apply,
       quit: quitMurmur,
       }),
       messages: {},
@@ -198,6 +202,22 @@ function openManagerWindow(tab: ManagerTab) {
     managerWin = null;
   });
 }
+
+// 更新服务：相位推进广播给全部窗口（与 pushSettings 同一双窗模式）。
+// 闭包里的 panel/managerWin 是调用时读取——广播只会在首个 check/apply 之后发生，
+// 那时窗口早已建好，TDZ 无虞；但服务必须先于 panel 建好（makeViewRpc 依赖它）。
+const updates = createUpdateService({
+  updater: Updater,
+  broadcast: (snap) => {
+    for (const win of [panel, managerWin]) {
+      try {
+        win?.webview.rpc?.send.updateStatus(snap);
+      } catch {
+        // 页面尚未加载完成时忽略推送失败。
+      }
+    }
+  },
+});
 
 const panel = new BrowserWindow<ViewRpc>({
   // 标题必须为空：Titled 窗口的标题文字会画在面板顶部（2026-09 实测）。
@@ -387,6 +407,9 @@ registry.onChange(() => {
 applyDockIcon(registry.getSettings().showDockIcon);
 
 await registry.start();
+// 启动静默检查一次更新：dev/裸跑不触网（updates.check 内 gate），
+// stable 拉 update.json 比对——结果走 updateStatus 推送，设置页打开即见。
+void updates.check();
 updateTrayTitle(registry.snapshot());
 if (appBundlePath()) console.log("[murmur] bundle:", appBundlePath());
 console.log("[murmur] started — ingest endpoint:", registry.ingestEndpoint());

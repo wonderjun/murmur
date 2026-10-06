@@ -12,7 +12,7 @@ import { create } from "zustand";
 
 import { useRpc } from "@/lib/rpc";
 
-import type { SettingsSnapshot, UsageDailyRow } from "../../shared/rpc";
+import type { SettingsSnapshot, UpdateSnapshot, UsageDailyRow } from "../../shared/rpc";
 import type { MurmurSettings } from "@core/settings";
 import type {
   AgentId,
@@ -35,6 +35,8 @@ interface MurmurStore {
   settingsError: boolean;
   /** 管理窗切 tab 指令（managerNav 推送；at 是 nonce——同 tab 重发也要生效）。 */
   managerNav: { tab: ManagerTab; at: number } | null;
+  /** 更新实况（updateStatus 推送 + getUpdateState 挂载补读；null=尚未读过）。 */
+  update: UpdateSnapshot | null;
   refresh(): Promise<void>;
   installHooks(): Promise<Record<AgentId, { changed: boolean; files: string[] }>>;
   refreshQuotas(): Promise<void>;
@@ -72,6 +74,12 @@ interface MurmurStore {
   /** 唤起会话宿主 app 到台前；app 为被激活的 .app 名。 */
   focusSessionApp(agent: AgentId, id: string): Promise<{ ok: boolean; app?: string }>;
   openDataDir(): Promise<void>;
+  /** 设置页挂载补读更新相位（管理窗晚开，可能错过推送）。 */
+  loadUpdateState(): Promise<void>;
+  /** 设置页「检查更新」按钮。 */
+  checkUpdate(): Promise<void>;
+  /** 设置页「更新并重启」：受理即返回，相位走 updateStatus 推送。 */
+  applyUpdate(): Promise<void>;
   quit(): void;
 }
 
@@ -81,6 +89,7 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     (tab) => set({ managerNav: { tab, at: Date.now() } }),
     // 其他窗口改设置（主题/字体/开关）→ 本窗同步，applyAppearance 随 settingsSnap 重跑。
     (s) => set({ settingsSnap: s }),
+    (u) => set({ update: u }),
   );
 
   async function refresh() {
@@ -197,6 +206,35 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     await rpc.rpc!.request.openDataDir({});
   }
 
+  async function loadUpdateState() {
+    try {
+      set({ update: await rpc.rpc!.request.getUpdateState({}) });
+    } catch {
+      // 无桥预览/桥未就绪：保持 null，设置页按缺省相位渲染。
+    }
+  }
+
+  async function checkUpdate() {
+    try {
+      set({ update: await rpc.rpc!.request.checkUpdate({}) });
+    } catch {
+      // RPC 超时也无妨：Updater 状态流仍在推进，updateStatus 推送会带最终相位。
+    }
+  }
+
+  async function applyUpdate() {
+    try {
+      const r = await rpc.rpc!.request.applyUpdate({});
+      if (!r.ok) {
+        set((s) => ({
+          update: { phase: "error", current: s.update?.current ?? "", channel: s.update?.channel ?? "", error: r.error },
+        }));
+      }
+    } catch {
+      // 受理请求超时不代表失败：下载在 bun 侧异步推进，相位推送照旧。
+    }
+  }
+
   function quit() {
     void rpc.rpc!.request.quitApp({});
   }
@@ -208,6 +246,7 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     settingsSnap: null,
     settingsError: false,
     managerNav: null,
+    update: null,
     refresh,
     installHooks,
     refreshQuotas,
@@ -231,6 +270,9 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     revealSession,
     focusSessionApp,
     openDataDir,
+    loadUpdateState,
+    checkUpdate,
+    applyUpdate,
     quit,
   };
 });

@@ -144,6 +144,13 @@ describe("createRpcHandlers", () => {
     ]);
     expect(handlers.openDataDir({})).toEqual({ ok: true });
     expect(deps.openedDataDir).toBe(true);
+
+    // 更新三连：读相位 / 触发检查 / 受理换包，全部透传到注入的 updates 服务。
+    expect((await handlers.getUpdateState({})).phase).toBe("idle");
+    expect((await handlers.checkUpdate({})).phase).toBe("up-to-date");
+    expect(await handlers.applyUpdate({})).toEqual({ ok: true });
+    expect(deps.updated).toEqual({ checked: 1, applied: 1 });
+
     expect(handlers.quitApp({})).toEqual({ ok: true });
     expect(deps.quit).toBe(true);
   });
@@ -216,6 +223,8 @@ interface FakeDeps {
   focused: { agent: AgentId; cwd: string | undefined }[];
   /** pushSettings 广播捕获：settings mutation 必须推一遍最新快照。 */
   settingsPushed: SettingsSnapshot[];
+  /** 更新服务调用计数：checkUpdate/applyUpdate 各应落一次。 */
+  updated: { checked: number; applied: number };
 }
 
 interface KeyCall {
@@ -310,6 +319,7 @@ function harness(): Harness {
     quit: false,
     focused: [],
     settingsPushed: [],
+    updated: { checked: 0, applied: 0 },
   };
   const moveToTrash = (path: string) => path.endsWith(".jsonl");
   const handlers = createRpcHandlers({
@@ -337,6 +347,15 @@ function harness(): Harness {
     moveToTrash,
     openDataDir: () => {
       deps.openedDataDir = true;
+    },
+    updateState: async () => ({ phase: "idle", current: "test", channel: "dev" }),
+    checkUpdate: async () => {
+      deps.updated.checked += 1;
+      return { phase: "up-to-date", current: "test", channel: "dev" };
+    },
+    applyUpdate: async () => {
+      deps.updated.applied += 1;
+      return { ok: true };
     },
     quit: () => {
       deps.quit = true;

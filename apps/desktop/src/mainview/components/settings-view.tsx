@@ -17,6 +17,7 @@ import { useMurmurStore } from "@/store/murmur";
 
 import type { MurmurSettings, ThemePreference } from "@core/settings";
 import type { AgentId, AgentSnapshot } from "@core/types";
+import type { UpdateSnapshot } from "../../shared/rpc";
 
 const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
   { value: "system", label: "跟随系统" },
@@ -28,6 +29,27 @@ const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
 interface OpResult {
   ok: boolean;
   message: string;
+}
+
+/** 「更新」行副文案：七相各一句；非打包 channel 不查更新。 */
+function updateDesc(u: UpdateSnapshot | null, channel: string): string {
+  if (channel !== "stable" && channel !== "canary") return "开发构建不走更新通道";
+  switch (u?.phase) {
+    case "checking":
+      return "正在检查更新…";
+    case "up-to-date":
+      return "已是最新版本";
+    case "available":
+      return u.latest ? `发现新版本 v${u.latest}` : "发现新版本";
+    case "downloading":
+      return u.progress != null ? `下载中 ${Math.round(u.progress)}%` : "下载中…";
+    case "applying":
+      return "正在应用更新，应用将自动重启";
+    case "error":
+      return u.error ? `更新失败：${u.error}` : "更新失败";
+    default:
+      return "从 GitHub Releases 获取新版本";
+  }
 }
 
 export default function SettingsView() {
@@ -42,6 +64,10 @@ export default function SettingsView() {
   const rebuildLedger = useMurmurStore((s) => s.rebuildLedger);
   const openDataDir = useMurmurStore((s) => s.openDataDir);
   const openManager = useMurmurStore((s) => s.openManager);
+  const update = useMurmurStore((s) => s.update);
+  const loadUpdateState = useMurmurStore((s) => s.loadUpdateState);
+  const checkUpdate = useMurmurStore((s) => s.checkUpdate);
+  const applyUpdate = useMurmurStore((s) => s.applyUpdate);
 
   const agents = useMemo(
     () =>
@@ -82,7 +108,8 @@ export default function SettingsView() {
 
   useEffect(() => {
     void loadSettings();
-  }, [loadSettings]);
+    void loadUpdateState();
+  }, [loadSettings, loadUpdateState]);
 
   useEffect(() => {
     if (fontDraft !== null && fontDraft === snap?.settings.font) setFontDraft(null);
@@ -363,6 +390,27 @@ export default function SettingsView() {
                 <span className="select-text font-data text-meta tabular-nums text-faint">
                   v{snap.runtime.version} · {snap.runtime.channel}
                 </span>
+              }
+            />
+            <GroupRow
+              label="更新"
+              desc={updateDesc(update, snap.runtime.channel)}
+              control={
+                snap.runtime.channel === "stable" || snap.runtime.channel === "canary" ? (
+                  update?.phase === "available" ? (
+                    <Button size="sm" onClick={() => void applyUpdate()}>
+                      更新并重启
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={update?.phase === "checking" || update?.phase === "downloading" || update?.phase === "applying"}
+                      onClick={() => void checkUpdate()}
+                    >
+                      {update?.phase === "checking" ? "检查中…" : "检查更新"}
+                    </Button>
+                  )
+                ) : undefined
               }
             />
             <GroupRow

@@ -45,6 +45,29 @@ export interface SettingsSnapshot {
   };
 }
 
+/** 更新相位：bun 侧把 Updater 的细粒度状态流收敛成 UI 可消费的七相。 */
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "up-to-date"
+  | "available"
+  | "downloading"
+  | "applying"
+  | "error";
+
+/** 更新实况快照：相位推进走 updateStatus 推送，getUpdateState 供晚开的窗口补读。 */
+export interface UpdateSnapshot {
+  phase: UpdatePhase;
+  /** 本地版本（裸 bun 直跑为 "dev"）。 */
+  current: string;
+  channel: string;
+  /** 远端发现的可更新版本（available 相位才有）。 */
+  latest?: string;
+  /** 下载进度 0–100（downloading 相位）。 */
+  progress?: number;
+  error?: string;
+}
+
 export type MurmurRPC = {
   bun: RPCSchema<{
     requests: {
@@ -100,6 +123,12 @@ export type MurmurRPC = {
       focusSessionApp: { params: { agent: AgentId; id: string }; response: { ok: boolean; app?: string } };
       /** Finder 打开 ~/.murmur 数据目录。 */
       openDataDir: { params: {}; response: { ok: true } };
+      /** 当前更新相位（设置页挂载补读——管理窗晚开会错过历史推送）。 */
+      getUpdateState: { params: {}; response: UpdateSnapshot };
+      /** 检查更新：拉远端 update.json 比对（Updater 内部 in-flight 去重；dev/裸跑不触网）。 */
+      checkUpdate: { params: {}; response: UpdateSnapshot };
+      /** 受理更新：下载+换包异步推进（相位走 updateStatus 推送），换包后进程由更新助手重启。 */
+      applyUpdate: { params: {}; response: { ok: boolean; error?: string } };
       quitApp: { params: {}; response: { ok: true } };
     };
     messages: {};
@@ -113,6 +142,8 @@ export type MurmurRPC = {
       managerNav: { tab: ManagerTab };
       /** 设置变更广播：任一窗口的 mutation 落库后推给所有窗口（面板要即时换主题/字体）。 */
       settings: SettingsSnapshot;
+      /** 更新相位推进（检查/下载进度/换包各节点；含启动后的静默检查）。 */
+      updateStatus: UpdateSnapshot;
     };
   }>;
 };
