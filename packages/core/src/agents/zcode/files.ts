@@ -63,7 +63,7 @@ function collectUnits(): Map<string, ZcodeUnit> {
   // cli/db/db.sqlite：session 表是会话本体（opencode 系同构 schema）。
   if (existsSync(dbPath)) {
     try {
-      const db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+      const db = new Database(dbPath, { readonly: true });
       try {
         const rows = db
           .query('SELECT id, title, directory, time_created, time_updated FROM session')
@@ -104,7 +104,7 @@ function collectUnits(): Map<string, ZcodeUnit> {
   // tasks-index：任务列表行（项目归属兜底 + 软删标记录入点）。
   if (existsSync(tasksDb)) {
     try {
-      const db = new Database(`file:${tasksDb}?mode=ro`, { readonly: true });
+      const db = new Database(tasksDb, { readonly: true });
       try {
         const rows = db
           .query('SELECT task_id, title, workspace_path, created_at, updated_at FROM tasks WHERE deleted=0')

@@ -52,7 +52,7 @@ function collectUnits(): Map<string, DevinUnit> {
   if (existsSync(dbPath)) {
     let db: Database | null = null;
     try {
-      db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+      db = new Database(dbPath, { readonly: true });
     } catch {
       db = null; // DB 被占用：fs 产物仍可列出。
     }

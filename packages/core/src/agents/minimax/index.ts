@@ -129,7 +129,7 @@ export function createMinimaxAdapter(): AgentAdapter {
       if (!existsSync(dbPath)) return () => {};
       let db: Database | null = null;
       try {
-        db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+        db = new Database(dbPath, { readonly: true });
       } catch {
         // 库损坏/被占 → watcher 空挂（诊断页 openable 探针如实上报）。
         db = null;

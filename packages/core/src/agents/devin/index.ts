@@ -187,7 +187,7 @@ export function createDevinAdapter(opts: DevinAdapterOptions = {}): AgentAdapter
       let db: Database | null = null;
       if (hasDb) {
         try {
-          db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+          db = new Database(dbPath, { readonly: true });
         } catch {
           // DB 损坏/被占 → 本地状态面降级，其余通道照常。
           db = null;

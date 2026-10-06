@@ -252,7 +252,7 @@ export function createOpencodeAdapter(): AgentAdapter {
         // pre-sqlite 旧版回退：扫 storage/message JSON 补用量面（状态面仍靠插件）。
         return watchLegacyJson(paths.home, emit, ledger);
       }
-      const db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+      const db = new Database(dbPath, { readonly: true });
       let lastRowid = Number(ledger.getCursor('opencode:event') ?? '0');
       if (!lastRowid) {
         // 首次：从回填窗口起算，不扫全库。种子取 MIN(rowid)-1——poll 用 > 游标，

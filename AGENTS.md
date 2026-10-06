@@ -158,3 +158,4 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 - 刊头/底栏是 `absolute` 玻璃覆盖层（`glass-chrome`），滚动区用 `--chrome-top`/`--chrome-bottom` padding 让位——**改刊头/底栏内容后必须回校 app.css 里这两个常量**，否则首行被遮或露缝。
 - macOS 编辑快捷键（⌘V/⌘C/⌘A/⌘Z）由**主菜单 keyEquivalent** 派发到第一响应者——菜单栏伴侣没有默认应用菜单，WKWebView 输入框粘贴/全选全废（Electron 同款坑）。`bun/index.ts` 启动时用 `setApplicationMenu`（`electrobun/main/app-menu`）注册最小 App+Edit 菜单（role 走原生 NSResponder selector），另挂隐藏 `Ctrl+V → paste`；webview 输入框再有 `onKeyDown` → `readClipboard` RPC 兜底（菜单已消费的事件到不了 JS，不会双贴；`e.currentTarget` 必须先捕获再 await）。
 - 新 UI 组件先上 `#/design` 设计板（`design/design-board.tsx`）再进业务页。
+- 只读开 sqlite 用 `new Database(path, { readonly: true })`，禁止 `file:...?mode=ro` URI 形式——URI 经 SQLite URI 文件名解析，Linux 上 readonly 开库 SQLITE_CANTOPEN（CI ubuntu 15 测试全挂、macOS 全绿，2026-10 实测）；diagnostics.ts:55 注释是约定源头。

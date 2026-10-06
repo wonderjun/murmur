@@ -150,7 +150,7 @@ export function createZcodeAdapter(): AgentAdapter {
       let taskCount = 0;
       try {
         if (existsSync(tasksDb)) {
-          const db = new Database(`file:${tasksDb}?mode=ro`, { readonly: true });
+          const db = new Database(tasksDb, { readonly: true });
           taskCount = (db.query('SELECT COUNT(*) n FROM tasks WHERE deleted=0').get() as { n: number }).n;
           db.close();
         }
@@ -208,7 +208,7 @@ export function createZcodeAdapter(): AgentAdapter {
       // —— 任务状态轮询（v2/tasks-index.sqlite，当前状态表）。
       const tasksDb = join(paths.sessions ?? paths.home, 'tasks-index.sqlite');
       if (existsSync(tasksDb)) {
-        const db = new Database(`file:${tasksDb}?mode=ro`, { readonly: true });
+        const db = new Database(tasksDb, { readonly: true });
         // 续跑游标：上次见过的最大 updated_at；≤ 它的行不再重复发事件（防重启重复落账）。
         let minUpdated = Number(ledger.getCursor('zcode:tasks') ?? '0');
         const seen = new Map<string, string>(); // taskKey → `${status}:${updated_at}`

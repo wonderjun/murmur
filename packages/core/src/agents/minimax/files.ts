@@ -70,7 +70,7 @@ function sessionMeta(dbPath: string): Map<string, { title?: string; cwd?: string
   if (!existsSync(dbPath)) return out;
   let db: Database | null = null;
   try {
-    db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+    db = new Database(dbPath, { readonly: true });
     for (const r of db
       .query('SELECT session_id, title, workspace_dir FROM local_runtime_sessions')
       .all() as Array<{ session_id: string; title: string | null; workspace_dir: string | null }>) {

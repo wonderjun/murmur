@@ -65,7 +65,7 @@ function collectDb(units: Map<string, OcUnit>, dbPath: string) {
   if (!existsSync(dbPath)) return;
   let db: Database | null = null;
   try {
-    db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+    db = new Database(dbPath, { readonly: true });
   } catch {
     return; // DB 被占用/不可读：fs 产物仍可列出。
   }

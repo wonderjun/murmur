@@ -345,7 +345,7 @@ export function createQoderAdapter(): AgentAdapter {
       let db: Database | null = null;
       if (hasDb && dbPath) {
         try {
-          db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+          db = new Database(dbPath, { readonly: true });
         } catch {
           db = null;
         }
