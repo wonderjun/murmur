@@ -8,4 +8,7 @@ build/
 *.log
 # 各 agent 工具的本机产物（会话计划/权限配置），不进库
 .zcode/
+.qoder/
+.devin/
+.cottontail-tmp/
 *.local.json
