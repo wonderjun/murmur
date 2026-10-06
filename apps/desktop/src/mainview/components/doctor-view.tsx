@@ -138,7 +138,7 @@ export default function DoctorView() {
               <div className="relative">
                 <p className="eyebrow text-faint">欢迎</p>
                 <p className="mt-1.5 text-body font-semibold">已在本机发现 {found} 个可观察的工具</p>
-                <p className="mt-1.5 max-w-[380px] text-meta leading-relaxed text-muted-foreground">
+                <p className="mt-1.5 max-w-95 text-meta leading-relaxed text-muted-foreground">
                   Murmur 只读本地数据：本地读取即可看到会话状态与用量；接入 hook 后还能实时收到「轮到你了」这类回合信号。
                 </p>
                 {report ? (

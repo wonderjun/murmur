@@ -29,6 +29,13 @@ bun run check:tsconfig # 同上，只检查 drift（非 0 即 paths 过期）
 
 首次：`cd apps/desktop && hutch install && hutch electrobun sync && hutch run dev`。
 
+## 发版
+
+- 版本号真源是 `apps/desktop/electrobun.config.ts` 的 `app.version`（烘进 `Contents/Resources/version.json`）；同步面：根/`apps/desktop`/`packages/core` 三个 `package.json` + README 顶部 badge + `CHANGELOG.md` 段题 `## [x.y.z] - 日期` 与文末 compare 链接。
+- 动作：同步提交后 `git tag vX.Y.Z` 随分支一起 push → `.github/workflows/release.yml`（macos-15）先校验 tag==config version（不等拒构建），跑 test + typecheck:desktop，`hutch run build` 后用 `softprops/action-gh-release` 把 `apps/desktop/artifacts/*` 挂上 Release，notes 自动抽 CHANGELOG 对应段。
+- 产物**未签名未公证**（`build.mac.codesign/notarize` 未开）：用户首启需右键打开（README 安装段写明）。将来上 Developer ID：config 开两个开关 + workflow secrets `ELECTROBUN_DEVELOPER_ID`/`ELECTROBUN_APPLEID`/`ELECTROBUN_APPLEIDPASS`/`ELECTROBUN_TEAMID`。
+- `release.baseUrl` = `releases/latest/download` 已烘进包（GitHub latest 只跟正式 release，pre-release 不算）；应用内 `Updater.checkForUpdate` 尚未接线，`release.generatePatch` 暂 false——接自动更新时再开。release 上的 `stable-macos-arm64-*` 更新件禁止改名（updater 按前缀寻址）。
+
 ## 目录地图
 
 ```
@@ -128,6 +135,7 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 | UI 裸色板 / hex / 任意 px 字号 | 语义 token；app.css 是 token 唯一真源；彩色只有 accent（谁）与 status（什么状态）；组件内禁止写死品牌色，accent 走 `data-agent` 属性 |
 | `any` | 具体类型；外部脏数据用 `as unknown as X` 收敛在 adapter 边界。生产源码由 architecture-boundary 词法门禁卡住（注释、字符串、模板静态文本除外） |
 | BYOK key 进 settings.json / RPC 快照 / 日志 | settings.json 经 getSettings 整包发 webview——key 只进 credentials.json（0600），对外一律 maskKey 掩码 |
+| 个人路径 / 真实凭据 / 真机使用数据入库（注释、截图、文档都算） | 公开仓库卫生：注释里的示例路径写 `/path/to/` 占位（真机路径曾混进 render.ts 注释，2026-10 靠 filter-repo 重写历史才清掉）；截图只拍 `?seed` 演示快照（main.tsx seed 桩就是为这个准备的）；测试桩 key 必须一眼假（`sk-...do-not-leak` 形）；agent 本机目录按目录级进 .gitignore（`.zcode/` `.qoder/` `.devin/` `.cottontail-tmp/`），只靠 `*.local.json` 会漏新文件 |
 
 规范文档与实现冲突时的仲裁：token/状态色以 `app.css` 为准，类型与 agent 集合以 `packages/core/src/types.ts` 为准，并顺手把 skill 改对。
 

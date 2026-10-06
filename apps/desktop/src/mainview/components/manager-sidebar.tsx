@@ -34,8 +34,8 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
   const tokens = todayTokens(snapshot);
 
   return (
-    <aside className="relative z-10 flex w-[200px] shrink-0 flex-col border-r border-hairline bg-surface-1 mid:w-[56px]">
-      <div className="h-[52px] shrink-0" style={DRAG_STYLE} />
+    <aside className="relative z-10 flex w-50 shrink-0 flex-col border-r border-hairline bg-surface-1 mid:w-14">
+      <div className="h-13 shrink-0" style={DRAG_STYLE} />
       <nav className="flex flex-col gap-0.5 px-2" aria-label="管理台视图">
         {ITEMS.map((item) => {
           const Icon = item.icon;

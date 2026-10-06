@@ -4,7 +4,7 @@ export default {
   app: {
     name: "Murmur",
     identifier: "dev.murmur.app",
-    version: "0.1.1",
+    version: "0.1.2",
   },
   build: {
     mainProcess: "bun",
@@ -28,5 +28,11 @@ export default {
     win: {
       bundleCEF: false,
     },
+  },
+  release: {
+    // GitHub Releases 托管更新件；/latest/download 只跟随正式 release（不含 prerelease）
+    baseUrl: "https://github.com/chen-wang-jun/murmur/releases/latest/download",
+    // 应用内 Updater 未接入前不产 delta patch（首版也无前序 release 可 diff）
+    generatePatch: false,
   },
 } satisfies ElectrobunConfig;

@@ -27,7 +27,7 @@ export function GroupList({
   return (
     <section className={className}>
       {title && <h2 className="mb-2 px-1 text-meta font-semibold text-muted-foreground">{title}</h2>}
-      {desc && <p className="mb-2 mt-[-6px] px-1 text-micro text-faint">{desc}</p>}
+      {desc && <p className="mb-2 -mt-1.5 px-1 text-micro text-faint">{desc}</p>}
       <div className="divide-y divide-hairline/60 overflow-hidden rounded-item bg-surface-1">{children}</div>
     </section>
   );
@@ -104,7 +104,7 @@ export function GroupRow({
       )}
       {/* 展开块：与行同级入 divide 组，有 leading 时 pl 对齐文字列 */}
       {expanded && children != null && (
-        <div className={cn("bg-surface-2/40 px-4 py-3", leading ? "pl-[52px]" : undefined)}>{children}</div>
+        <div className={cn("bg-surface-2/40 px-4 py-3", leading ? "pl-13" : undefined)}>{children}</div>
       )}
     </>
   );

@@ -1,0 +1,80 @@
+# 发版流水线：推 v* tag → macOS 构建 → 上传 artifacts 到 GitHub Release。
+# tag 必须与 apps/desktop/electrobun.config.ts 的 app.version 一致（第 6 步校验，不等即拒绝）。
+# 未签名：artifacts 不带公证票据，README 安装段写明右键打开。
+# release.baseUrl 烘进 version.json 指向 releases/latest/download；tar.zst/update.json
+# 与 dmg 同传且禁止改名——updater 件按 {channel}-{os}-{arch} 前缀寻址。
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      HUTCH_HOME: ${{ runner.temp }}/hutch
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+
+      - name: Install JS dependencies
+        run: |
+          bun install --frozen-lockfile --cwd packages/core
+          bun install --frozen-lockfile --cwd apps/desktop
+
+      - name: Install Hutch
+        run: |
+          curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh -s -- \
+            --version 0.27.1 \
+            --hutch-home "$HUTCH_HOME" \
+            --no-modify-path
+          echo "$HUTCH_HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Sync Electrobun devkit
+        working-directory: apps/desktop
+        run: hutch electrobun sync
+
+      - name: Check tag matches app version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          ver=$(sed -nE 's/^[[:space:]]*version: "([^"]+)".*/\1/p' apps/desktop/electrobun.config.ts | head -1)
+          echo "tag=$tag config=$ver"
+          [ -n "$ver" ] && [ "$tag" = "$ver" ] || { echo "::error::tag 与 electrobun.config.ts app.version 不一致"; exit 1; }
+
+      - name: Test
+        run: bun run test
+
+      - name: Typecheck desktop
+        run: bun run typecheck:desktop
+
+      - name: Build stable artifacts
+        working-directory: apps/desktop
+        run: hutch run build
+
+      - name: Extract release notes from CHANGELOG
+        run: |
+          ver="${GITHUB_REF_NAME#v}"
+          awk -v v="$ver" '
+            $0 ~ "^## \\[" v "\\]" { f=1; next }
+            /^## \[/ { f=0 }
+            f
+          ' CHANGELOG.md > release-notes.md
+          [ -s release-notes.md ] || echo "See CHANGELOG.md for details." > release-notes.md
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: apps/desktop/artifacts/*
+          body_path: release-notes.md
+          fail_on_unmatched_files: true

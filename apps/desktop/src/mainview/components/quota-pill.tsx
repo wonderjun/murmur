@@ -41,7 +41,7 @@ export default function QuotaPill({ window: w }: { window: QuotaWindow }) {
     >
       <span className="font-sans font-medium">{w.label}</span>
       <span className="tabular-nums">{fmtQuotaHeadline(w)}</span>
-      <span className="relative h-[3px] w-7 overflow-hidden rounded-full bg-foreground/10">
+      <span className="relative h-0.75 w-7 overflow-hidden rounded-full bg-foreground/10">
         <span
           className={cn("absolute inset-y-0 left-0 rounded-full", danger ? "bg-stale" : warn ? "bg-foreground" : "bg-foreground/50")}
           style={{ width: `${w.usedPct}%` }}

@@ -133,7 +133,7 @@ export default function App() {
                   {active && (
                     <span
                       className={cn(
-                        "absolute inset-x-0 -bottom-[7px] h-[2px] rounded-full",
+                        "absolute inset-x-0 -bottom-1.75 h-0.5 rounded-full",
                         item.id === "live" && waiting > 0 ? "bg-waiting" : "bg-foreground",
                       )}
                     />

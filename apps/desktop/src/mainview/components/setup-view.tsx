@@ -35,7 +35,7 @@ export default function SetupView() {
             {connectedCount}/{agents.length} 已连接
           </span>
         </div>
-        <p className="mt-2 max-w-[310px] text-meta leading-relaxed text-muted-foreground">
+        <p className="mt-2 max-w-77.5 text-meta leading-relaxed text-muted-foreground">
           Murmur 只读取本机工具。不同工具的观察方式不同，这里会把数据来源和额度状态分开说明。
         </p>
       </section>
@@ -93,7 +93,7 @@ export default function SetupView() {
                           {fmtQuotaHeadline(w)}
                         </span>
                       </div>
-                      <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-surface-3">
+                      <div className="mt-1.5 h-0.75 overflow-hidden rounded-full bg-surface-3">
                         <span
                           className={cn("block h-full rounded-full transition-[width]", quotaBar(w.usedPct))}
                           style={{ width: `${Math.min(w.usedPct, 100)}%` }}

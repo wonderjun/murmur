@@ -59,7 +59,7 @@ export default function ManagerApp() {
       <Dawn className="z-0" />
       <ManagerSidebar tab={tab} onChange={setTab} />
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <div className="h-[52px] shrink-0" style={DRAG_STYLE} />
+        <div className="h-13 shrink-0" style={DRAG_STYLE} />
         {tab === "files" ? (
           // SessionsView 自带 h-full 布局——外层给 min-h-0 定界。内容列流体铺满：
           // 宽窗不再居中限宽（全屏双留白实测很难看），padding 走断点收紧。

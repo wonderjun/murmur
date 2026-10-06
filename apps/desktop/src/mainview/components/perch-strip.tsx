@@ -76,7 +76,7 @@ export default function PerchStrip({ className }: { className?: string }) {
             {AGENT_META[bird.agent].name}
           </span>
           {/* 晕环压枝：bg-background 圆晕把枝线从点下挤开 */}
-          <span className="flex items-center justify-center rounded-full bg-background p-[3px]">
+          <span className="flex items-center justify-center rounded-full bg-background p-0.75">
             {/* 状态切换即 remount 播 land；首次入场按栖位错峰，群鸟依次落枝。
                 waiting 鸟额外一圈琥珀晕环，一眼锁定「轮到你了」 */}
             <span

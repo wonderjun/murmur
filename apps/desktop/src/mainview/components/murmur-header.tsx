@@ -50,7 +50,7 @@ export default function MurmurHeader() {
   return (
     <header className="animate-enter px-5 pb-3 pt-4">
       <div className="flex items-start gap-3">
-        <MurmurMark size={28} live={waiting > 0} className="mt-[3px] text-foreground" />
+        <MurmurMark size={28} live={waiting > 0} className="mt-0.75 text-foreground" />
         <div className="min-w-0 flex-1">
           {/* 状态头条：headline 档当家；waiting 时数字琥珀 */}
           <p className="text-headline font-semibold tracking-tight">
