@@ -16,8 +16,6 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    env:
-      HUTCH_HOME: ${{ runner.temp }}/hutch
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +30,8 @@ jobs:
 
       - name: Install Hutch
         run: |
+          # runner context 只在 step 内可用（job 级 env 求值时没有它），用 runner 注入的 $RUNNER_TEMP
+          export HUTCH_HOME="$RUNNER_TEMP/hutch"
           curl -fsSL https://hutch.blackboard.sh/hutch/install.sh | sh -s -- \
             --version 0.27.1 \
             --hutch-home "$HUTCH_HOME" \
