@@ -69,6 +69,8 @@ interface MurmurStore {
   deleteSessions(items: { agent: AgentId; id: string }[]): Promise<SessionDeleteResult[]>;
   /** Finder 定位会话首个磁盘产物。 */
   revealSession(agent: AgentId, id: string): Promise<boolean>;
+  /** 唤起会话宿主 app 到台前；app 为被激活的 .app 名。 */
+  focusSessionApp(agent: AgentId, id: string): Promise<{ ok: boolean; app?: string }>;
   openDataDir(): Promise<void>;
   quit(): void;
 }
@@ -187,6 +189,10 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     return r.ok;
   }
 
+  async function focusSessionApp(agent: AgentId, id: string) {
+    return rpc.rpc!.request.focusSessionApp({ agent, id });
+  }
+
   async function openDataDir() {
     await rpc.rpc!.request.openDataDir({});
   }
@@ -223,6 +229,7 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     scanSessions,
     deleteSessions,
     revealSession,
+    focusSessionApp,
     openDataDir,
     quit,
   };

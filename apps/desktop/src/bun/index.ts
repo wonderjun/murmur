@@ -20,6 +20,7 @@ import { AgentRegistry, migrateLegacyHome, MURMUR_HOME } from "../../../../packa
 
 import type { AppSnapshot, ManagerTab } from "../../../../packages/core/src/index";
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
+import { createFocusApp } from "./focus-app";
 import { createRpcHandlers } from "./rpc-handlers";
 import {
   appBundlePath,
@@ -58,6 +59,22 @@ async function resolveMainViewUrl(): Promise<string> {
 if (migrateLegacyHome()) console.log("[murmur] legacy ~/.perch migrated → ~/.murmur");
 
 const registry = new AgentRegistry();
+
+/** 外部命令执行器：ps/lsof/open 只读 stdout + exit code，8s 兜底防子进程挂住 RPC。 */
+async function runCmd(argv: string[]): Promise<{ code: number; stdout: string }> {
+  try {
+    const proc = Bun.spawn(argv, { stdout: "pipe", stderr: "ignore" });
+    const timeout = setTimeout(() => proc.kill(), 8_000);
+    try {
+      const stdout = await new Response(proc.stdout).text();
+      return { code: await proc.exited, stdout };
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch {
+    return { code: -1, stdout: "" };
+  }
+}
 
 /** 退出主流程：stop 无论成败都必须落到 process.exit，进程绝不能残留。 */
 function quitMurmur(): void {
@@ -132,6 +149,7 @@ function makeViewRpc() {
       revealInFinder: (path) => {
         Utils.showItemInFolder(path);
       },
+      focusApp: createFocusApp(runCmd),
       moveToTrash: (path) => Utils.moveToTrash(path),
       openDataDir: () => {
         Utils.showItemInFolder(MURMUR_HOME);

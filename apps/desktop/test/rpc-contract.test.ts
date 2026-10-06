@@ -9,7 +9,14 @@ import { join } from "node:path";
 import { createRpcHandlers } from "../src/bun/rpc-handlers";
 
 import type { RpcHandlerDeps, RpcRegistry } from "../src/bun/rpc-handlers";
-import type { AgentId, AppSnapshot, DiagnosticsSnapshot, HookTestResult, ManagerTab } from "../../../packages/core/src/types";
+import type {
+  AgentId,
+  AppSnapshot,
+  DiagnosticsSnapshot,
+  HookTestResult,
+  ManagerTab,
+  SessionSnapshot,
+} from "../../../packages/core/src/types";
 import type { MurmurSettings } from "../../../packages/core/src/settings";
 import type { SettingsSnapshot } from "../src/shared/rpc";
 
@@ -124,6 +131,17 @@ describe("createRpcHandlers", () => {
     expect(scanned.items).toEqual([{ agent: "kimi", id: "s1", sizeBytes: 4, createdAt: 1, modifiedAt: 2, kind: "file", active: false }]);
     expect(await handlers.revealSession({ agent: "kimi", id: "s1" })).toEqual({ ok: true });
     expect(deps.revealed).toEqual(["/tmp/session.jsonl"]);
+
+    // focusSessionApp：活跃会话查到 cwd 才传给 focusApp；ended/查无会话各自兜底。
+    expect(await handlers.focusSessionApp({ agent: "kimi", id: "s1" })).toEqual({ ok: true, app: "TestApp" });
+    expect(deps.focused).toEqual([{ agent: "kimi", cwd: "/work/proj" }]);
+    await handlers.focusSessionApp({ agent: "zcode", id: "ended-1" });
+    await handlers.focusSessionApp({ agent: "kimi", id: "nope" });
+    expect(deps.focused).toEqual([
+      { agent: "kimi", cwd: "/work/proj" },
+      { agent: "zcode", cwd: "/work/ended" },
+      { agent: "kimi", cwd: undefined },
+    ]);
     expect(handlers.openDataDir({})).toEqual({ ok: true });
     expect(deps.openedDataDir).toBe(true);
     expect(handlers.quitApp({})).toEqual({ ok: true });
@@ -194,6 +212,8 @@ interface FakeDeps {
   tabs: ManagerTab[];
   openedDataDir: boolean;
   quit: boolean;
+  /** focusApp 调用捕获：handler 必须先查会话 cwd 再唤起。 */
+  focused: { agent: AgentId; cwd: string | undefined }[];
   /** pushSettings 广播捕获：settings mutation 必须推一遍最新快照。 */
   settingsPushed: SettingsSnapshot[];
 }
@@ -288,6 +308,7 @@ function harness(): Harness {
     tabs: [],
     openedDataDir: false,
     quit: false,
+    focused: [],
     settingsPushed: [],
   };
   const moveToTrash = (path: string) => path.endsWith(".jsonl");
@@ -309,6 +330,10 @@ function harness(): Harness {
     },
     openManager: (tab) => deps.tabs.push(tab),
     revealInFinder: (path) => deps.revealed.push(path),
+    focusApp: async (agent, cwd) => {
+      deps.focused.push({ agent, cwd });
+      return { ok: true, app: "TestApp" };
+    },
     moveToTrash,
     openDataDir: () => {
       deps.openedDataDir = true;
@@ -347,7 +372,42 @@ function settingsSnapshot(): SettingsSnapshot {
 }
 
 function appSnapshot(): AppSnapshot {
-  return { agents: [], overall: "idle", generatedAt: NOW };
+  const session: SessionSnapshot = {
+    agent: "kimi",
+    sessionId: "s1",
+    status: "waiting",
+    statusAt: 1,
+    lastEventAt: 2,
+    startedAt: 1,
+    cwd: "/work/proj",
+    tokens: { input: 1, output: 2 },
+    costUsd: 0,
+  };
+  const ended: SessionSnapshot = {
+    agent: "zcode",
+    sessionId: "ended-1",
+    status: "ended",
+    statusAt: 3,
+    lastEventAt: 3,
+    startedAt: 1,
+    endedAt: 3,
+    cwd: "/work/ended",
+    tokens: { input: 0, output: 0 },
+    costUsd: 0,
+  };
+  return {
+    agents: [
+      {
+        agent: "kimi",
+        install: { installed: true, hasCredentials: false, homeDir: "/h", hookInstalled: false },
+        disabled: false,
+        sessions: [session],
+      },
+    ],
+    overall: "waiting",
+    generatedAt: NOW,
+    recentlyEnded: [ended],
+  };
 }
 
 function diagnostics(): DiagnosticsSnapshot {

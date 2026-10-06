@@ -10,6 +10,7 @@
 import type { AgentId, ManagerTab } from "../../../../packages/core/src/index";
 import type { MurmurSettings } from "../../../../packages/core/src/settings";
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
+import type { FocusAppResult } from "./focus-app";
 
 /** bun.requests 的单方法实现：入参与返回值钉死在契约上。 */
 type RequestHandler<M extends keyof RpcRequests> = (
@@ -70,6 +71,8 @@ export interface RpcHandlerDeps {
   openManager: (tab: ManagerTab) => void;
   /** Finder 定位；调用方已确认路径允许。 */
   revealInFinder: (path: string) => void;
+  /** 唤起宿主 app 到台前；cwd 供祖先链候选精确匹配（缺省也能跑）。 */
+  focusApp: (agent: AgentId, cwd: string | undefined) => Promise<FocusAppResult>;
   /** 文件类会话产物进废纸篓。 */
   moveToTrash: (path: string) => boolean;
   openDataDir: () => void;
@@ -158,6 +161,14 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
       const [path] = await registry.sessionPaths(agent, id);
       if (path) deps.revealInFinder(path);
       return { ok: Boolean(path) };
+    },
+    focusSessionApp: async ({ agent, id }) => {
+      // 活跃会话与 recentlyEnded 都算数：ended 会话宿主 app 多半仍在，cwd 照旧兜得上。
+      const snap = registry.snapshot();
+      const session =
+        snap.agents.flatMap((a) => a.sessions).find((s) => s.agent === agent && s.sessionId === id) ??
+        (snap.recentlyEnded ?? []).find((s) => s.agent === agent && s.sessionId === id);
+      return deps.focusApp(agent, session?.cwd);
     },
     openDataDir: () => {
       deps.openDataDir();

@@ -3,7 +3,7 @@
  * 左侧 3px 琥珀边条 + 卡内局部天光（dawn-live 恒亮不呼吸，环境光语义：
  * 琥珀亮起 = 轮到你了）。
  * 多 waiting 时底部圆点 + 「下一个」轮换展示；动作行（复制路径 /
- * 在 Finder 显示 / 查看会话 ›）走 useSessionActions，与 agent-row 同源。
+ * 在 Finder 显示 / 打开应用 ›）走 useSessionActions，与 agent-row 同源。
  */
 
 import { useState } from "react";
@@ -12,21 +12,15 @@ import { Button } from "@/components/ui/button";
 import { AGENT_META } from "@/lib/agent-meta";
 import { fmtAge } from "@/lib/format";
 import { waitingReasonLabel } from "@/lib/status-text";
-import { useSessionActions } from "@/lib/use-session-actions";
+import { hintLabel, useSessionActions } from "@/lib/use-session-actions";
 import { cn } from "@/lib/utils";
 
-import type { AgentId, SessionSnapshot } from "@core/types";
+import type { SessionSnapshot } from "@core/types";
 
-/** waiting 会话卡列表轮换头条；onFocus 用于定位到对应 AgentRow。 */
-export default function WaitingHero({
-  sessions,
-  onFocus,
-}: {
-  sessions: SessionSnapshot[];
-  onFocus: (agent: AgentId) => void;
-}) {
+/** waiting 会话卡列表轮换头条；「打开应用」唤起宿主 app 到台前。 */
+export default function WaitingHero({ sessions }: { sessions: SessionSnapshot[] }) {
   const [idx, setIdx] = useState(0);
-  const { reveal, copyCwd, hint } = useSessionActions();
+  const { reveal, copyCwd, focus, hint } = useSessionActions();
   const session = sessions[Math.min(idx, sessions.length - 1)];
   if (!session) return null;
 
@@ -59,12 +53,12 @@ export default function WaitingHero({
           <Button size="sm" variant="ghost" onClick={() => void reveal(session)}>
             在 Finder 显示
           </Button>
-          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => onFocus(session.agent)}>
-            查看会话 ›
+          <Button size="sm" variant="ghost" className="ml-auto" onClick={() => void focus(session)}>
+            打开应用 ›
           </Button>
         </div>
         {hint?.sessionId === session.sessionId && (
-          <p className="mt-1 text-micro text-faint">{hint.kind === "miss" ? "未找到磁盘产物" : "路径已复制"}</p>
+          <p className="mt-1 text-micro text-faint">{hintLabel(hint)}</p>
         )}
       </div>
       {sessions.length > 1 && (

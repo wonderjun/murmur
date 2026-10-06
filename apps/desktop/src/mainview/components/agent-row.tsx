@@ -1,12 +1,10 @@
 /** agent 行：折叠头（mono 徽标状态环 + 摘要）+ 展开会话明细 + 额度窗格。
  *  自身不带卡片壳——分组容器（monitor-view / 设计板）提供叠层面与分隔。
- *  展开走 grid-template-rows 0fr↔1fr 过渡（无测量）+ ease-spring 弹性；
- *  外部经 expandSignal 请求展开（waiting hero 定位），DOM 锚
- *  data-agent-row / data-session 供滚动定位，不引入路由。
+ *  展开走 grid-template-rows 0fr↔1fr 过渡（无测量）+ ease-spring 弹性。
  *  会话动作（Finder 定位 / 复制路径）走 useSessionActions：行内提示 3 秒淡出。 */
 
 import { ChevronDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import StatusDot from "@/components/status-dot";
@@ -14,21 +12,16 @@ import StatusRing from "@/components/status-ring";
 import { AGENT_META } from "@/lib/agent-meta";
 import { fmtQuotaHeadline, fmtTokens, relAgo } from "@/lib/format";
 import { sessionStatusText, sessionTimeline } from "@/lib/status-text";
-import { useSessionActions } from "@/lib/use-session-actions";
+import { hintLabel, useSessionActions } from "@/lib/use-session-actions";
 import { cn } from "@/lib/utils";
 
 import type { AgentSnapshot, AgentStatus, SessionSnapshot } from "@core/types";
 
 const STATUS_ORDER: AgentStatus[] = ["waiting", "working", "stale", "idle", "ended"];
 
-export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot; expandSignal?: number }) {
+export default function AgentRow({ agent }: { agent: AgentSnapshot }) {
   const [expanded, setExpanded] = useState(true);
   const { reveal, copyCwd, hint } = useSessionActions();
-
-  // waiting hero 点击定位：外部信号递增即展开（已展开则保持）。
-  useEffect(() => {
-    if (expandSignal) setExpanded(true);
-  }, [expandSignal]);
 
   const name = AGENT_META[agent.agent].name;
   const sessions = useMemo(() => [...agent.sessions].sort((a, b) => b.lastEventAt - a.lastEventAt), [agent.sessions]);
@@ -43,7 +36,7 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
     : `${s.title || compactPath(s.cwd)} · ${statusText(s.status)}`;
 
   return (
-    <article data-agent={agent.agent} data-agent-row={agent.agent}>
+    <article data-agent={agent.agent}>
       <button
         type="button"
         className="flex w-full items-center gap-3 px-3.5 py-2.5 text-left transition-colors duration-fast hover:bg-surface-2"
@@ -80,11 +73,10 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
             {sessions.map((session) => (
               <div
                 key={session.sessionId}
-                data-session={session.sessionId}
                 className="group select-text border-b border-hairline/60 px-3.5 py-2.5 last:border-b-0"
               >
                 <div className="flex items-start gap-2.5">
-                  <StatusDot status={session.status} size={6} className="mt-[5px]" />
+                  <StatusDot status={session.status} size={6} className="mt-1.25" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
                       <span className="min-w-0 truncate text-detail font-medium" title={session.title || "未命名任务"}>
@@ -130,9 +122,7 @@ export default function AgentRow({ agent, expandSignal }: { agent: AgentSnapshot
                       </button>
                     </div>
                     {hint?.sessionId === session.sessionId && (
-                      <p className="mt-0.5 text-micro text-faint">
-                        {hint.kind === "miss" ? "未找到磁盘产物" : "路径已复制"}
-                      </p>
+                      <p className="mt-0.5 text-micro text-faint">{hintLabel(hint)}</p>
                     )}
                     {/* 轻量时间线：发起 / 最近工具调用 / 等待开始（缺项不渲染） */}
                     {sessionTimeline(session).length > 0 && (

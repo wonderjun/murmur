@@ -2,7 +2,7 @@
  *  → 最近结束折叠组（快照 recentlyEnded，grace 期短暂可见）。
  *  打开编排一次排定：刊头 0ms 先行（animate-enter），hero 120 / 正在发生 160 /
  *  已停更 200 / 最近结束 220 / 空态 160；切 tab main remount 重播（期望行为）。
- *  hero「查看会话」定位到「正在发生」里的目标 AgentRow 并展开（data-agent-row 锚）。 */
+ *  hero「打开应用」经 RPC 唤起会话宿主 app 到台前。 */
 
 import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -20,7 +20,7 @@ import { allSessions } from "@/lib/selectors";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
-import type { AgentId, SessionSnapshot } from "@core/types";
+import type { SessionSnapshot } from "@core/types";
 
 export default function MonitorView() {
   const snapshot = useMurmurStore((s) => s.snapshot);
@@ -38,16 +38,6 @@ export default function MonitorView() {
   const recentlyEnded = snapshot?.recentlyEnded ?? [];
   // 「最近结束」折叠组：本地展开态，默认收起。
   const [endedOpen, setEndedOpen] = useState(false);
-  // hero 点击定位：对目标 agent 的 AgentRow 发展开信号（递增计数驱动 effect）。
-  const [expandSignals, setExpandSignals] = useState<Partial<Record<AgentId, number>>>({});
-
-  function focusAgent(agent: AgentId) {
-    setExpandSignals((m) => ({ ...m, [agent]: (m[agent] ?? 0) + 1 }));
-    // 等展开信号落地后再滚动；行头锚点常在（不受 0fr 折叠高度影响）。
-    requestAnimationFrame(() => {
-      document.querySelector(`[data-agent-row="${agent}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    });
-  }
 
   if (loading) {
     return (
@@ -77,7 +67,7 @@ export default function MonitorView() {
       {/* 头条：waiting 会话轮播——琥珀左边条 + 卡内天光，本页唯一 hero。 */}
       {waitingSessions.length > 0 && (
         <div className="animate-enter" style={{ animationDelay: "120ms" }}>
-          <WaitingHero sessions={waitingSessions} onFocus={focusAgent} />
+          <WaitingHero sessions={waitingSessions} />
         </div>
       )}
 
@@ -91,7 +81,7 @@ export default function MonitorView() {
           {/* 分组列表：surface-1 叠层 + hairline 分隔，AgentRow 自身不带卡片壳 */}
           <div className="divide-y divide-hairline/60 overflow-hidden rounded-item bg-surface-1">
             {activeAgents.map((agent) => (
-              <AgentRow key={agent.agent} agent={agent} expandSignal={expandSignals[agent.agent]} />
+              <AgentRow key={agent.agent} agent={agent} />
             ))}
           </div>
         </section>
@@ -106,7 +96,7 @@ export default function MonitorView() {
           </div>
           <div className="divide-y divide-hairline/60 overflow-hidden rounded-item bg-surface-1">
             {staleSessions.map((session) => (
-              <div key={session.sessionId} className="flex items-center gap-3 bg-stale/[0.03] px-3.5 py-2.5">
+              <div key={session.sessionId} className="flex items-center gap-3 bg-stale/3 px-3.5 py-2.5">
                 <StatusRing status={session.status} size={24}>
                   <AgentIcon agent={session.agent} variant="mono" size={24} />
                 </StatusRing>

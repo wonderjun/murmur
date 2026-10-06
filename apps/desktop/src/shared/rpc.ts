@@ -96,6 +96,8 @@ export type MurmurRPC = {
       };
       /** 在 Finder 中定位会话的首个磁盘产物。 */
       revealSession: { params: { agent: AgentId; id: string }; response: { ok: boolean } };
+      /** 唤起会话宿主 app 到台前（进程祖先链 → 静态 bundle 兜底）；app 为被激活的 .app 名。 */
+      focusSessionApp: { params: { agent: AgentId; id: string }; response: { ok: boolean; app?: string } };
       /** Finder 打开 ~/.murmur 数据目录。 */
       openDataDir: { params: {}; response: { ok: true } };
       quitApp: { params: {}; response: { ok: true } };
