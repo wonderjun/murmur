@@ -42,6 +42,8 @@ const PROC_PATTERNS: Record<AgentId, RegExp> = {
   qoder: /\bqoder\b/i,
   minimax: /\b(?:mcode|mavis|minimax)\b/i,
   omp: /\b(?:omp|oh-my-pi)\b/i,
+  // CLI 可执行名是 claude；桌面宿主 Claude.app 的二进制名也是 Claude。
+  "claude-code": /\bclaude(?:-code)?\b/i,
 };
 
 /** 静态兜底条目：bundleId 走 open -b，name 走 open -a 按 LaunchServices 名解析。 */
@@ -68,6 +70,9 @@ const FALLBACK_APPS: Record<AgentId, Array<FallbackApp>> = {
   minimax: [{ bundleId: "com.minimax.agent.cn", name: "MiniMax Code" }],
   // omp 是终端 CLI 无专属 app——祖先链命中宿主终端；静态兜底同 codex 置空。
   omp: [],
+  // claude-code 主形态是终端 CLI（祖先链命中宿主终端）；Claude Desktop 可宿主
+  // claude code 会话（官方文档明示），兜底走桌面 app。
+  "claude-code": [{ bundleId: "com.anthropic.claudefordesktop", name: "Claude" }],
 };
 
 /** 喂给 lsof 的候选上限与链上 pid 总上限（-p 逗号清单长度保护）。 */

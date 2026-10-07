@@ -26,6 +26,7 @@ const AGENT_COLORS: Record<string, string> = {
   qoder: "var(--agent-qoder)",
   minimax: "var(--agent-minimax)",
   omp: "var(--agent-omp)",
+  "claude-code": "var(--agent-claude-code)",
 };
 const agentColor = (a: string) => AGENT_COLORS[a] ?? "var(--faint)";
 

@@ -14,8 +14,8 @@ import { removeEndpointFile, writeEndpointFile, type HookEndpoint } from './endp
 /** 把原始 hook payload 翻译成归一化事件（可返回多条或 null）。 */
 export type HookTranslator = (payload: unknown) => unknown;
 
-// 路由白名单：已下线 agent（claude-code）仍放行——旧 hook 脚本打进来 202 后
-// 无 adapter 接收即丢弃，比 404 更安静。devin 已收编回来（agents/devin）。
+// 路由白名单：只收有 push 平面的 adapter（minimax 纯 pull 不在列）；
+// claude-code 收编后旧 perch 脚本若还在打，也能正常落 ingest 被 adapter 接住。
 const VALID_AGENTS = new Set<AgentId>([
   'kimi',
   'zcode',

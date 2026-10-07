@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { scanClaudeSessions, deleteClaudeSessions } from '../src/agents/claude-code/files';
 import { scanCodexSessions, deleteCodexSessions } from '../src/agents/codex/files';
 import { scanCursorSessions, deleteCursorSessions } from '../src/agents/cursor/files';
 import { scanDevinSessions, deleteDevinSessions } from '../src/agents/devin/files';
@@ -39,6 +40,7 @@ const ENV_KEYS = [
   'MURMUR_MINIMAX_HOME',
   'MURMUR_OMP_HOME',
   'MURMUR_OMP_AGENT_DIR',
+  'MURMUR_CLAUDE_HOME',
 ] as const;
 const saved = new Map<string, string | undefined>();
 
@@ -56,6 +58,7 @@ beforeEach(() => {
   process.env.MURMUR_MINIMAX_HOME = join(ROOT, 'minimax');
   process.env.MURMUR_OMP_HOME = join(ROOT, 'omp');
   delete process.env.MURMUR_OMP_AGENT_DIR;
+  process.env.MURMUR_CLAUDE_HOME = join(ROOT, 'claude');
 });
 
 afterEach(() => {
@@ -345,6 +348,44 @@ describe('会话产物盘点', () => {
     expect(existsSync(join(ROOT, 'omp', 'agent', 'agent.db'))).toBe(true);
   });
 
+  test('claude：transcript + 变体 + 会话目录 + 旁路产物归并同一 sessionId', async () => {
+    const home = join(ROOT, 'claude');
+    const sid = 'c1aaaaaa-1111-2222-3333-444444444444';
+    const proj = join(home, 'projects', '-tmp');
+    mkdirSync(join(proj, sid, 'subagents'), { recursive: true });
+    mkdirSync(join(proj, 'memory'), { recursive: true });
+    mkdirSync(join(home, 'file-history', sid), { recursive: true });
+    mkdirSync(join(home, 'tasks', sid), { recursive: true });
+    writeFileSync(
+      join(proj, `${sid}.jsonl`),
+      [
+        '{"type":"summary","summary":"修登录页"}',
+        '{"type":"user","sessionId":"' + sid + '","message":{"role":"user","content":[{"type":"text","text":"改一下登录页"}]}}',
+      ].join('\n') + '\n',
+    );
+    writeFileSync(join(proj, `${sid}.orphaned-2026.jsonl`), '{"type":"user"}\n');
+    writeFileSync(join(proj, sid, 'subagents', 'agent-a1.jsonl'), '{"type":"user"}\n');
+    writeFileSync(join(proj, 'memory', 'MEMORY.md'), '# mem');
+    writeFileSync(join(home, 'file-history', sid, 'snap1'), 'x');
+    writeFileSync(join(home, 'tasks', sid, 't.json'), '{}');
+
+    const items = await scanClaudeSessions();
+    expect(items).toHaveLength(1);
+    const s = items[0];
+    expect(s.id).toBe(sid);
+    expect(s.title).toBe('修登录页'); // summary 行优先于 user 文本
+    expect(s.project).toBe('/tmp');
+    expect(s.kind).toBe('dir');
+    expect(s.paths).toHaveLength(5); // 主 jsonl + orphaned 变体 + <sid>/ + file-history/ + tasks/
+
+    const res = await deleteClaudeSessions([sid], trash);
+    expect(res[0].ok).toBe(true);
+    expect(trashed).toHaveLength(5);
+    // memory/ 是项目级产物，不归并进会话也不被删除。
+    expect(trashed.join()).not.toContain('memory');
+    expect(existsSync(join(proj, 'memory', 'MEMORY.md'))).toBe(true);
+  });
+
   test('目录不存在 → 空列表而非报错', async () => {
     expect(await scanKimiSessions()).toHaveLength(0);
     expect(await scanCodexSessions()).toHaveLength(0);
@@ -355,6 +396,7 @@ describe('会话产物盘点', () => {
     expect(await scanQoderSessions()).toHaveLength(0);
     expect(await scanMinimaxSessions()).toHaveLength(0);
     expect(await scanOmpSessions()).toHaveLength(0);
+    expect(await scanClaudeSessions()).toHaveLength(0);
     expect(existsSync(ROOT)).toBe(true);
   });
 });

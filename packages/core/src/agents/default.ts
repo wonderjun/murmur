@@ -1,9 +1,10 @@
 /**
- * 缺省 adapter 清单：生产形态的九家真 adapter 一次组装。
+ * 缺省 adapter 清单：生产形态的十家真 adapter 一次组装。
  * 从 registry 拆出——注册表的职责是编排不是名单；opts.adapters 注入时本表不生效。
  */
 
 import type { AgentAdapter } from './base';
+import { createClaudeCodeAdapter } from './claude-code';
 import { createCodexAdapter } from './codex';
 import { createCursorAdapter } from './cursor';
 import { createDevinAdapter } from './devin';
@@ -26,5 +27,6 @@ export function defaultAdapters(): AgentAdapter[] {
     createQoderAdapter(),
     createMinimaxAdapter(),
     createOmpAdapter(),
+    createClaudeCodeAdapter(),
   ];
 }

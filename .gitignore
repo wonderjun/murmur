@@ -10,5 +10,6 @@ build/
 .zcode/
 .qoder/
 .devin/
+.claude/
 .cottontail-tmp/
 *.local.json

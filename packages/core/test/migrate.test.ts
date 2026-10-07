@@ -16,6 +16,8 @@ const ROOT = mkdtempSync(join(tmpdir(), 'murmur-migrate-test-'));
 process.env.MURMUR_CURSOR_HOME = join(ROOT, 'cursor');
 process.env.MURMUR_CODEX_HOME = join(ROOT, 'codex');
 process.env.MURMUR_OPENCODE_CONFIG = join(ROOT, 'oc');
+process.env.MURMUR_DEVIN_CONFIG = join(ROOT, 'devin', 'config.json');
+process.env.MURMUR_CLAUDE_HOME = join(ROOT, 'claude');
 
 describe('migrateLegacyHome', () => {
   test('搬迁 legacy 家目录：库改名、脚本换词根、旧目录保留', () => {
@@ -104,7 +106,7 @@ describe('migrateLegacyHome', () => {
     expect(migrateLegacyHome({ home, legacyHome: legacy })).toBe(false);
   });
 
-  test('死端点宿主配置（claude/devin）：我们的整条摘除，orca 等他人条目原样', () => {
+  test('perch 注入的宿主 hook 配置（claude/devin）：换词根续用，orca 等他人条目原样', () => {
     const home = join(ROOT, 'home4');
     const legacy = join(ROOT, 'perch4');
     const marker = join(legacy, 'agent-hooks');
@@ -132,18 +134,25 @@ describe('migrateLegacyHome', () => {
       }),
     );
 
-    migrateLegacyHome({ home, legacyHome: legacy, deadHookConfigs: [claudeCfg, devinCfg] });
+    migrateLegacyHome({ home, legacyHome: legacy });
 
-    const claude = JSON.parse(readFileSync(claudeCfg, 'utf8')) as { hooks: Record<string, unknown[]> };
-    expect(claude.hooks.SessionStart).toBeUndefined(); // 清空的事件键连键摘除。
-    expect(claude.hooks.Stop).toHaveLength(1); // orca 条目原样保留。
-    expect((claude.hooks.Stop[0] as { hooks: Array<{ command: string }> }).hooks[0].command).toBe('orca run');
-    const devin = JSON.parse(readFileSync(devinCfg, 'utf8')) as { version: number; hooks: Record<string, unknown> };
-    expect(devin.hooks.PreToolUse).toBeUndefined();
+    // 两家都收编过 adapter：旧条目换词根指向 ~/.murmur 脚本无缝续用。
+    const claude = JSON.parse(readFileSync(claudeCfg, 'utf8')) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(claude.hooks.SessionStart[0].hooks[0].command).toContain('murmur4/agent-hooks/claude-code.sh');
+    expect(claude.hooks.SessionStart[0].hooks[0].command).not.toContain('perch');
+    expect(claude.hooks.Stop).toHaveLength(2); // orca 条目原样保留。
+    expect(claude.hooks.Stop[1].hooks[0].command).toBe('orca run');
+    const devin = JSON.parse(readFileSync(devinCfg, 'utf8')) as {
+      version: number;
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(devin.hooks.PreToolUse[0].hooks[0].command).toContain('murmur4/agent-hooks/devin.sh');
     expect(devin.version).toBe(1); // 配置其他键一字不动。
 
     // 幂等：再跑一遍不再改动。
-    migrateLegacyHome({ home, legacyHome: legacy, deadHookConfigs: [claudeCfg, devinCfg] });
-    expect(JSON.parse(readFileSync(claudeCfg, 'utf8')).hooks.Stop).toHaveLength(1);
+    migrateLegacyHome({ home, legacyHome: legacy });
+    expect(JSON.parse(readFileSync(claudeCfg, 'utf8')).hooks.Stop).toHaveLength(2);
   });
 });

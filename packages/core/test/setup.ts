@@ -25,3 +25,7 @@ process.env.MURMUR_DEVIN_CONFIG = join(root, 'devin-config');
 process.env.MURMUR_QODER_HOME = join(root, 'qoder');
 process.env.MURMUR_MINIMAX_HOME = join(root, 'minimax');
 process.env.MURMUR_OMP_HOME = join(root, 'omp');
+// claude-code：MURMUR_CLAUDE_HOME 优先于 CLAUDE_CONFIG_DIR，钉死后 settings/projects/
+// credentials 全在沙箱；CLAUDE_CONFIG_DIR 也钉住防宿主 env 串味。
+process.env.MURMUR_CLAUDE_HOME = join(root, 'claude');
+process.env.CLAUDE_CONFIG_DIR = join(root, 'claude');

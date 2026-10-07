@@ -33,6 +33,7 @@
 | Qoder | settings.json hooks + jsonl + main.sqlite | 暂缺（PAT 候选） | 桌面端与 CLI 共用 `~/.qoder` |
 | MiniMax Code | runtime-state.sqlite 只读轮询 | 暂缺 | 纯 pull，官方未开放 hooks；IDE/CLI 共用 `~/.minimax` |
 | oh-my-pi (omp) | TS 扩展上报 + sessions journal tail | agent.db `usage_history` 本地快照 | 扩展模块非 shell hook，落 `~/.omp/agent/extensions/` |
+| Claude Code | settings.json hooks + projects/ jsonl | `/api/oauth/usage`（Keychain/.credentials.json 只读） | 凭据不代刷；终端/IDE/桌面宿主共用 `~/.claude` |
 
 ## 功能
 
@@ -98,7 +99,7 @@ The app is unsigned — Gatekeeper blocks the first launch: right-click the app 
 
 ## Agents
 
-Supports **9 agents** — Kimi Code, ZCode, OpenCode, Codex, Cursor, Devin, Qoder, MiniMax Code, oh-my-pi — via a three-plane collection model: push hooks, pull watchers, and official quota endpoints, normalized into one status machine.
+Supports **10 agents** — Kimi Code, ZCode, OpenCode, Codex, Cursor, Devin, Qoder, MiniMax Code, oh-my-pi, Claude Code — via a three-plane collection model: push hooks, pull watchers, and official quota endpoints, normalized into one status machine.
 
 ## Features
 

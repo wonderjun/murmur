@@ -143,7 +143,27 @@ export const DEMO_DIAG_OMP: AgentDiagnostics = {
   hint: "数据源正常——暂无活跃会话",
 };
 
-/** seed 诊断全景：九家全列（zcode 故障默认展开用）。 */
+/** seed 补充 · claude-code 已连接（settings.json hook + transcript 在扫 + OAuth 额度）。 */
+export const DEMO_DIAG_CLAUDE: AgentDiagnostics = {
+  agent: "claude-code",
+  home: { label: "数据根", path: "~/.claude", kind: "dir", exists: true, readable: true },
+  sources: [
+    { label: "会话 transcript", path: "~/.claude/projects", kind: "dir", exists: true, readable: true },
+    { label: "凭据文件（Linux/兜底）", path: "~/.claude/.credentials.json", kind: "file", exists: false, readable: false },
+  ],
+  hook: {
+    installed: true,
+    enabled: true,
+    targets: ["~/.claude/settings.json"],
+    lastEventAt: Date.now() - 120_000,
+  },
+  pull: { active: true, lastScanAt: Date.now() - 30_000, sources: [{ name: "projects", at: Date.now() - 30_000 }] },
+  spool: { pendingFiles: 0, bytes: 0 },
+  quota: { fetchedAt: Date.now() - 240_000 },
+  hint: "数据源正常——暂无活跃会话",
+};
+
+/** seed 诊断全景：十家全列（zcode 故障默认展开用）。 */
 export const SEED_DIAG_AGENTS: AgentDiagnostics[] = [
   DEMO_DIAG_OK,
   DEMO_DIAG_BAD,
@@ -154,6 +174,7 @@ export const SEED_DIAG_AGENTS: AgentDiagnostics[] = [
   DEMO_DIAG_QODER,
   DEMO_DIAG_MINIMAX,
   DEMO_DIAG_OMP,
+  DEMO_DIAG_CLAUDE,
 ];
 
 /** seed 会话文件桩：14 条跨三家，体量/时间/类型混合。 */

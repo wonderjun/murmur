@@ -160,5 +160,21 @@ export function agentPaths(agent: AgentId): AgentPaths {
         hookConfig: join(dir, 'settings.json'),
       };
     }
+    case 'claude-code': {
+      // Claude Code（Anthropic）：数据根 ~/.claude，官方 CLAUDE_CONFIG_DIR 可整体搬迁。
+      // projects/<slug>/<uuid>.jsonl 是会话 transcript（行带 ISO timestamp、cwd 与
+      // message.usage 全量 token）；<uuid>/subagents/、tool-results/ 归并父会话；
+      // projects/<slug>/memory/ 是项目级 auto memory——不是会话产物，不盘点不删。
+      // settings.json 的 hooks 键是官方 matcher-group hook 面（command 支持 async）。
+      // 订阅凭据：macOS 在登录 Keychain（service "Claude Code-credentials"，自定义
+      // 配置目录时后缀 -<sha256(dir)[:8]>），.credentials.json 是 Linux/旧版文件兜底。
+      const dir = process.env.MURMUR_CLAUDE_HOME ?? process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude');
+      return {
+        home: dir,
+        sessions: join(dir, 'projects'),
+        credentials: join(dir, '.credentials.json'),
+        hookConfig: join(dir, 'settings.json'),
+      };
+    }
   }
 }

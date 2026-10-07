@@ -50,6 +50,7 @@
   --color-agent-qoder: var(--agent-qoder);
   --color-agent-minimax: var(--agent-minimax);
   --color-agent-omp: var(--agent-omp);
+  --color-agent-claude-code: var(--agent-claude-code);
   --color-heat: var(--heat);
   --radius-item: 12px;
   --radius-row: 8px;
@@ -214,6 +215,9 @@
   /* omp：青蓝——oh-my-pi（π）无官方彩砖（纯黑字标），取天青填 190–260 空档，
      与 zcode 蓝紫（h≈270）/opencode 翡翠（h≈164）拉开色相。 */
   --agent-omp: oklch(0.720 0.120 225.0);
+  /* claude-code：赭橙——官方 #D97757 本色 h≈42 与热力图 ramp（h≈43）撞色，色相
+     推到 56 保赭橙观感；两侧与 devin 珊瑚（h≈33）/cursor 琥珀（h≈73）拉开。 */
+  --agent-claude-code: oklch(0.692 0.138 56.0);
   /* 热力图密度色：暖橙单色相 ramp（用量密度语义，非「谁」非状态），#f0763f 等价 oklch */
   --heat: oklch(0.699 0.165 43.2);
   /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
@@ -260,6 +264,7 @@
   --agent-qoder: oklch(0.579 0.137 134.7);
   --agent-minimax: oklch(0.575 0.210 14.0);
   --agent-omp: oklch(0.520 0.150 228.0);
+  --agent-claude-code: oklch(0.565 0.160 56.0);
   --heat: oklch(0.640 0.191 36.1);
   /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
      浅档透明度低，系列区分另有 dash 双编码兜底 */
@@ -429,6 +434,7 @@ a:focus-visible {
 [data-agent="qoder"] { --accent: var(--agent-qoder); }
 [data-agent="minimax"] { --accent: var(--agent-minimax); }
 [data-agent="omp"] { --accent: var(--agent-omp); }
+[data-agent="claude-code"] { --accent: var(--agent-claude-code); }
 
 @media (prefers-reduced-motion: reduce) {
   *,

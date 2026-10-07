@@ -245,3 +245,36 @@ export function clip(text: string | undefined, max = 80): string | undefined {
   if (!flat) return undefined;
   return flat.length > max ? `${flat.slice(0, max)}…` : flat;
 }
+
+const slugCache = new Map<string, string | undefined>();
+
+/**
+ * projects 目录名是工作区绝对路径把 '/' 换成 '-'（Claude 系约定：非字母数字
+ * 统一编码成 '-'，如 -Users-chen-Documents-flow）。逐段贪心最长匹配真实目录
+ * 还原（目录名本身含 '-' 的歧义靠 existsSync 裁决），还原不出宁可不填 cwd。
+ */
+export function slugToPath(slug: string | undefined): string | undefined {
+  if (!slug) return undefined;
+  if (slugCache.has(slug)) return slugCache.get(slug);
+  // slug 带前导 '-' 代表根 '/'（如 -Users-chen-x）；剥掉后首段就是根目录。
+  const normalized = slug.startsWith('-') ? slug.slice(1) : slug;
+  const segs = normalized.split('-');
+  let path = '/';
+  let i = 0;
+  while (i < segs.length) {
+    let hit = '';
+    for (let j = segs.length; j > i; j--) {
+      const cand = segs.slice(i, j).join('-');
+      if (existsSync(join(path, cand))) {
+        hit = cand;
+        break;
+      }
+    }
+    if (!hit) break;
+    path = join(path, hit);
+    i += hit.split('-').length;
+  }
+  const resolved = i === segs.length && path ? path : undefined;
+  slugCache.set(slug, resolved);
+  return resolved;
+}

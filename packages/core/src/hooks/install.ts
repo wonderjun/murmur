@@ -282,6 +282,74 @@ export function qoderHooksRegistered(configPath: string | null): boolean {
   }
 }
 
+/** claude-code 式 hook 条目：官方 settings.json matcher-group（{matcher?,hooks:[{type:command,...}]}）。
+ * async 后台执行不阻塞 agent 会话（command hook 官方支持 async；async 条目官方明示
+ * 不 enforce timeout——timeout 是给不认 async 的旧版本兜底的 10s 保险丝，脚本本身
+ * 已自限 ~1.5s curl）。 */
+function claudeHookEntry(command: string) {
+  return { hooks: [{ type: 'command' as const, command, async: true, timeout: 10 }] };
+}
+
+/**
+ * 纯配置合并（claude ~/.claude/settings.json 的 hooks 键 schema，无 fs 副作用）。
+ * 与 codex/devin/qoder 同铁律：只加不减、已有我们的条目即跳过、他人条目原样保留。
+ * settings.json 是共享用户配置（permissions/env/model 等同住），只碰 hooks 子树。
+ */
+export function mergeClaudeHooksConfig(cfg: Record<string, unknown>, command: string, events: string[]): boolean {
+  const hooks = (cfg.hooks ?? {}) as Record<string, unknown>;
+  let changed = false;
+  for (const ev of events) {
+    const cur = hooks[ev];
+    const list = Array.isArray(cur) ? [...cur] : cur != null ? [cur] : [];
+    if (!hasOurHook(list)) {
+      list.push(claudeHookEntry(command));
+      changed = true;
+    }
+    hooks[ev] = list;
+  }
+  cfg.hooks = hooks;
+  return changed;
+}
+
+/**
+ * 合并写入 claude `~/.claude/settings.json`（用户级配置的 hooks 键）。
+ * 铁律同上：追加不覆盖、原子写、脚本丢失自愈；官方 hook 改配置即生效、无 trust 门槛。
+ * stdout {} 是合法 JSON 不注入上下文（仅 SessionStart/UserPromptSubmit 注入纯文本 stdout）。
+ */
+export function mergeClaudeHooks(configPath: string, agent: AgentId, events: string[]): { changed: boolean } {
+  const dir = join(configPath, '..');
+  mkdirSync(dir, { recursive: true });
+  let cfg: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    try {
+      cfg = JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+    } catch {
+      // 配置损坏时不碰它，避免误伤用户配置。
+      return { changed: false };
+    }
+  }
+  const hooks = (cfg.hooks ?? {}) as Record<string, unknown>;
+  const command = writeHookScript(agent);
+  if (events.every((ev) => hasOurHook(hooks[ev]))) return { changed: false };
+  mergeClaudeHooksConfig(cfg, command, events);
+  const tmp = `${configPath}.murmur-tmp`;
+  writeFileSync(tmp, JSON.stringify(cfg, null, 2));
+  chmodSync(tmp, 0o600);
+  renameSync(tmp, configPath);
+  return { changed: true };
+}
+
+/** claude settings.json 的 hooks 键里是否已有我们的条目（脚本路径片段判归属）。 */
+export function claudeHooksRegistered(configPath: string | null): boolean {
+  if (!configPath || !existsSync(configPath)) return false;
+  try {
+    return readFileSync(configPath, 'utf8').includes('agent-hooks/claude-code.sh');
+  } catch {
+    // 读不了算未注册。
+    return false;
+  }
+}
+
 /**
  * 合并写入 zcode 用户级 hook 配置（`~/.zcode/cli/config.json`）。
  * 与 mergeJsonHooks 同铁律：追加不覆盖；原子写；脚本丢失时自愈重建。
@@ -599,3 +667,4 @@ export function unmergeCodexNotify(configPath: string, agent: AgentId): { change
   renameSync(tmp, configPath);
   return { changed: true };
 }
+

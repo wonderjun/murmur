@@ -8,7 +8,8 @@
  * agent→组件静态映射保证 tree-shake；无映射的新 agent 落 muted 缩写占位。
  */
 
-import { Codex, Cursor, Devin, Kimi, Minimax, OpenCode, Pi, Qoder, ZAI } from "@lobehub/icons";
+import { ClaudeCode, Codex, Cursor, Devin, Kimi, Minimax, OpenCode, Pi, Qoder, ZAI } from "@lobehub/icons";
+import * as claudecodeStyle from "@lobehub/icons/es/ClaudeCode/style";
 import * as codexStyle from "@lobehub/icons/es/Codex/style";
 import * as cursorStyle from "@lobehub/icons/es/Cursor/style";
 import * as devinStyle from "@lobehub/icons/es/Devin/style";
@@ -44,6 +45,7 @@ const MONO_ICON: Partial<Record<AgentId, IconType>> = {
   qoder: Qoder,
   minimax: Minimax,
   omp: Pi,
+  "claude-code": ClaudeCode,
 };
 
 /** agent → lobehub 品牌参数；zcode 取 Z.AI 品牌砖；缺映射落缩写占位。 */
@@ -83,6 +85,13 @@ const ICON: Partial<Record<AgentId, BrandDef>> = {
     bg: piStyle.AVATAR_BACKGROUND,
     fg: piStyle.AVATAR_COLOR,
     mult: piStyle.AVATAR_ICON_MULTIPLE,
+  },
+  // claude-code：官方 Avatar 即 #D97757 星芒字形压黑砖（AVATAR_* 直取）。
+  "claude-code": {
+    Icon: ClaudeCode,
+    bg: claudecodeStyle.AVATAR_BACKGROUND,
+    fg: claudecodeStyle.AVATAR_COLOR,
+    mult: claudecodeStyle.AVATAR_ICON_MULTIPLE,
   },
 };
 

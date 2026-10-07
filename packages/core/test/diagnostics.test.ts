@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import type { AgentAdapter } from '../src/agents/base';
+import { createClaudeCodeAdapter } from '../src/agents/claude-code';
 import { createCodexAdapter } from '../src/agents/codex';
 import { createCursorAdapter } from '../src/agents/cursor';
 import { createDevinAdapter } from '../src/agents/devin';
@@ -121,6 +122,7 @@ describe('selfTestPayload × 各家 adapter', () => {
     createQoderAdapter(),
     createMinimaxAdapter(),
     createOmpAdapter(),
+    createClaudeCodeAdapter(),
   ];
 
   for (const a of adapters) {
