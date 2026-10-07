@@ -266,7 +266,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
         }
       />
 
-      {/* 筛选行：工具分段 + 项目下拉（联动收窄）；窄窗允许折行，下拉保持右对齐 */}
+      {/* 筛选行：工具分段（胶囊溢出轨内横滚）+ 项目下拉（联动收窄）；窄窗允许折行，下拉保持右对齐 */}
       <div className="flex flex-wrap items-center gap-3 pb-3">
         <Segmented
           options={[

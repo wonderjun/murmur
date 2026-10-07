@@ -444,6 +444,15 @@ a:focus-visible {
   );
 }
 
+/* 隐藏滚动条但保留滚动——横滚胶囊轨等内敛滚动区专用。
+   WKWebView 走 ::-webkit-scrollbar，scrollbar-width 兜底规范属性。 */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* 浮层专属玻璃：chrome 级（吸顶刊头/底栏）与 overlay 级（浮卡）两档。
    混合比本身已够暗——backdrop-filter 失效时仍可读，天然优雅降级。 */
 @utility glass-chrome {

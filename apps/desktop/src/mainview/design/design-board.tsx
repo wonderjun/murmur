@@ -15,6 +15,7 @@ import Murmuration from "@/components/murmuration";
 import MurmurMark from "@/components/murmur-mark";
 import PerchStrip from "@/components/perch-strip";
 import QuotaPill from "@/components/quota-pill";
+import Segmented from "@/components/segmented";
 import StatusDot from "@/components/status-dot";
 import SwitchRow from "@/components/switch-row";
 import UsageRangePicker from "@/components/usage-range";
@@ -129,6 +130,19 @@ function BoardHead({ children }: { children: string }) {
 function UsageRangeDemo() {
   const [range, setRange] = useState<UsageRange>({ kind: "preset", days: 7 });
   return <UsageRangePicker value={range} onChange={setRange} />;
+}
+
+/* 分段溢出展件：全 agent 进 280px 限宽盒，验证轨内横滚与可滚缘渐隐。 */
+function SegmentedOverflowDemo() {
+  const [agent, setAgent] = useState<string>("all");
+  return (
+    <Segmented
+      options={[{ value: "all", label: "全部" }, ...AGENTS.map((a) => ({ value: a, label: AGENT_META[a].name }))]}
+      value={agent}
+      onChange={setAgent}
+      label="按工具过滤"
+    />
+  );
 }
 
 /* 接入诊断展件：GroupList 容器内正常/故障两张卡，单开手风琴（故障态默认展开）。 */
@@ -310,6 +324,13 @@ export default function DesignBoard() {
         <BoardHead>日期区间（用量自定义区间 · Popover + Calendar）</BoardHead>
         <div className="rounded-item bg-surface-1 px-3 py-2.5">
           <UsageRangeDemo />
+        </div>
+      </section>
+
+      <section>
+        <BoardHead>分段选择器溢出（限宽 280px · 轨内横滚 + 可滚缘渐隐）</BoardHead>
+        <div className="w-70 rounded-item bg-surface-1 p-3">
+          <SegmentedOverflowDemo />
         </div>
       </section>
 
