@@ -231,6 +231,9 @@ export function selfTestPayload(agent: AgentId, sid: string): unknown {
     case 'cursor':
       // cursor 事件名是 camelCase（sessionStart），与其余家的 PascalCase 不同。
       return { hook_event_name: 'sessionStart', session_id: sid, sessionId: sid, cwd: '/tmp' };
+    case 'omp':
+      // omp 扩展上报的是 omp 自身 snake_case 事件名（pi.on 订阅名直传）。
+      return { hook_event_name: 'session_start', session_id: sid, sessionId: sid, cwd: '/tmp' };
     default:
       // kimi/zcode/codex/devin/qoder 均为 hook_event_name + session_id 契约。
       return { hook_event_name: 'SessionStart', session_id: sid, sessionId: sid, cwd: '/tmp' };

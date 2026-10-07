@@ -7,7 +7,7 @@
  */
 
 /** 支持的编码 agent 标识。 */
-export type AgentId = 'kimi' | 'zcode' | 'opencode' | 'codex' | 'cursor' | 'devin' | 'qoder' | 'minimax';
+export type AgentId = 'kimi' | 'zcode' | 'opencode' | 'codex' | 'cursor' | 'devin' | 'qoder' | 'minimax' | 'omp';
 
 /** 会话状态：working=干活中 waiting=轮到你了/等批准 idle=空闲 stale=疑似卡住 ended=已结束。 */
 export type AgentStatus = 'working' | 'waiting' | 'idle' | 'stale' | 'ended';

@@ -8,13 +8,14 @@
  * agent→组件静态映射保证 tree-shake；无映射的新 agent 落 muted 缩写占位。
  */
 
-import { Codex, Cursor, Devin, Kimi, Minimax, OpenCode, Qoder, ZAI } from "@lobehub/icons";
+import { Codex, Cursor, Devin, Kimi, Minimax, OpenCode, Pi, Qoder, ZAI } from "@lobehub/icons";
 import * as codexStyle from "@lobehub/icons/es/Codex/style";
 import * as cursorStyle from "@lobehub/icons/es/Cursor/style";
 import * as devinStyle from "@lobehub/icons/es/Devin/style";
 import * as kimiStyle from "@lobehub/icons/es/Kimi/style";
 import * as minimaxStyle from "@lobehub/icons/es/Minimax/style";
 import * as opencodeStyle from "@lobehub/icons/es/OpenCode/style";
+import * as piStyle from "@lobehub/icons/es/Pi/style";
 import * as qoderStyle from "@lobehub/icons/es/Qoder/style";
 import * as zaiStyle from "@lobehub/icons/es/ZAI/style";
 
@@ -42,6 +43,7 @@ const MONO_ICON: Partial<Record<AgentId, IconType>> = {
   devin: Devin,
   qoder: Qoder,
   minimax: Minimax,
+  omp: Pi,
 };
 
 /** agent → lobehub 品牌参数；zcode 取 Z.AI 品牌砖；缺映射落缩写占位。 */
@@ -74,6 +76,13 @@ const ICON: Partial<Record<AgentId, BrandDef>> = {
     bg: minimaxStyle.AVATAR_BACKGROUND,
     fg: minimaxStyle.AVATAR_COLOR,
     mult: minimaxStyle.AVATAR_ICON_MULTIPLE,
+  },
+  // omp（oh-my-pi）：π 字标，官方 Pi Avatar 即白字形压黑砖（AVATAR_* 直取）。
+  omp: {
+    Icon: Pi,
+    bg: piStyle.AVATAR_BACKGROUND,
+    fg: piStyle.AVATAR_COLOR,
+    mult: piStyle.AVATAR_ICON_MULTIPLE,
   },
 };
 

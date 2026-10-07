@@ -41,6 +41,7 @@ const PROC_PATTERNS: Record<AgentId, RegExp> = {
   devin: /\bdevin\b/i,
   qoder: /\bqoder\b/i,
   minimax: /\b(?:mcode|mavis|minimax)\b/i,
+  omp: /\b(?:omp|oh-my-pi)\b/i,
 };
 
 /** 静态兜底条目：bundleId 走 open -b，name 走 open -a 按 LaunchServices 名解析。 */
@@ -65,6 +66,8 @@ const FALLBACK_APPS: Record<AgentId, Array<FallbackApp>> = {
     { bundleId: "com.qoder.ide", name: "Qoder IDE" },
   ],
   minimax: [{ bundleId: "com.minimax.agent.cn", name: "MiniMax Code" }],
+  // omp 是终端 CLI 无专属 app——祖先链命中宿主终端；静态兜底同 codex 置空。
+  omp: [],
 };
 
 /** 喂给 lsof 的候选上限与链上 pid 总上限（-p 逗号清单长度保护）。 */

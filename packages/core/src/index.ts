@@ -14,6 +14,7 @@ export { startIngestServer } from './ingest/server';
 export { drainSpool } from './ingest/spool';
 export { readEndpointFile, writeEndpointFile } from './ingest/endpoint';
 export { renderHookScript, HOOK_MARKER } from './hooks/script';
+export { renderOmpExtension } from './hooks/omp-script';
 export {
   writeHookScript,
   mergeJsonHooks,
@@ -35,6 +36,12 @@ export {
   isHookInstalled,
   zcodeHookState,
 } from './hooks/install';
+export {
+  installOmpExtension,
+  uninstallOmpExtension,
+  ompExtensionInstalled,
+  ompExtensionPath,
+} from './hooks/omp-install';
 export { DEFAULT_SETTINGS, flagEnabled, loadSettings, saveSettings, type MurmurSettings } from './settings';
 export { loadCredentials, saveCredentials, maskKey, type ByokCredential, type ByokStore } from './credentials';
 export type { AgentAdapter } from './agents/base';

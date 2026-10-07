@@ -125,6 +125,25 @@ export function agentPaths(agent: AgentId): AgentPaths {
         hookConfig: null,
       };
     }
+    case 'omp': {
+      // omp（oh-my-pi，Stencil Labs）：数据根 ~/.omp（官方 PI_CONFIG_DIR 改根名），
+      // 默认 profile 的 agent 目录 <root>/agent（PI_CODING_AGENT_DIR 可搬，命名
+      // profile 忽略该 env 走 <root>/profiles/<name>/agent，由 adapter 枚举）。
+      // agent/sessions/**.jsonl 是会话 journal（v3：session 头 + message/model_change/
+      // title_change 树形 entry，usage 全量 token 在 assistant 行——唯一计量源）。
+      // agent/agent.db 的 auth_credentials 是凭据登记、usage_history 是 omp 自采的
+      // provider 额度窗快照（本地只读即得 QuotaWindow，无需网络/BYOK）。
+      // hook 面：extensions/*.ts|js 是官方自动发现目录（TS 扩展模块非 sh hook），
+      // hookConfig 指向该目录（opencode plugins 目录先例），adapter 往里落 murmur-agent.ts。
+      const root = process.env.MURMUR_OMP_HOME ?? join(home, process.env.PI_CONFIG_DIR ?? '.omp');
+      const agentDir = process.env.MURMUR_OMP_AGENT_DIR ?? process.env.PI_CODING_AGENT_DIR ?? join(root, 'agent');
+      return {
+        home: root,
+        sessions: join(agentDir, 'sessions'),
+        credentials: join(agentDir, 'agent.db'),
+        hookConfig: join(agentDir, 'extensions'),
+      };
+    }
     case 'qoder': {
       // 新「Qoder」桌面产品（com.qoder.app）：Electron 壳 + 内嵌 qodercli runtime，
       // 与 qodercli/旧 IDE 共用 ~/.qoder 数据根（官方 QODER_CONFIG_DIR 可整体搬迁）。

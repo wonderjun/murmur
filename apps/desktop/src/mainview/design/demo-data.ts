@@ -123,7 +123,27 @@ export const DEMO_DIAG_MINIMAX: AgentDiagnostics = {
   hint: "已发现数据源——等第一条会话事件",
 };
 
-/** seed 诊断全景：八家全列（zcode 故障默认展开用）。 */
+/** seed 补充 · omp 已连接（TS 扩展 hook + journal 在扫 + 本地额度快照）。 */
+export const DEMO_DIAG_OMP: AgentDiagnostics = {
+  agent: "omp",
+  home: { label: "数据根", path: "~/.omp", kind: "dir", exists: true, readable: true },
+  sources: [
+    { label: "会话 journal", path: "~/.omp/agent/sessions", kind: "dir", exists: true, readable: true },
+    { label: "状态/额度库", path: "~/.omp/agent/agent.db", kind: "sqlite", exists: true, readable: true, openable: true },
+  ],
+  hook: {
+    installed: true,
+    enabled: true,
+    targets: ["~/.omp/agent/extensions/murmur-agent.ts"],
+    lastEventAt: Date.now() - 240_000,
+  },
+  pull: { active: true, lastScanAt: Date.now() - 45_000, sources: [{ name: "sessions", at: Date.now() - 45_000 }] },
+  spool: { pendingFiles: 0, bytes: 0 },
+  quota: { fetchedAt: Date.now() - 300_000 },
+  hint: "数据源正常——暂无活跃会话",
+};
+
+/** seed 诊断全景：九家全列（zcode 故障默认展开用）。 */
 export const SEED_DIAG_AGENTS: AgentDiagnostics[] = [
   DEMO_DIAG_OK,
   DEMO_DIAG_BAD,
@@ -133,6 +153,7 @@ export const SEED_DIAG_AGENTS: AgentDiagnostics[] = [
   DEMO_DIAG_DEVIN,
   DEMO_DIAG_QODER,
   DEMO_DIAG_MINIMAX,
+  DEMO_DIAG_OMP,
 ];
 
 /** seed 会话文件桩：14 条跨三家，体量/时间/类型混合。 */

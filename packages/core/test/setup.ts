@@ -24,3 +24,4 @@ process.env.MURMUR_DEVIN_DATA = join(root, 'devin');
 process.env.MURMUR_DEVIN_CONFIG = join(root, 'devin-config');
 process.env.MURMUR_QODER_HOME = join(root, 'qoder');
 process.env.MURMUR_MINIMAX_HOME = join(root, 'minimax');
+process.env.MURMUR_OMP_HOME = join(root, 'omp');

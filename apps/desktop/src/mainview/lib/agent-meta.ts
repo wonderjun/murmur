@@ -14,9 +14,10 @@ export const AGENT_META: Record<AgentId, { name: string; abbr: string }> = {
   devin: { name: "Devin", abbr: "D" },
   qoder: { name: "Qoder", abbr: "Q" },
   minimax: { name: "MiniMax Code", abbr: "M" },
+  omp: { name: "oh-my-pi", abbr: "π" },
 };
 
-export const AGENT_ORDER: AgentId[] = ["kimi", "zcode", "opencode", "codex", "cursor", "devin", "qoder", "minimax"];
+export const AGENT_ORDER: AgentId[] = ["kimi", "zcode", "opencode", "codex", "cursor", "devin", "qoder", "minimax", "omp"];
 
 /**
  * 关闭 hook 上报的降级说明（设置页开关下展示）：push 平面撤掉后退回 pull 轮询，
@@ -31,6 +32,7 @@ export const HOOK_IMPACT: Partial<Record<AgentId, string>> = {
   cursor: "关闭后 CLI 会话活性退回 meta.json 启发式轮询，延迟约十秒",
   devin: "关闭后退回 sessions.db 活性轮询，实时状态延迟数秒；云端会话走 API 不受影响",
   qoder: "关闭后退回本地数据轮询，实时状态延迟数秒",
+  omp: "关闭后退回会话 journal 轮询：状态延迟数秒，用量统计不受影响",
 };
 
 /** 关闭整个监听的后果说明（设置页主开关下展示）。 */

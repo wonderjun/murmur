@@ -4,6 +4,10 @@
 
 ## [未发布]
 
+### Added
+
+- 收编 **omp** adapter（oh-my-pi / omp CLI，Stencil Labs）：push 面是首家「TS 扩展模块」而非 shell hook——生成的 `murmur-agent.ts` 落 `~/.omp/agent/extensions/` 官方自动发现目录（独占文件按 marker 判归属、命名 profile 一并覆盖），扩展内经 endpoint+token POST `/hook/omp`、非 202/超时写 spool、单在途队列不积压；覆盖生命周期/工具/审批事件（`agent_end.willContinue` 续跑不误收尾、`session_switch/branch` 反解旧 id 补 end）。pull 面 tail `sessions/<slug>/<ts>_<uuid>.jsonl` v3 journal（assistant 行全量 usage/stopReason 是唯一计量源、`custom/tool_execution_start` 给 toolName+intent、`ask` 工具→waiting(question)），subagent 目录归并父会话；quota 面本地只读 `agent.db` 的 `usage_history` 额度窗快照（零网络零凭据）；清理页 journal+subagent 目录整组进废纸篓
+
 ## [0.1.2] - 2026-10-06
 
 ### Added

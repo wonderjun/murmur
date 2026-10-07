@@ -300,6 +300,7 @@ const AGENT_NAMES: Record<string, string> = {
   devin: "Devin",
   qoder: "Qoder",
   minimax: "MiniMax Code",
+  omp: "oh-my-pi",
 };
 
 // 「轮到你了」通知：waiting 集合（sessionId+reason 键）只增才发——同会话从

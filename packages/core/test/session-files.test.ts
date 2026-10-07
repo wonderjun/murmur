@@ -16,6 +16,7 @@ import { scanCursorSessions, deleteCursorSessions } from '../src/agents/cursor/f
 import { scanDevinSessions, deleteDevinSessions } from '../src/agents/devin/files';
 import { scanKimiSessions, deleteKimiSessions } from '../src/agents/kimi/files';
 import { scanMinimaxSessions, deleteMinimaxSessions } from '../src/agents/minimax/files';
+import { scanOmpSessions, deleteOmpSessions } from '../src/agents/omp/files';
 import { scanOpencodeSessions, deleteOpencodeSessions } from '../src/agents/opencode/files';
 import { scanQoderSessions, deleteQoderSessions } from '../src/agents/qoder/files';
 import { scanZcodeSessions, deleteZcodeSessions } from '../src/agents/zcode/files';
@@ -36,6 +37,8 @@ const ENV_KEYS = [
   'MURMUR_DEVIN_DATA',
   'MURMUR_QODER_HOME',
   'MURMUR_MINIMAX_HOME',
+  'MURMUR_OMP_HOME',
+  'MURMUR_OMP_AGENT_DIR',
 ] as const;
 const saved = new Map<string, string | undefined>();
 
@@ -51,6 +54,8 @@ beforeEach(() => {
   process.env.MURMUR_DEVIN_DATA = join(ROOT, 'devin');
   process.env.MURMUR_QODER_HOME = join(ROOT, 'qoder');
   process.env.MURMUR_MINIMAX_HOME = join(ROOT, 'minimax');
+  process.env.MURMUR_OMP_HOME = join(ROOT, 'omp');
+  delete process.env.MURMUR_OMP_AGENT_DIR;
 });
 
 afterEach(() => {
@@ -307,6 +312,39 @@ describe('会话产物盘点', () => {
     db2.close();
   });
 
+  test('omp：journal + subagent 目录归并同一 sessionId，agent.db 不动', async () => {
+    const sessions = join(ROOT, 'omp', 'agent', 'sessions');
+    const stem = '2026-10-07T06-25-41-003Z_omp-uuid1';
+    const dir = join(sessions, '-Documents-flow');
+    mkdirSync(join(dir, stem), { recursive: true });
+    writeFileSync(
+      join(dir, `${stem}.jsonl`),
+      [
+        '{"type":"title","v":1,"title":"omp 会话","updatedAt":"2026-10-07T07:00:00Z"}',
+        '{"type":"session","version":3,"id":"omp-uuid1","timestamp":"2026-10-07T06:25:41.003Z","cwd":"/tmp/op"}',
+        '{"type":"message","message":{"role":"user","content":[{"type":"text","text":"改 bug"}]}}',
+      ].join('\n') + '\n',
+    );
+    writeFileSync(join(dir, stem, 'Sub.jsonl'), '{"type":"session","id":"sub-own-id"}\n');
+    // agent.db 是 omp 本体的库——盘点不碰、删除不碰。
+    new Database(join(ROOT, 'omp', 'agent', 'agent.db'), { create: true }).close();
+
+    const items = await scanOmpSessions();
+    expect(items).toHaveLength(1);
+    const s = items[0];
+    expect(s.id).toBe('omp-uuid1');
+    expect(s.title).toBe('omp 会话');
+    expect(s.project).toBe('/tmp/op');
+    expect(s.kind).toBe('dir');
+    expect(s.createdAt).toBe(Date.parse('2026-10-07T06:25:41.003Z'));
+    expect(s.paths).toHaveLength(2);
+
+    const res = await deleteOmpSessions(['omp-uuid1'], trash);
+    expect(res[0].ok).toBe(true);
+    expect(trashed).toHaveLength(2); // 主 journal + subagent 目录整组
+    expect(existsSync(join(ROOT, 'omp', 'agent', 'agent.db'))).toBe(true);
+  });
+
   test('目录不存在 → 空列表而非报错', async () => {
     expect(await scanKimiSessions()).toHaveLength(0);
     expect(await scanCodexSessions()).toHaveLength(0);
@@ -316,6 +354,7 @@ describe('会话产物盘点', () => {
     expect(await scanDevinSessions()).toHaveLength(0);
     expect(await scanQoderSessions()).toHaveLength(0);
     expect(await scanMinimaxSessions()).toHaveLength(0);
+    expect(await scanOmpSessions()).toHaveLength(0);
     expect(existsSync(ROOT)).toBe(true);
   });
 });

@@ -24,6 +24,7 @@ const VALID_AGENTS = new Set<AgentId>([
   'cursor',
   'devin',
   'qoder',
+  'omp',
   'claude-code',
 ] as AgentId[]);
 

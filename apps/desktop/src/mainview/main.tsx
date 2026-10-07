@@ -26,6 +26,7 @@ if (location.search.includes("seed")) {
     ["cursor", "kimi-for-coding", 0.6],
     ["zcode", "grok-4.7", 0.15],
     ["codex", "qwen3-max", 0.1],
+    ["omp", "swe-2", 0.4],
   ];
   const seedHash = (n: number) => {
     const x = Math.sin(n * 12.9898) * 43758.5453;

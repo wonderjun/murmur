@@ -16,6 +16,7 @@ import { createCursorAdapter } from '../src/agents/cursor';
 import { createDevinAdapter } from '../src/agents/devin';
 import { createKimiAdapter } from '../src/agents/kimi';
 import { createMinimaxAdapter } from '../src/agents/minimax';
+import { createOmpAdapter } from '../src/agents/omp';
 import { createOpencodeAdapter } from '../src/agents/opencode';
 import { createQoderAdapter } from '../src/agents/qoder';
 import { createZcodeAdapter } from '../src/agents/zcode';
@@ -119,6 +120,7 @@ describe('selfTestPayload × 各家 adapter', () => {
     createDevinAdapter(),
     createQoderAdapter(),
     createMinimaxAdapter(),
+    createOmpAdapter(),
   ];
 
   for (const a of adapters) {

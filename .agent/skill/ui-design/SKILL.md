@@ -75,7 +75,7 @@ Murmur 是常驻菜单栏的「状态伴侣」，质感来自**克制与一瞥�
 
 ### Agent accent（品牌识别色，图表/图例唯一彩色入口）
 
-`--agent-kimi` 紫 / `--agent-zcode` 蓝 / `--agent-opencode` 绿 / `--agent-codex` 中性（暗底亮灰、亮底深灰）/ `--agent-cursor` 金 / `--agent-devin` 珊瑚朱 / `--agent-qoder` 芽绿，双主题各一套取值。
+`--agent-kimi` 紫 / `--agent-zcode` 蓝 / `--agent-opencode` 绿 / `--agent-codex` 中性（暗底亮灰、亮底深灰）/ `--agent-cursor` 金 / `--agent-devin` 珊瑚朱 / `--agent-qoder` 芽绿 / `--agent-minimax` 品红 / `--agent-omp` 青蓝，双主题各一套取值。
 
 用法：`data-agent="<id>"` 属性 → 自动获得 `--accent` 变量（卡片内 accent 语境）→ `color-mix(in oklab, var(--accent) 15%, transparent)` 做底色；图表直接用 `var(--agent-*)`。组件内**禁止**写死品牌色。**注意：Switch、额度条等 chrome 件不读 --accent**——它们必须全 agent 同色（单色纪律）。
 
