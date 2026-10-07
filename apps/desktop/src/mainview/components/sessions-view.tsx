@@ -237,7 +237,9 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
 
       <PageHead
         title="会话文件"
-        meta={items ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)} · 扫描于 ${fmtFileTime(scannedAt)}` : "扫描中…"}
+        meta={
+          items ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)} · 扫描于 ${fmtFileTime(scannedAt)}` : "扫描中…"
+        }
         actions={
           <>
             <Button
@@ -251,7 +253,11 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
               <RefreshCw size={14} />
             </Button>
             {selectedItems.length > 0 && (
-              <Button variant={armed ? "destructive" : "destructiveSoft"} disabled={deleting} onClick={() => void doDelete()}>
+              <Button
+                variant={armed ? "destructive" : "destructiveSoft"}
+                disabled={deleting}
+                onClick={() => void doDelete()}
+              >
                 <Trash2 size={11} />
                 {deleting ? "删除中…" : armed ? "确认删除" : `删除 ${selectedItems.length} 项`}
               </Button>
@@ -263,7 +269,10 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
       {/* 筛选行：工具分段 + 项目下拉（联动收窄）；窄窗允许折行，下拉保持右对齐 */}
       <div className="flex flex-wrap items-center gap-3 pb-3">
         <Segmented
-          options={[{ value: "all" as const, label: "全部" }, ...agents.map((a) => ({ value: a, label: AGENT_META[a].name }))]}
+          options={[
+            { value: "all" as const, label: "全部" },
+            ...agents.map((a) => ({ value: a, label: AGENT_META[a].name })),
+          ]}
           value={agentFilter}
           onChange={(v) => setAgentFilter(v)}
           label="按工具过滤"
@@ -288,110 +297,127 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
           sticky 表头 + 行列表共用 ScrollArea 的纵向滚动区 */}
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-item bg-surface-1">
         <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
-          <div className="flex h-full min-w-[520px] flex-col">
+          <div className="flex h-full min-w-130 flex-col">
             <ScrollArea className="min-h-0 flex-1">
-          {items === null && scanning ? (
-            <div className="flex flex-col gap-2 p-4">
-              {[0, 1, 2, 3].map((i) => (
-                <div key={i} className="h-9 animate-pulse rounded-item bg-surface-2" />
-              ))}
-            </div>
-          ) : (
-            <>
-              {/* 表头（sticky）：激活列前景色 + 方向箭头 */}
-              <div className={cn(GRID, "sticky top-0 z-10 h-9 bg-surface-2 px-3")}>
-                <Checkbox
-                  checked={allSelected ? true : someSelected ? "indeterminate" : false}
-                  onCheckedChange={toggleAll}
-                  disabled={!selectable.length}
-                />
-                {/* 图标列表头：须占住 grid 格（sr-only 是 absolute 会让后续列左移一格），用 overflow 裁掉文字 */}
-                <span className={cn(headCell, "overflow-hidden text-transparent select-none")} aria-label="工具">
-                  工具
-                </span>
-                <SortHead label="会话" k="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-                <span className={headCell}>项目</span>
-                <SortHead label="大小" k="sizeBytes" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="justify-end" />
-                <SortHead label="修改" k="modifiedAt" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="justify-end" />
-                <span />
-              </div>
-
-              {filtered.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-2 px-3 py-16">
-                  <Murmuration size={120} />
-                  <p className="text-body text-muted-foreground">没有会话产物</p>
-                  <p className="text-meta text-faint">接入的 CLI 跑过会话后会出现在这里</p>
+              {items === null && scanning ? (
+                <div className="flex flex-col gap-2 p-4">
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="h-9 animate-pulse rounded-item bg-surface-2" />
+                  ))}
                 </div>
               ) : (
-                <div className="divide-y divide-hairline/60">
-                  {filtered.map((i) => {
-                    const k = rowKey(i);
-                    const checked = selected.has(k);
-                    return (
-                      <div
-                        key={k}
-                        role="checkbox"
-                        aria-checked={checked}
-                        aria-disabled={i.active || undefined}
-                        tabIndex={i.active ? -1 : 0}
-                        className={cn(
-                          GRID,
-                          "group h-10 cursor-pointer px-3 transition-colors duration-fast focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground/45",
-                          checked ? "bg-surface-3/60" : "hover:bg-surface-2 focus-visible:bg-surface-2",
-                          i.active && "opacity-60",
-                        )}
-                        onClick={() => toggleOne(i)}
-                        onKeyDown={(e) => {
-                          // 行内 Checkbox 等子控件的按键不抢，只认落在行身的 Space/Enter。
-                          if (e.target !== e.currentTarget) return;
-                          if (e.key === " " || e.key === "Enter") {
-                            e.preventDefault();
-                            toggleOne(i);
-                          }
-                        }}
-                      >
-                        <Checkbox
-                          checked={checked}
-                          disabled={i.active}
-                          onCheckedChange={() => toggleOne(i)}
-                          onClick={(e) => e.stopPropagation()}
-                        />
-                        <AgentIcon agent={i.agent} size={18} />
-                        <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="select-text truncate text-detail text-foreground" title={i.title ?? i.id}>
-                            {i.title || i.id}
-                          </span>
-                          {i.kind === "db" && <span className="shrink-0 text-micro text-faint">库内</span>}
-                          {i.active && <span className="shrink-0 text-micro text-waiting">活跃</span>}
-                        </div>
-                        <span className="select-text truncate text-meta text-muted-foreground" title={i.project}>
-                          {projectName(i.project)}
-                        </span>
-                        <span className="text-right font-data text-meta tabular-nums text-muted-foreground">
-                          {fmtBytes(i.sizeBytes)}
-                        </span>
-                        <span className="text-right font-data text-meta tabular-nums text-faint">
-                          {fmtFileTime(i.modifiedAt)}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="在 Finder 中显示"
-                          className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void revealSession(i.agent, i.id);
-                          }}
-                        >
-                          <FolderSearch size={12} />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
+                <>
+                  {/* 表头（sticky）：激活列前景色 + 方向箭头 */}
+                  <div className={cn(GRID, "sticky top-0 z-10 h-9 bg-surface-2 px-3")}>
+                    <Checkbox
+                      checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                      onCheckedChange={toggleAll}
+                      disabled={!selectable.length}
+                    />
+                    {/* 图标列表头：须占住 grid 格（sr-only 是 absolute 会让后续列左移一格），用 overflow 裁掉文字 */}
+                    <span className={cn(headCell, "overflow-hidden text-transparent select-none")} aria-label="工具">
+                      工具
+                    </span>
+                    <SortHead label="会话" k="title" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+                    <span className={headCell}>项目</span>
+                    <SortHead
+                      label="大小"
+                      k="sizeBytes"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={onSort}
+                      className="justify-end"
+                    />
+                    <SortHead
+                      label="修改"
+                      k="modifiedAt"
+                      sortKey={sortKey}
+                      sortDir={sortDir}
+                      onSort={onSort}
+                      className="justify-end"
+                    />
+                    <span />
+                  </div>
+
+                  {filtered.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center gap-2 px-3 py-16">
+                      <Murmuration size={120} />
+                      <p className="text-body text-muted-foreground">没有会话产物</p>
+                      <p className="text-meta text-faint">接入的 CLI 跑过会话后会出现在这里</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-hairline/60">
+                      {filtered.map((i) => {
+                        const k = rowKey(i);
+                        const checked = selected.has(k);
+                        return (
+                          <div
+                            key={k}
+                            role="checkbox"
+                            aria-checked={checked}
+                            aria-disabled={i.active || undefined}
+                            tabIndex={i.active ? -1 : 0}
+                            className={cn(
+                              GRID,
+                              "group h-10 cursor-pointer px-3 transition-colors duration-fast focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-foreground/45",
+                              checked ? "bg-surface-3/60" : "hover:bg-surface-2 focus-visible:bg-surface-2",
+                              i.active && "opacity-60",
+                            )}
+                            onClick={() => toggleOne(i)}
+                            onKeyDown={(e) => {
+                              // 行内 Checkbox 等子控件的按键不抢，只认落在行身的 Space/Enter。
+                              if (e.target !== e.currentTarget) return;
+                              if (e.key === " " || e.key === "Enter") {
+                                e.preventDefault();
+                                toggleOne(i);
+                              }
+                            }}
+                          >
+                            <Checkbox
+                              checked={checked}
+                              disabled={i.active}
+                              onCheckedChange={() => toggleOne(i)}
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            <AgentIcon agent={i.agent} size={18} />
+                            <div className="flex min-w-0 items-center gap-1.5">
+                              <span
+                                className="select-text truncate text-detail text-foreground"
+                                title={i.title ?? i.id}
+                              >
+                                {i.title || i.id}
+                              </span>
+                              {i.kind === "db" && <span className="shrink-0 text-micro text-faint">库内</span>}
+                              {i.active && <span className="shrink-0 text-micro text-waiting">活跃</span>}
+                            </div>
+                            <span className="select-text truncate text-meta text-muted-foreground" title={i.project}>
+                              {projectName(i.project)}
+                            </span>
+                            <span className="text-right font-data text-meta tabular-nums text-muted-foreground">
+                              {fmtBytes(i.sizeBytes)}
+                            </span>
+                            <span className="text-right font-data text-meta tabular-nums text-faint">
+                              {fmtFileTime(i.modifiedAt)}
+                            </span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="在 Finder 中显示"
+                              className="opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-visible:opacity-100 group-focus-within:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void revealSession(i.agent, i.id);
+                              }}
+                            >
+                              <FolderSearch size={12} />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
               )}
-            </>
-          )}
             </ScrollArea>
           </div>
         </div>

@@ -28,7 +28,17 @@ import type { AgentId, AgentSnapshot, AgentStatus } from "@core/types";
 
 const STATUSES: AgentStatus[] = ["working", "waiting", "idle", "stale", "ended"];
 const AGENTS = Object.keys(AGENT_META) as AgentId[];
-const SURFACES = ["--background", "--surface-1", "--surface-2", "--surface-3", "--overlay", "--hairline", "--glow", "--foreground", "--muted-foreground"];
+const SURFACES = [
+  "--background",
+  "--surface-1",
+  "--surface-2",
+  "--surface-3",
+  "--overlay",
+  "--hairline",
+  "--glow",
+  "--foreground",
+  "--muted-foreground",
+];
 const CHART_TOKENS = ["--chart-1", "--chart-2", "--chart-3", "--chart-4", "--chart-5", "--chart-6", "--chart-7"];
 
 const DEMO_TIP_ROWS = [
@@ -44,9 +54,25 @@ const DEMO_DAYS = Array.from({ length: 7 }, (_, i) => {
 });
 
 const DEMO_SERIES = [
-  { name: "kimi-for-coding", color: "var(--chart-1)", width: 1.75, values: [12, 30, 8, 42, 20, 95, 40].map((v) => v * 1.4e6) },
-  { name: "gpt-5.6-terra", color: "var(--chart-2)", width: 1.5, values: [60, 52, 40, 6, 4, 70, 18].map((v) => v * 1e6) },
-  { name: "k3-256k", color: "var(--chart-3)", width: 1.5, dash: "6 3", values: [30, 36, 20, 4, 2, 60, 10].map((v) => v * 1e6) },
+  {
+    name: "kimi-for-coding",
+    color: "var(--chart-1)",
+    width: 1.75,
+    values: [12, 30, 8, 42, 20, 95, 40].map((v) => v * 1.4e6),
+  },
+  {
+    name: "gpt-5.6-terra",
+    color: "var(--chart-2)",
+    width: 1.5,
+    values: [60, 52, 40, 6, 4, 70, 18].map((v) => v * 1e6),
+  },
+  {
+    name: "k3-256k",
+    color: "var(--chart-3)",
+    width: 1.5,
+    dash: "6 3",
+    values: [30, 36, 20, 4, 2, 60, 10].map((v) => v * 1e6),
+  },
 ];
 
 /* 与 usage-view 的 MODEL_LINE_STYLES 同序（真源在业务页），仅供图表系列展件演示线型。 */
@@ -109,7 +135,7 @@ function UsageRangeDemo() {
 function DoctorCardDemo() {
   const [open, setOpen] = useState<AgentId | null>("zcode");
   return (
-    <GroupList title="工具" className="max-w-[640px]">
+    <GroupList title="工具" className="max-w-160">
       <DoctorAgentCard
         diag={DEMO_DIAG_OK}
         onChanged={() => {}}
@@ -142,7 +168,9 @@ export default function DesignBoard() {
       <BoardFoundation />
 
       <section>
-        <BoardHead>字阶七档（micro 10 · meta 11 · detail 12 · body 13 · title 15 · headline 26 · display 34）</BoardHead>
+        <BoardHead>
+          字阶七档（micro 10 · meta 11 · detail 12 · body 13 · title 15 · headline 26 · display 34）
+        </BoardHead>
         <div className="rounded-item bg-surface-1 p-3.5">
           <p className="font-data text-display font-semibold tabular-nums leading-none">128.4M</p>
           <p className="mt-2 text-headline font-semibold">3 个任务轮到你了</p>
@@ -198,7 +226,7 @@ export default function DesignBoard() {
                 {navDemo === i && (
                   <span
                     className={cn(
-                      "absolute inset-x-0 -bottom-[7px] h-[2px] rounded-full",
+                      "absolute inset-x-0 -bottom-1.75 h-0.5 rounded-full",
                       i === 0 ? "bg-waiting" : "bg-foreground",
                     )}
                   />
@@ -255,7 +283,7 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>图表悬浮（玻璃浮卡 · 悬停试试，瞬时无延迟）</BoardHead>
-        <div className="relative h-[120px] rounded-item bg-surface-1">
+        <div className="relative h-30 rounded-item bg-surface-1">
           <ChartTip tip={{ x: 80, y: 60, place: "top" }}>
             <p className="whitespace-nowrap text-meta">
               <span className="font-mono tabular-nums text-faint">09-11</span>
@@ -265,10 +293,10 @@ export default function DesignBoard() {
           </ChartTip>
           <ChartTip tip={{ x: 300, y: 20, place: "left" }}>
             <p className="text-meta font-semibold">9月11日 周五</p>
-            <div className="mt-1.5 flex min-w-[150px] flex-col gap-1">
+            <div className="mt-1.5 flex min-w-37.5 flex-col gap-1">
               {DEMO_TIP_ROWS.map((row) => (
                 <span key={row.name} className="flex items-center gap-1.5 text-meta">
-                  <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: row.color }} />
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ background: row.color }} />
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.name}</span>
                   <span className="font-mono tabular-nums">{row.value}</span>
                 </span>
@@ -294,10 +322,21 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>设置开关</BoardHead>
-        <div className="flex max-w-[360px] flex-col gap-3 rounded-item bg-surface-1 p-3.5">
+        <div className="flex max-w-90 flex-col gap-3 rounded-item bg-surface-1 p-3.5">
           <SwitchRow label="登录时启动" desc="登录 macOS 后自动打开 Murmur" checked={true} onCheckedChange={() => {}} />
-          <SwitchRow label="「轮到你了」通知" desc="有待处理会话新增时发系统通知" checked={false} onCheckedChange={() => {}} />
-          <SwitchRow label="禁用态" desc="未安装的工具不可开关" checked={false} disabled={true} onCheckedChange={() => {}} />
+          <SwitchRow
+            label="「轮到你了」通知"
+            desc="有待处理会话新增时发系统通知"
+            checked={false}
+            onCheckedChange={() => {}}
+          />
+          <SwitchRow
+            label="禁用态"
+            desc="未安装的工具不可开关"
+            checked={false}
+            disabled={true}
+            onCheckedChange={() => {}}
+          />
         </div>
       </section>
 
@@ -307,7 +346,7 @@ export default function DesignBoard() {
           {SURFACES.map((t) => (
             <span
               key={t}
-              className="flex h-12 w-[92px] items-end rounded-lg border border-hairline p-1.5"
+              className="flex h-12 w-23 items-end rounded-lg border border-hairline p-1.5"
               style={{ background: `var(${t})` }}
             >
               <span className="font-mono text-micro text-foreground/70">{t}</span>
@@ -320,10 +359,7 @@ export default function DesignBoard() {
         <BoardHead>图表系列（--chart-1..7 · heat 暖橙 ramp + dash 双编码，用量密度语义与热力图同族）</BoardHead>
         <div className="flex flex-wrap gap-2">
           {CHART_TOKENS.map((t, i) => (
-            <span
-              key={t}
-              className="flex h-12 w-[92px] flex-col justify-between rounded-lg border border-hairline p-1.5"
-            >
+            <span key={t} className="flex h-12 w-23 flex-col justify-between rounded-lg border border-hairline p-1.5">
               <svg width="100%" height="6" aria-hidden="true">
                 <line
                   x1="2"
@@ -344,7 +380,7 @@ export default function DesignBoard() {
 
       <section>
         <BoardHead>分组列表样例（业务页同款容器）</BoardHead>
-        <div className="max-w-[360px] divide-y divide-hairline/60 overflow-hidden rounded-item bg-surface-1">
+        <div className="max-w-90 divide-y divide-hairline/60 overflow-hidden rounded-item bg-surface-1">
           <AgentRow agent={demoAgent("kimi", "working")} />
           <AgentRow agent={demoAgent("zcode", "waiting")} />
           <AgentRow agent={demoAgent("opencode", "idle")} />

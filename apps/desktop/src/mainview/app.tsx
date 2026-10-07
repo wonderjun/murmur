@@ -124,10 +124,7 @@ export default function App() {
                   {item.label}
                   {item.id === "live" && waiting > 0 && (
                     <span role="status" aria-label={`${waiting} 个会话待处理`}>
-                      <AnimatedNumber
-                        value={waiting}
-                        className="font-data text-micro tabular-nums text-waiting"
-                      />
+                      <AnimatedNumber value={waiting} className="font-data text-micro tabular-nums text-waiting" />
                     </span>
                   )}
                   {active && (
@@ -156,7 +153,7 @@ export default function App() {
           </button>
           <button
             type="button"
-            className="ml-2 flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-surface-2 hover:text-muted-foreground"
+            className="ml-2 flex size-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-surface-2 hover:text-muted-foreground"
             title="管理台"
             onClick={() => void openManager("doctor")}
           >
@@ -164,7 +161,7 @@ export default function App() {
           </button>
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-surface-2 hover:text-stale"
+            className="flex size-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-surface-2 hover:text-stale"
             title="退出 Murmur"
             onClick={quit}
           >

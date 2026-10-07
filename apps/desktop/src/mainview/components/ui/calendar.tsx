@@ -54,10 +54,7 @@ function Calendar({
           "flex h-(--cell-size) w-full items-center justify-center px-(--cell-size)",
           defaultClassNames.month_caption,
         ),
-        dropdowns: cn(
-          "flex h-(--cell-size) w-full items-center justify-center gap-1.5",
-          defaultClassNames.dropdowns,
-        ),
+        dropdowns: cn("flex h-(--cell-size) w-full items-center justify-center gap-1.5", defaultClassNames.dropdowns),
         dropdown_root: cn("relative rounded-(--cell-radius)", defaultClassNames.dropdown_root),
         dropdown: cn("absolute inset-0 opacity-0", defaultClassNames.dropdown),
         caption_label: cn("select-none text-detail font-semibold text-foreground", defaultClassNames.caption_label),
@@ -71,7 +68,7 @@ function Calendar({
         week_number_header: cn("w-(--cell-size) select-none", defaultClassNames.week_number_header),
         week_number: cn("select-none text-micro text-faint", defaultClassNames.week_number),
         day: cn(
-          "group/day relative aspect-square h-full w-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-(--cell-radius)",
+          "group/day relative aspect-square size-full rounded-(--cell-radius) p-0 text-center select-none [&:last-child[data-selected=true]_button]:rounded-r-(--cell-radius)",
           props.showWeekNumber
             ? "[&:nth-child(2)[data-selected=true]_button]:rounded-l-(--cell-radius)"
             : "[&:first-child[data-selected=true]_button]:rounded-l-(--cell-radius)",

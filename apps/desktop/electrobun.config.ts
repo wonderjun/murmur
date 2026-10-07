@@ -15,7 +15,7 @@ export default {
     copy: {
       "dist/index.html": "views/mainview/index.html",
       "dist/assets": "views/mainview/assets",
-      "assets": "views/assets",
+      assets: "views/assets",
     },
     // Ignore Vite output in watch mode — HMR handles view rebuilds separately
     watchIgnore: ["dist/**"],

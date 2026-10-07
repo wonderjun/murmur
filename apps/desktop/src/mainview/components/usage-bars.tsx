@@ -40,13 +40,7 @@ interface BarSegment {
   h: number;
 }
 
-export default function UsageBars({
-  rows,
-  days,
-}: {
-  rows: UsageDailyRow[];
-  days: { day: string; label: string }[];
-}) {
+export default function UsageBars({ rows, days }: { rows: UsageDailyRow[]; days: { day: string; label: string }[] }) {
   const chartDays = useMemo(() => {
     const byAgent = new Map<string, Map<string, number>>();
     for (const r of rows) {
@@ -80,7 +74,8 @@ export default function UsageBars({
   /* 图例明细：区间内各 agent 合计与占比。 */
   const agentLegend = useMemo(() => {
     const byAgent = new Map<string, number>();
-    for (const d of chartDays) for (const seg of d.segments) byAgent.set(seg.agent, (byAgent.get(seg.agent) ?? 0) + seg.tokens);
+    for (const d of chartDays)
+      for (const seg of d.segments) byAgent.set(seg.agent, (byAgent.get(seg.agent) ?? 0) + seg.tokens);
     return [...byAgent.entries()]
       .map(([agent, tokens]) => ({ agent, tokens, pct: rangeTokens ? Math.round((tokens / rangeTokens) * 100) : 0 }))
       .sort((a, b) => b.tokens - a.tokens);
@@ -126,7 +121,7 @@ export default function UsageBars({
     <>
       <div ref={setBarBox} className="relative">
         {/* gap-1：30 列时 8px 间隙在窄窗吃掉 232px，柱子变细条——4px 足够分列 */}
-        <div className="flex h-[84px] items-end gap-1">
+        <div className="flex h-21 items-end gap-1">
           {chartDays.map((d, i) => (
             <div key={d.day} className="flex min-w-0 flex-1 flex-col items-center gap-1">
               <div className="flex w-full flex-col-reverse gap-px" style={{ height: "64px" }}>
@@ -136,7 +131,7 @@ export default function UsageBars({
                     role="img"
                     aria-label={`${segName(seg.agent)} ${fmtTokens(seg.tokens)} 令牌`}
                     tabIndex={0}
-                    className="w-full rounded-[2px] transition-opacity duration-fast hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
+                    className="w-full rounded-xs transition-opacity duration-fast hover:opacity-80 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40"
                     style={{ height: `${seg.h}px`, background: agentColor(seg.agent) }}
                     onMouseEnter={(e) => onBarEnter(e, seg)}
                     onMouseLeave={() => setBarTip(null)}
@@ -149,7 +144,7 @@ export default function UsageBars({
                   nowrap+center 让窄列里标签居中溢出而非折行（min-w-0 拆掉 min-content 约束） */}
               <span
                 className={`w-full whitespace-nowrap text-center font-data text-micro tabular-nums text-faint${
-                  barLabelIs.has(i) ? "" : " invisible"
+                  barLabelIs.has(i) ? "" : "invisible"
                 }`}
               >
                 {d.label}
@@ -170,7 +165,7 @@ export default function UsageBars({
       <div className="mt-2 flex flex-col gap-1 border-t border-hairline/60 pt-2">
         {agentLegend.map((a) => (
           <span key={a.agent} className="flex items-center gap-1.5 text-meta">
-            <span className="h-[6px] w-[6px] shrink-0 rounded-full" style={{ background: agentColor(a.agent) }} />
+            <span className="size-1.5 shrink-0 rounded-full" style={{ background: agentColor(a.agent) }} />
             <span className="text-muted-foreground">{segName(a.agent)}</span>
             <span className="ml-auto font-data tabular-nums text-faint">{a.pct}%</span>
             <span className="w-9 text-right font-data tabular-nums">{fmtTokens(a.tokens)}</span>

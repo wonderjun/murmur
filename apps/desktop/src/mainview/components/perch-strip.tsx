@@ -46,9 +46,18 @@ export default function PerchStrip({ className }: { className?: string }) {
   const label = birds.map((b) => `${AGENT_META[b.agent].name} ${STATUS_TEXT[b.status]}`).join("，");
 
   return (
-    <div className={cn("relative flex h-5 items-center justify-between px-1", className)} role="group" aria-label={label}>
+    <div
+      className={cn("relative flex h-5 items-center justify-between px-1", className)}
+      role="group"
+      aria-label={label}
+    >
       {/* 枝条微弧（中点略高），linearGradient 做两端渐隐——读作「栖枝」而非分隔线 */}
-      <svg className="absolute inset-0 h-full w-full text-hairline" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">
+      <svg
+        className="absolute inset-0 size-full text-hairline"
+        viewBox="0 0 100 20"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
         <defs>
           <linearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0" stopColor="currentColor" stopOpacity="0" />
@@ -57,7 +66,13 @@ export default function PerchStrip({ className }: { className?: string }) {
             <stop offset="1" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <path d="M0 11.5 Q 50 8.5 100 11.5" fill="none" stroke={`url(#${fadeId})`} strokeWidth="1.25" vectorEffect="non-scaling-stroke" />
+        <path
+          d="M0 11.5 Q 50 8.5 100 11.5"
+          fill="none"
+          stroke={`url(#${fadeId})`}
+          strokeWidth="1.25"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
       {birds.map((bird, i) => (
         <button
@@ -81,7 +96,10 @@ export default function PerchStrip({ className }: { className?: string }) {
                 waiting 鸟额外一圈琥珀晕环，一眼锁定「轮到你了」 */}
             <span
               key={bird.status}
-              className={cn("animate-land flex rounded-full", bird.status === "waiting" && "shadow-[0_0_0_4px_var(--status-waiting-glow)]")}
+              className={cn(
+                "animate-land flex rounded-full",
+                bird.status === "waiting" && "shadow-[0_0_0_4px_var(--status-waiting-glow)]",
+              )}
               style={{ animationDelay: `${80 + i * 45}ms` }}
             >
               <StatusDot status={bird.status} size={11} hasSrText={false} />

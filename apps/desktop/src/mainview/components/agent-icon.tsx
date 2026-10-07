@@ -16,7 +16,11 @@ export default function AgentIcon({
 }) {
   if (variant === "mono") {
     return (
-      <span className="inline-flex shrink-0 items-center justify-center" data-agent={agent} style={{ width: size, height: size }}>
+      <span
+        className="inline-flex shrink-0 items-center justify-center"
+        data-agent={agent}
+        style={{ width: size, height: size }}
+      >
         <BrandIcon agent={agent} size={size} variant="mono" />
       </span>
     );

@@ -30,7 +30,7 @@ function probeTone(p: PathProbe): string {
 
 /** 卡片头部健康标签（与 setup-view 的 health() 同语义，数据源换成诊断实况）。 */
 export function cardHealth(diag: AgentDiagnostics, snap?: AgentSnapshot): { label: string; tone: string; dot: string } {
-  if (!diag.home.exists && !(snap?.install.installed)) return { label: "未安装", tone: "text-faint", dot: "bg-faint" };
+  if (!diag.home.exists && !snap?.install.installed) return { label: "未安装", tone: "text-faint", dot: "bg-faint" };
   if (snap?.disabled) return { label: "已停用", tone: "text-faint", dot: "bg-ended" };
   if (diag.pull.error || diag.sources.some((s) => s.exists && (!s.readable || s.openable === false))) {
     return { label: "需检查", tone: "text-stale", dot: "bg-stale" };
@@ -126,7 +126,7 @@ export default function DoctorAgentCard({
       desc={diag.hint}
       control={
         <span className={cn("flex shrink-0 items-center gap-1.5 text-meta font-medium", h.tone)}>
-          <span className={cn("h-1.5 w-1.5 rounded-full", h.dot)} />
+          <span className={cn("size-1.5 rounded-full", h.dot)} />
           {h.label}
         </span>
       }
@@ -139,7 +139,7 @@ export default function DoctorAgentCard({
           <Eyebrow>数据面</Eyebrow>
           {probes.map((p) => (
             <div key={`${p.label}:${p.path}`} className="group flex min-w-0 items-center gap-2 py-1 text-meta">
-              <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", probeTone(p))} />
+              <span className={cn("size-1.5 shrink-0 rounded-full", probeTone(p))} />
               <span className="shrink-0 text-muted-foreground">{p.label}</span>
               <span className="min-w-0 flex-1 truncate font-data text-micro text-faint" title={p.path}>
                 {p.path}
@@ -174,19 +174,19 @@ export default function DoctorAgentCard({
                   </span>
                 </span>
                 {diag.hook.targets.map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => void revealPath(t).catch(() => {})}
-                  title={`${t}（点击在 Finder 显示）`}
-                  className="group flex min-w-0 items-center gap-1.5 py-0.5 text-left"
-                >
-                  <span className="min-w-0 flex-1 truncate font-data text-micro text-faint">{t}</span>
-                  <FolderSearch
-                    size={10}
-                    className="shrink-0 text-faint opacity-0 transition-opacity duration-fast group-hover:opacity-70"
-                  />
-                </button>
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => void revealPath(t).catch(() => {})}
+                    title={`${t}（点击在 Finder 显示）`}
+                    className="group flex min-w-0 items-center gap-1.5 py-0.5 text-left"
+                  >
+                    <span className="min-w-0 flex-1 truncate font-data text-micro text-faint">{t}</span>
+                    <FolderSearch
+                      size={10}
+                      className="shrink-0 text-faint opacity-0 transition-opacity duration-fast group-hover:opacity-70"
+                    />
+                  </button>
                 ))}
               </div>
             </div>
@@ -234,9 +234,7 @@ export default function DoctorAgentCard({
         <div className="mt-3 flex flex-col gap-1">
           {test.steps.map((s) => (
             <div key={s.name} className="flex min-w-0 items-baseline gap-2 text-meta">
-              <span className={cn("shrink-0 font-data", s.ok ? "text-working" : "text-stale")}>
-                {s.ok ? "✓" : "✗"}
-              </span>
+              <span className={cn("shrink-0 font-data", s.ok ? "text-working" : "text-stale")}>{s.ok ? "✓" : "✗"}</span>
               <span className="shrink-0 text-muted-foreground">{s.name}</span>
               {s.detail && <span className="min-w-0 truncate font-data text-micro text-faint">{s.detail}</span>}
             </div>

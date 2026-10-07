@@ -233,15 +233,16 @@ describe("createFocusApp", () => {
   });
 
   test("cwd 区分同 agent 多宿主：cwd 命中终端候选 > 常驻 app 候选", async () => {
-    const ps = [
-      PS_GARDEN,
-      " 5000     1 iTerm2",
-      " 5001  5000 -zsh",
-      " 5002  5001 kimi chat",
+    const ps = [PS_GARDEN, " 5000     1 iTerm2", " 5001  5000 -zsh", " 5002  5001 kimi chat"].join("\n");
+    const lsof = [
+      LSOF_GARDEN,
+      "p5000",
+      "ftxt",
+      "n/Applications/iTerm.app/Contents/MacOS/iTerm2",
+      "p5002",
+      "fcwd",
+      "n/work/b",
     ].join("\n");
-    const lsof = [LSOF_GARDEN, "p5000", "ftxt", "n/Applications/iTerm.app/Contents/MacOS/iTerm2", "p5002", "fcwd", "n/work/b"].join(
-      "\n",
-    );
     const { calls, focusApp } = harness({ ps, lsof });
     expect(await focusApp("kimi", "/work/b")).toEqual({ ok: true, app: "iTerm" });
     expect(calls[calls.length - 1]).toEqual(["open", "/Applications/iTerm.app"]);

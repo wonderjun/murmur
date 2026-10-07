@@ -11,5 +11,8 @@ export default {
     hmr: "hutch electrobun prepare && bunx vite --port 5173",
     build: "hutch electrobun prepare && bunx vite build && hutch electrobun build --env=stable",
     "build:canary": "hutch electrobun prepare && bunx vite build && hutch electrobun build --env=canary",
+    lint: ["bunx", "eslint", "."],
+    "lint:fix": ["bunx", "eslint", ".", "--fix"],
+    format: ["bunx", "prettier", "--write", "."],
   },
 };

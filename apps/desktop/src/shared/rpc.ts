@@ -46,14 +46,7 @@ export interface SettingsSnapshot {
 }
 
 /** 更新相位：bun 侧把 Updater 的细粒度状态流收敛成 UI 可消费的七相。 */
-export type UpdatePhase =
-  | "idle"
-  | "checking"
-  | "up-to-date"
-  | "available"
-  | "downloading"
-  | "applying"
-  | "error";
+export type UpdatePhase = "idle" | "checking" | "up-to-date" | "available" | "downloading" | "applying" | "error";
 
 /** 更新实况快照：相位推进走 updateStatus 推送，getUpdateState 供晚开的窗口补读。 */
 export interface UpdateSnapshot {

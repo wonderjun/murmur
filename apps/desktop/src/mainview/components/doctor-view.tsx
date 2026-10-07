@@ -34,10 +34,7 @@ export default function DoctorView() {
   const [dismissed, setDismissed] = useState(false);
   const [openAgent, setOpenAgent] = useState<AgentId | null>(null);
 
-  const snapOf = useMemo(
-    () => (agent: AgentId) => snapshot?.agents.find((s) => s.agent === agent),
-    [snapshot],
-  );
+  const snapOf = useMemo(() => (agent: AgentId) => snapshot?.agents.find((s) => s.agent === agent), [snapshot]);
 
   async function load() {
     try {
@@ -104,9 +101,7 @@ export default function DoctorView() {
       <PageHead
         title="接入诊断"
         meta={
-          diag
-            ? `${found} 个工具已发现 · ${connected} 已连接${needCheck ? ` · ${needCheck} 需检查` : ""}`
-            : "诊断中…"
+          diag ? `${found} 个工具已发现 · ${connected} 已连接${needCheck ? ` · ${needCheck} 需检查` : ""}` : "诊断中…"
         }
         actions={
           <Button
@@ -138,15 +133,18 @@ export default function DoctorView() {
               <div className="relative">
                 <p className="eyebrow text-faint">欢迎</p>
                 <p className="mt-1.5 text-body font-semibold">已在本机发现 {found} 个可观察的工具</p>
-                <p className="mt-1.5 max-w-95 text-meta leading-relaxed text-muted-foreground">
-                  Murmur 只读本地数据：本地读取即可看到会话状态与用量；接入 hook 后还能实时收到「轮到你了」这类回合信号。
+                <p className="mt-1.5 max-w-95 text-meta/relaxed text-muted-foreground">
+                  Murmur 只读本地数据：本地读取即可看到会话状态与用量；接入 hook
+                  后还能实时收到「轮到你了」这类回合信号。
                 </p>
                 {report ? (
                   <div className="mt-2.5 flex flex-col gap-1 border-t border-hairline/60 pt-2">
                     {Object.entries(report).map(([id, r]) => (
                       <div key={id} className="flex min-w-0 items-baseline gap-1.5">
                         <span className={r.changed ? "text-working" : "text-faint"}>·</span>
-                        <span className="shrink-0 text-meta text-muted-foreground">{AGENT_META[id as AgentId].name}</span>
+                        <span className="shrink-0 text-meta text-muted-foreground">
+                          {AGENT_META[id as AgentId].name}
+                        </span>
                         <span className="min-w-0 truncate font-data text-micro text-faint">
                           {r.changed ? `已接入 · ${r.files.join("、")}` : "无需改动"}
                         </span>
@@ -176,7 +174,7 @@ export default function DoctorView() {
               desc={<span className="font-data text-micro">{diag.ingest.endpoint}</span>}
               control={
                 <span className="flex items-center gap-1.5 text-meta">
-                  <span className={`h-1.5 w-1.5 rounded-full ${diag.ingest.ok ? "bg-working" : "bg-stale"}`} />
+                  <span className={`size-1.5 rounded-full ${diag.ingest.ok ? "bg-working" : "bg-stale"}`} />
                   <span className={diag.ingest.ok ? "text-muted-foreground" : "text-stale"}>
                     {diag.ingest.ok ? "在听" : "未启动"}
                   </span>

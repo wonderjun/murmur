@@ -56,9 +56,13 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
             >
               <Icon size={14} strokeWidth={1.8} />
               <span className="mid:hidden">{item.label}</span>
-              {item.id === "doctor" && hasStale && <span className="ml-auto size-1.5 rounded-full bg-stale mid:hidden" />}
+              {item.id === "doctor" && hasStale && (
+                <span className="ml-auto size-1.5 rounded-full bg-stale mid:hidden" />
+              )}
               {item.id === "usage" && tokens > 0 && (
-                <span className="ml-auto font-data text-micro tabular-nums text-faint mid:hidden">{fmtTokens(tokens)}</span>
+                <span className="ml-auto font-data text-micro tabular-nums text-faint mid:hidden">
+                  {fmtTokens(tokens)}
+                </span>
               )}
             </button>
           );

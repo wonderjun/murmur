@@ -79,7 +79,7 @@ Murmur 是常驻菜单栏的「状态伴侣」，质感来自**克制与一瞥�
 
 用法：`data-agent="<id>"` 属性 → 自动获得 `--accent` 变量（卡片内 accent 语境）→ `color-mix(in oklab, var(--accent) 15%, transparent)` 做底色；图表直接用 `var(--agent-*)`。组件内**禁止**写死品牌色。**注意：Switch、额度条等 chrome 件不读 --accent**——它们必须全 agent 同色（单色纪律）。
 
-## 纪律（eslint 级约束，违者返工）
+## 纪律（eslint 级约束，违者返工——前四条已由 `apps/desktop/eslint.config.js` 的 `better-tailwindcss/no-restricted-classes` 门禁）
 
 - ❌ 裸 Tailwind 色板（`bg-red-500`、`text-neutral-400`）、任意 hex、任意 px 字号
 - ❌ 组件内写 `dark:` 或亮暗分支——主题差异只走 app.css 的 `:root[data-theme]` token 块

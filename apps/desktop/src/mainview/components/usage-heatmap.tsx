@@ -116,26 +116,29 @@ export default function UsageHeatmap({ rows }: { rows: UsageDailyRow[] }) {
     <div ref={heatBox} className="relative">
       {/* 月份行：与周列对齐（左缩进 = 星期列宽 + 列距）；nowrap 溢出不裁——
           列宽 ~12px 装不下「10月」，右邻列的标签位恒为空 */}
-      <div className="mb-1 flex gap-[3px] pl-[15px]">
+      <div className="mb-1 flex gap-0.75 pl-3.75">
         {heatWeeks.map((week, wi) => (
           <span key={wi} className="min-w-0 flex-1 whitespace-nowrap font-data text-micro leading-none text-faint">
             {week.monthLabel}
           </span>
         ))}
       </div>
-      <div className="flex gap-[3px]">
+      <div className="flex gap-0.75">
         {/* 星期列：一三五日标在隔行，GitHub 惯例 */}
-        <div className="flex w-3 shrink-0 flex-col gap-[3px]">
+        <div className="flex w-3 shrink-0 flex-col gap-0.75">
           {WEEKDAY_MARKS.map((mark, i) => (
-            <span key={i} className="flex h-[11px] items-center justify-center font-data text-micro leading-none text-faint">
+            <span
+              key={i}
+              className="flex h-2.75 items-center justify-center font-data text-micro leading-none text-faint"
+            >
               {mark}
             </span>
           ))}
         </div>
         {heatWeeks.map((week, wi) => (
-          <div key={wi} className="flex flex-1 flex-col gap-[3px]">
+          <div key={wi} className="flex flex-1 flex-col gap-0.75">
             {week.cells.map((cell, di) => {
-              if (!cell) return <span key={`pad-${di}`} aria-hidden className="h-[11px] w-full" />;
+              if (!cell) return <span key={`pad-${di}`} aria-hidden className="h-2.75 w-full" />;
               const future = cell.day > todayKey;
               return (
                 <span
@@ -143,8 +146,8 @@ export default function UsageHeatmap({ rows }: { rows: UsageDailyRow[] }) {
                   role={future ? undefined : "img"}
                   aria-label={future ? undefined : `${cell.day} ${fmtTokens(cell.tokens)} 令牌`}
                   tabIndex={future ? -1 : 0}
-                  className={`h-[11px] w-full rounded-[2px] transition-shadow duration-fast hover:ring-1 hover:ring-foreground/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40${
-                    future ? " pointer-events-none" : ""
+                  className={`h-2.75 w-full rounded-xs transition-shadow duration-fast hover:ring-1 hover:ring-foreground/25 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/40${
+                    future ? "pointer-events-none" : ""
                   }`}
                   style={{ background: cell.color }}
                   onMouseEnter={(e) => onHeatEnter(e, cell)}

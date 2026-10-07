@@ -91,70 +91,135 @@
   --animate-land: land 480ms cubic-bezier(0.32, 0.72, 0, 1) both;
 
   @keyframes tip-in {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @keyframes breathe {
-    0%, 100% { opacity: 0.55; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.16); }
+    0%,
+    100% {
+      opacity: 0.55;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.16);
+    }
   }
 
   /* 状态环呼吸：breathe 的不透明度版（环不缩放，只起伏） */
   @keyframes ring-breathe {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   @keyframes attention {
-    0% { box-shadow: 0 0 0 0 var(--status-waiting-glow); }
-    70% { box-shadow: 0 0 0 6px transparent; }
-    100% { box-shadow: 0 0 0 0 transparent; }
+    0% {
+      box-shadow: 0 0 0 0 var(--status-waiting-glow);
+    }
+    70% {
+      box-shadow: 0 0 0 6px transparent;
+    }
+    100% {
+      box-shadow: 0 0 0 0 transparent;
+    }
   }
 
   /* 版块入场：上浮 6px 淡入，父级按序 inline animation-delay 错峰 */
   @keyframes enter {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* 栖枝鸟跳：状态切换瞬间的短促起落（key remount 驱动） */
   @keyframes hop {
-    0% { transform: translateY(0); }
-    30% { transform: translateY(-3px); }
-    55% { transform: translateY(0.6px); }
-    100% { transform: translateY(0); }
+    0% {
+      transform: translateY(0);
+    }
+    30% {
+      transform: translateY(-3px);
+    }
+    55% {
+      transform: translateY(0.6px);
+    }
+    100% {
+      transform: translateY(0);
+    }
   }
 
   /* 数字转轮：新值从下方滑入，容器 overflow-hidden 裁出机芯感 */
   @keyframes num-in {
-    from { opacity: 0; transform: translateY(45%); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(45%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   /* 椋鸟群游动：每点 --dx/--dy/--drift-* 变量错峰漂移 */
   @keyframes drift {
-    0%, 100% { transform: translate(0, 0); }
-    50% { transform: translate(var(--dx, 0px), var(--dy, 0px)); }
+    0%,
+    100% {
+      transform: translate(0, 0);
+    }
+    50% {
+      transform: translate(var(--dx, 0px), var(--dy, 0px));
+    }
   }
 
   /* waiting 头条的琥珀环境光：4.5s 慢呼吸，静水深流 */
   @keyframes hero-breathe {
-    0%, 100% { opacity: 0.45; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.45;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   /* 天光 live 态：琥珀光晕慢呼吸（安静态不呼吸，恒亮） */
   @keyframes dawn {
-    0%, 100% { opacity: 0.55; }
-    50% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0.55;
+    }
+    50% {
+      opacity: 1;
+    }
   }
 
   /* 落位：新行自上方 4px 落下回弹——栖鸟落枝 */
   @keyframes land {
-    0% { transform: translateY(-4px); opacity: 0; }
-    70% { transform: translateY(1px); opacity: 1; }
-    100% { transform: translateY(0); }
+    0% {
+      transform: translateY(-4px);
+      opacity: 0;
+    }
+    70% {
+      transform: translateY(1px);
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(0);
+    }
   }
 }
 
@@ -192,32 +257,32 @@
   /* 天光：琥珀 = 轮到你了；dawn-quiet/dawn-live 两条 utility 即静默/live 两档强度 */
   --glow: oklch(0.78 0.16 70);
   --status-working: oklch(0.74 0.14 160);
-  --status-waiting: oklch(0.80 0.16 70);
+  --status-waiting: oklch(0.8 0.16 70);
   --status-waiting-glow: color-mix(in oklab, var(--status-waiting) 35%, transparent);
   --status-idle: oklch(0.48 0.012 262);
   --status-stale: oklch(0.66 0.19 22);
-  --status-ended: oklch(0.40 0.012 262);
+  --status-ended: oklch(0.4 0.012 262);
   /* 破坏性操作色：与 status 红同色相，语义独立（删除确认态专用，不进状态色）。 */
   --destructive: var(--status-stale);
   --destructive-foreground: #fff;
   /* agent accent：旧 hex 原值转 oklch 后整体降饱和约 10%（色相不变） */
   --agent-kimi: oklch(0.709 0.143 293.5);
-  --agent-zcode: oklch(0.670 0.151 270.0);
+  --agent-zcode: oklch(0.67 0.151 270);
   --agent-opencode: oklch(0.662 0.105 163.6);
   --agent-codex: oklch(0.848 0.012 266.7);
   --agent-cursor: oklch(0.756 0.096 73.2);
   /* devin：珊瑚朱——Cognition/Devin 品牌暖色，与 cursor 琥珀/zcode 蓝拉开色相。 */
-  --agent-devin: oklch(0.703 0.140 33.4);
+  --agent-devin: oklch(0.703 0.14 33.4);
   /* qoder：芽绿——Qoder 品牌绿，比 opencode 的翡翠绿更偏黄提亮度。 */
   --agent-qoder: oklch(0.789 0.128 129.8);
   /* minimax：品红——官方 #F23F5D 品牌玫红降饱和，与 devin 珊瑚（h≈33）拉开色相。 */
-  --agent-minimax: oklch(0.660 0.190 14.0);
+  --agent-minimax: oklch(0.66 0.19 14);
   /* omp：青蓝——oh-my-pi（π）无官方彩砖（纯黑字标），取天青填 190–260 空档，
      与 zcode 蓝紫（h≈270）/opencode 翡翠（h≈164）拉开色相。 */
-  --agent-omp: oklch(0.720 0.120 225.0);
+  --agent-omp: oklch(0.72 0.12 225);
   /* claude-code：赭橙——官方 #D97757 本色 h≈42 与热力图 ramp（h≈43）撞色，色相
      推到 56 保赭橙观感；两侧与 devin 珊瑚（h≈33）/cursor 琥珀（h≈73）拉开。 */
-  --agent-claude-code: oklch(0.692 0.138 56.0);
+  --agent-claude-code: oklch(0.692 0.138 56);
   /* 热力图密度色：暖橙单色相 ramp（用量密度语义，非「谁」非状态），#f0763f 等价 oklch */
   --heat: oklch(0.699 0.165 43.2);
   /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
@@ -250,22 +315,22 @@
   /* waiting 琥珀压到 L=0.55：对底色对比度 4.6:1（0.58 档只有 4.05，不合格） */
   --status-waiting: oklch(0.55 0.15 60);
   --status-waiting-glow: color-mix(in oklab, var(--status-waiting) 30%, transparent);
-  --status-idle: oklch(0.70 0.01 262);
+  --status-idle: oklch(0.7 0.01 262);
   --status-stale: oklch(0.55 0.2 24);
   --status-ended: oklch(0.78 0.01 262);
   --destructive: var(--status-stale);
   --destructive-foreground: #fff;
-  --agent-kimi: oklch(0.541 0.247 293.0);
+  --agent-kimi: oklch(0.541 0.247 293);
   --agent-zcode: oklch(0.546 0.215 262.9);
-  --agent-opencode: oklch(0.564 0.115 161.0);
-  --agent-codex: oklch(0.439 0.000 89.9);
+  --agent-opencode: oklch(0.564 0.115 161);
+  --agent-codex: oklch(0.439 0 89.9);
   --agent-cursor: oklch(0.627 0.114 75.1);
   --agent-devin: oklch(0.611 0.165 32.7);
   --agent-qoder: oklch(0.579 0.137 134.7);
-  --agent-minimax: oklch(0.575 0.210 14.0);
-  --agent-omp: oklch(0.520 0.150 228.0);
-  --agent-claude-code: oklch(0.565 0.160 56.0);
-  --heat: oklch(0.640 0.191 36.1);
+  --agent-minimax: oklch(0.575 0.21 14);
+  --agent-omp: oklch(0.52 0.15 228);
+  --agent-claude-code: oklch(0.565 0.16 56);
+  --heat: oklch(0.64 0.191 36.1);
   /* 图表系列色：--heat 暖橙 ramp（100→16% 递减）——密度语义延伸，与热力图同族；
      浅档透明度低，系列区分另有 dash 双编码兜底 */
   --chart-1: var(--heat);
@@ -412,17 +477,36 @@ a:focus-visible {
   padding-bottom: 12px;
 }
 
-
-[data-agent="kimi"] { --accent: var(--agent-kimi); }
-[data-agent="zcode"] { --accent: var(--agent-zcode); }
-[data-agent="opencode"] { --accent: var(--agent-opencode); }
-[data-agent="codex"] { --accent: var(--agent-codex); }
-[data-agent="cursor"] { --accent: var(--agent-cursor); }
-[data-agent="devin"] { --accent: var(--agent-devin); }
-[data-agent="qoder"] { --accent: var(--agent-qoder); }
-[data-agent="minimax"] { --accent: var(--agent-minimax); }
-[data-agent="omp"] { --accent: var(--agent-omp); }
-[data-agent="claude-code"] { --accent: var(--agent-claude-code); }
+[data-agent="kimi"] {
+  --accent: var(--agent-kimi);
+}
+[data-agent="zcode"] {
+  --accent: var(--agent-zcode);
+}
+[data-agent="opencode"] {
+  --accent: var(--agent-opencode);
+}
+[data-agent="codex"] {
+  --accent: var(--agent-codex);
+}
+[data-agent="cursor"] {
+  --accent: var(--agent-cursor);
+}
+[data-agent="devin"] {
+  --accent: var(--agent-devin);
+}
+[data-agent="qoder"] {
+  --accent: var(--agent-qoder);
+}
+[data-agent="minimax"] {
+  --accent: var(--agent-minimax);
+}
+[data-agent="omp"] {
+  --accent: var(--agent-omp);
+}
+[data-agent="claude-code"] {
+  --accent: var(--agent-claude-code);
+}
 
 @media (prefers-reduced-motion: reduce) {
   *,

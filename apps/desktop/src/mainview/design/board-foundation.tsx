@@ -23,13 +23,13 @@ export default function BoardFoundation() {
       <section>
         <BoardHead>暮色天光（quiet 恒亮 / live 呼吸 · 琥珀 = 轮到你了）</BoardHead>
         <div className="flex gap-3">
-          <div className="relative h-[140px] w-[392px] overflow-hidden rounded-item bg-background">
+          <div className="relative h-35 w-98 overflow-hidden rounded-item bg-background">
             <Dawn />
             <p className="relative p-4 text-headline font-semibold">
               <span className="font-data tabular-nums">2</span> 个任务
             </p>
           </div>
-          <div className="relative h-[140px] w-[392px] overflow-hidden rounded-item bg-background">
+          <div className="relative h-35 w-98 overflow-hidden rounded-item bg-background">
             <Dawn live />
             <p className="relative p-4 text-headline font-semibold">
               <span className="font-data tabular-nums text-glow">2</span> 个任务
@@ -44,7 +44,9 @@ export default function BoardFoundation() {
         <div className="flex items-center gap-3">
           <div className="rounded-item bg-surface-1 p-2.5">
             <div className="rounded-row bg-surface-2 p-2.5">
-              <div className="rounded-row bg-surface-3 px-3 py-2 text-meta text-muted-foreground">surface-1 → 2 → 3</div>
+              <div className="rounded-row bg-surface-3 px-3 py-2 text-meta text-muted-foreground">
+                surface-1 → 2 → 3
+              </div>
             </div>
           </div>
           <div className="rounded-item bg-overlay px-3 py-2 text-meta text-muted-foreground shadow-float">overlay</div>

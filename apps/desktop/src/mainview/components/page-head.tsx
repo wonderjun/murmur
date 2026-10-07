@@ -10,7 +10,9 @@ export default function PageHead({ title, meta, actions }: { title: string; meta
         <h1 className="text-headline font-semibold tracking-tight">{title}</h1>
         {meta && <p className="mt-1.5 text-meta text-muted-foreground">{meta}</p>}
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2 tight:self-stretch tight:justify-end">{actions}</div>}
+      {actions && (
+        <div className="flex shrink-0 items-center gap-2 tight:self-stretch tight:justify-end">{actions}</div>
+      )}
     </header>
   );
 }

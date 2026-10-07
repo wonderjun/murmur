@@ -15,7 +15,8 @@ describe("架构边界", () => {
     const hits = scan(join(repo, "packages/core/src"), (source) => {
       const code = stripComments(source);
       const forbiddenImport = importSpecifiers(code).filter(
-        (spec) => spec === "react" || spec === "react-dom" || spec.startsWith("react/") || spec.startsWith("electrobun"),
+        (spec) =>
+          spec === "react" || spec === "react-dom" || spec.startsWith("react/") || spec.startsWith("electrobun"),
       );
       const dom = [...stripStrings(code).matchAll(/\b(?:window|document|HTMLElement|DOMParser)\b/g)].map((m) => m[0]);
       return [...forbiddenImport, ...dom];
@@ -28,10 +29,12 @@ describe("架构边界", () => {
     const hits = scan(join(repo, "apps/desktop/src/mainview"), (source, file) => {
       if (file === rpc) return [];
       const code = stripComments(source);
-      const specifiers = importSpecifiers(code).filter((spec) => spec === "electrobun" || spec.startsWith("electrobun/"));
-      const bridge = [...stripStrings(code).matchAll(/\b(?:__electrobun|Electroview|Electrobun)\b|window\.electrobun/g)].map(
-        (m) => m[0],
+      const specifiers = importSpecifiers(code).filter(
+        (spec) => spec === "electrobun" || spec.startsWith("electrobun/"),
       );
+      const bridge = [
+        ...stripStrings(code).matchAll(/\b(?:__electrobun|Electroview|Electrobun)\b|window\.electrobun/g),
+      ].map((m) => m[0]);
       return [...specifiers, ...bridge];
     });
     expect(hits).toEqual([]);

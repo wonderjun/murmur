@@ -11,13 +11,12 @@ import { cn } from "@/lib/utils";
 
 import type { ComponentProps } from "react";
 
-
 function Switch({ className, ...props }: ComponentProps<typeof SwitchPrimitive.Root>) {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
-        "relative inline-flex h-[18px] w-[30px] shrink-0 items-center rounded-full bg-foreground/15 transition-colors duration-fast data-[disabled]:opacity-40 data-[state=checked]:bg-foreground",
+        "relative inline-flex h-4.5 w-7.5 shrink-0 items-center rounded-full bg-foreground/15 transition-colors duration-fast data-disabled:opacity-40 data-[state=checked]:bg-foreground",
         className,
       )}
       {...props}
@@ -25,7 +24,7 @@ function Switch({ className, ...props }: ComponentProps<typeof SwitchPrimitive.R
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
         // CUSTOMIZED: 滑块阴影退场（shadow-raised 已删），叠层语言不留投影
-        className="block h-[14px] w-[14px] translate-x-[2px] rounded-full bg-foreground transition-transform duration-fast data-[state=checked]:translate-x-[14px] data-[state=checked]:bg-background"
+        className="block size-3.5 translate-x-0.5 rounded-full bg-foreground transition-transform duration-fast data-[state=checked]:translate-x-3.5 data-[state=checked]:bg-background"
       />
     </SwitchPrimitive.Root>
   );

@@ -244,7 +244,7 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
             <div className="mt-1.5 flex min-w-37.5 flex-col gap-1">
               {hoverRows.map((row) => (
                 <span key={row.name} className="flex items-center gap-1.5 text-meta">
-                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: row.color }} />
+                  <span className="size-1.5 shrink-0 rounded-full" style={{ background: row.color }} />
                   <span className="min-w-0 flex-1 truncate text-muted-foreground">{row.name}</span>
                   <span className="font-mono tabular-nums">{fmt(row.value)}</span>
                 </span>

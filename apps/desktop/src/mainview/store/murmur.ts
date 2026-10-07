@@ -227,7 +227,12 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
       const r = await rpc.rpc!.request.applyUpdate({});
       if (!r.ok) {
         set((s) => ({
-          update: { phase: "error", current: s.update?.current ?? "", channel: s.update?.channel ?? "", error: r.error },
+          update: {
+            phase: "error",
+            current: s.update?.current ?? "",
+            channel: s.update?.channel ?? "",
+            error: r.error,
+          },
         }));
       }
     } catch {

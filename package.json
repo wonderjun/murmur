@@ -27,6 +27,9 @@
     "test:desktop": "bun test apps/desktop/test/rpc-contract.test.ts apps/desktop/test/architecture-boundary.test.ts apps/desktop/test/focus-app.test.ts apps/desktop/test/updates.test.ts scripts/sync-desktop-tsconfig.test.ts",
     "typecheck": "cd packages/core && bunx tsc --noEmit",
     "typecheck:desktop": "cd apps/desktop && bunx tsc --noEmit",
+    "lint": "cd apps/desktop && bunx eslint .",
+    "lint:fix": "cd apps/desktop && bunx eslint . --fix",
+    "format": "cd apps/desktop && bunx prettier --write .",
     "sync:tsconfig": "bun scripts/sync-desktop-tsconfig.ts",
     "check:tsconfig": "bun scripts/sync-desktop-tsconfig.ts --check"
   }

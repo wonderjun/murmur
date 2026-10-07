@@ -15,10 +15,7 @@ import type { ComponentProps } from "react";
 function ScrollArea({ className, children, ...props }: ComponentProps<typeof ScrollAreaPrimitive.Root>) {
   return (
     <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn("relative", className)} {...props}>
-      <ScrollAreaPrimitive.Viewport
-        data-slot="scroll-area-viewport"
-        className="h-full w-full [&>div]:block!"
-      >
+      <ScrollAreaPrimitive.Viewport data-slot="scroll-area-viewport" className="size-full [&>div]:block!">
         {children}
       </ScrollAreaPrimitive.Viewport>
       <ScrollBar />

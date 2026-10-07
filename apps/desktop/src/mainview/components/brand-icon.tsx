@@ -50,7 +50,12 @@ const MONO_ICON: Partial<Record<AgentId, IconType>> = {
 
 /** agent → lobehub 品牌参数；zcode 取 Z.AI 品牌砖；缺映射落缩写占位。 */
 const ICON: Partial<Record<AgentId, BrandDef>> = {
-  kimi: { Icon: Kimi.Color, bg: kimiStyle.AVATAR_BACKGROUND, fg: kimiStyle.AVATAR_COLOR, mult: kimiStyle.AVATAR_ICON_MULTIPLE },
+  kimi: {
+    Icon: Kimi.Color,
+    bg: kimiStyle.AVATAR_BACKGROUND,
+    fg: kimiStyle.AVATAR_COLOR,
+    mult: kimiStyle.AVATAR_ICON_MULTIPLE,
+  },
   zcode: { Icon: ZAI, bg: zaiStyle.AVATAR_BACKGROUND, fg: zaiStyle.AVATAR_COLOR, mult: zaiStyle.AVATAR_ICON_MULTIPLE },
   opencode: {
     Icon: OpenCode,
@@ -70,8 +75,18 @@ const ICON: Partial<Record<AgentId, BrandDef>> = {
     fg: cursorStyle.AVATAR_COLOR,
     mult: cursorStyle.AVATAR_ICON_MULTIPLE,
   },
-  devin: { Icon: Devin.Color, bg: devinStyle.AVATAR_BACKGROUND, fg: devinStyle.AVATAR_COLOR, mult: devinStyle.AVATAR_ICON_MULTIPLE },
-  qoder: { Icon: Qoder.Color, bg: qoderStyle.AVATAR_BACKGROUND, fg: qoderStyle.AVATAR_COLOR, mult: qoderStyle.AVATAR_ICON_MULTIPLE },
+  devin: {
+    Icon: Devin.Color,
+    bg: devinStyle.AVATAR_BACKGROUND,
+    fg: devinStyle.AVATAR_COLOR,
+    mult: devinStyle.AVATAR_ICON_MULTIPLE,
+  },
+  qoder: {
+    Icon: Qoder.Color,
+    bg: qoderStyle.AVATAR_BACKGROUND,
+    fg: qoderStyle.AVATAR_COLOR,
+    mult: qoderStyle.AVATAR_ICON_MULTIPLE,
+  },
   // minimax 官方 Avatar 就是白 Mono 字形压粉橙渐变砖（AVATAR_* 常量直取）。
   minimax: {
     Icon: Minimax,
@@ -110,7 +125,7 @@ export default function BrandIcon({
     if (!Mono) {
       return (
         <span
-          className="flex h-full w-full items-center justify-center font-mono font-medium"
+          className="flex size-full items-center justify-center font-mono font-medium"
           style={{ fontSize: Math.round(size * 0.44) }}
         >
           {AGENT_META[agent].abbr}
@@ -118,7 +133,7 @@ export default function BrandIcon({
       );
     }
     return (
-      <span className="flex h-full w-full items-center justify-center">
+      <span className="flex size-full items-center justify-center">
         <Mono size={Math.round(size * 0.62)} color="currentColor" />
       </span>
     );
@@ -127,7 +142,7 @@ export default function BrandIcon({
   if (!def) {
     return (
       <span
-        className="flex h-full w-full items-center justify-center bg-surface-3 font-mono font-medium text-muted-foreground"
+        className="flex size-full items-center justify-center bg-surface-3 font-mono font-medium text-muted-foreground"
         style={{ fontSize: Math.round(size * 0.44) }}
       >
         {AGENT_META[agent].abbr}
@@ -136,7 +151,7 @@ export default function BrandIcon({
   }
   return (
     <span
-      className="flex h-full w-full items-center justify-center"
+      className="flex size-full items-center justify-center"
       style={{ background: def.bg, boxShadow: "inset 0 0 0 1px var(--hairline)" }}
     >
       <def.Icon size={Math.round(size * def.mult)} color={def.fg} />

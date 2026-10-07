@@ -16,7 +16,10 @@ const MONO_FALLBACK = '"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospac
 
 /** 字体名净化：剔引号/分号/花括号防 CSS 值注入，逗号也不收（只认单字体名）。 */
 function sanitizeFontName(raw: string): string {
-  return raw.replace(/["'\\,;{}]/g, "").trim().slice(0, 60);
+  return raw
+    .replace(/["'\\,;{}]/g, "")
+    .trim()
+    .slice(0, 60);
 }
 
 /** 当前系统外观对应的主题值。 */

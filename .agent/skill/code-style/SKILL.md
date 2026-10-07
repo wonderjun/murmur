@@ -5,7 +5,7 @@ description: 在 Murmur 编写或修改任何 TS/TSX 文件时使用（命名、
 
 # Murmur 代码风格
 
-格式由 Prettier 统一（printWidth 120、semi、singleQuote、trailingComma all、lf），不要手工对齐。本文只管格式化管不了的：命名、结构、注释、禁区。
+格式由 Prettier 统一（printWidth 120、semi、trailingComma all、lf——`.prettierrc` 在仓库根），不要手工对齐。**引号按包约定**：`apps/desktop` 全双引号，`packages/core`/`scripts` 单引号（prettier overrides 已配）。desktop 有 eslint 门禁（`bun run lint`，CI 有步）：canonical tailwind class（better-tailwindcss）、ui-design 设计禁区（no-restricted-classes）、react-hooks、prettier 格式都过 error 级——改码前先跑。本文只管格式化管不了的：命名、结构、注释、禁区。
 
 ## 命名总表
 

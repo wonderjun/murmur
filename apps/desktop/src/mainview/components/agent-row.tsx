@@ -182,5 +182,7 @@ function elapsed(start: number) {
 }
 
 function tokens(session: SessionSnapshot) {
-  return session.tokens.input + session.tokens.output + (session.tokens.cacheRead ?? 0) + (session.tokens.cacheWrite ?? 0);
+  return (
+    session.tokens.input + session.tokens.output + (session.tokens.cacheRead ?? 0) + (session.tokens.cacheWrite ?? 0)
+  );
 }

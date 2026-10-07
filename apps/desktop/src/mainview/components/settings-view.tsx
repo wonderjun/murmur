@@ -71,8 +71,8 @@ export default function SettingsView() {
 
   const agents = useMemo(
     () =>
-      AGENT_ORDER.map((id) => snapshot?.agents.find((a) => a.agent === id)).filter(
-        (a): a is AgentSnapshot => Boolean(a),
+      AGENT_ORDER.map((id) => snapshot?.agents.find((a) => a.agent === id)).filter((a): a is AgentSnapshot =>
+        Boolean(a),
       ),
     [snapshot],
   );
@@ -200,10 +200,7 @@ export default function SettingsView() {
 
   return (
     <div className="flex flex-col">
-      <PageHead
-        title="设置"
-        meta="Murmur 只做状态呈现。这里控制它怎么启动、怎么出现、观察哪些工具。"
-      />
+      <PageHead title="设置" meta="Murmur 只做状态呈现。这里控制它怎么启动、怎么出现、观察哪些工具。" />
 
       {!snap ? (
         settingsError ? (
@@ -235,21 +232,30 @@ export default function SettingsView() {
               label="显示 Dock 图标"
               desc="关闭后只保留菜单栏图标，应用不出现在 Dock 与 Cmd-Tab"
               control={
-                <Switch checked={snap.runtime.dockIconVisible} onCheckedChange={(v: boolean) => void save({ showDockIcon: v })} />
+                <Switch
+                  checked={snap.runtime.dockIconVisible}
+                  onCheckedChange={(v: boolean) => void save({ showDockIcon: v })}
+                />
               }
             />
             <GroupRow
               label="「轮到你了」通知"
               desc="有待处理会话新增时发系统通知；面板打开时不发"
               control={
-                <Switch checked={snap.settings.notifyOnWaiting} onCheckedChange={(v: boolean) => void save({ notifyOnWaiting: v })} />
+                <Switch
+                  checked={snap.settings.notifyOnWaiting}
+                  onCheckedChange={(v: boolean) => void save({ notifyOnWaiting: v })}
+                />
               }
             />
             <GroupRow
               label="启动时自动接入 hook"
               desc="给已安装且被监听的工具补齐上报配置；关闭后仍可在下方逐个开"
               control={
-                <Switch checked={snap.settings.autoInstallHooks} onCheckedChange={(v: boolean) => void save({ autoInstallHooks: v })} />
+                <Switch
+                  checked={snap.settings.autoInstallHooks}
+                  onCheckedChange={(v: boolean) => void save({ autoInstallHooks: v })}
+                />
               }
             />
           </GroupList>
@@ -259,7 +265,12 @@ export default function SettingsView() {
               label="主题"
               desc="跟随系统，或固定深色/浅色"
               control={
-                <Segmented options={THEME_OPTIONS} value={snap.settings.theme} onChange={(v) => void save({ theme: v })} label="主题" />
+                <Segmented
+                  options={THEME_OPTIONS}
+                  value={snap.settings.theme}
+                  onChange={(v) => void save({ theme: v })}
+                  label="主题"
+                />
               }
             />
             <GroupRow
@@ -274,7 +285,7 @@ export default function SettingsView() {
                   placeholder="SF / 苹方"
                   spellCheck={false}
                   autoComplete="off"
-                  className="w-[130px] shrink-0 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-right font-data text-meta text-foreground outline-none transition-colors duration-fast placeholder:text-faint focus:border-foreground/30"
+                  className="w-32.5 shrink-0 rounded-md border border-hairline bg-surface-2 px-2 py-1 text-right font-data text-meta text-foreground outline-none transition-colors duration-fast placeholder:text-faint focus:border-foreground/30"
                 />
               }
             />
@@ -315,19 +326,22 @@ export default function SettingsView() {
                               <p className="text-meta text-muted-foreground">hook 上报</p>
                               <p className="mt-0.5 text-micro text-faint">{hookStatus(agent)}</p>
                             </div>
-                            <Switch checked={hookOn(agent)} onCheckedChange={(v: boolean) => setAgentHook(agent.agent, v)} />
+                            <Switch
+                              checked={hookOn(agent)}
+                              onCheckedChange={(v: boolean) => setAgentHook(agent.agent, v)}
+                            />
                           </div>
                           {!hookOn(agent) && (
-                            <p className="py-1 text-micro leading-relaxed text-faint">{HOOK_IMPACT[agent.agent]}</p>
+                            <p className="py-1 text-micro/relaxed text-faint">{HOOK_IMPACT[agent.agent]}</p>
                           )}
                         </>
                       ) : (
-                        <p className="py-1 text-micro leading-relaxed text-faint">纯本地轮询——该工具没有 hook 上报面</p>
+                        <p className="py-1 text-micro/relaxed text-faint">纯本地轮询——该工具没有 hook 上报面</p>
                       )}
                       {agent.install.supportsByok && <ByokRow agent={agent} />}
                     </div>
                   ) : (
-                    <p className="py-1 text-meta leading-relaxed text-muted-foreground">
+                    <p className="py-1 text-meta/relaxed text-muted-foreground">
                       {agent.install.installed ? OBSERVE_IMPACT : UNINSTALLED_HINT}
                     </p>
                   )}
@@ -404,7 +418,9 @@ export default function SettingsView() {
                   ) : (
                     <Button
                       size="sm"
-                      disabled={update?.phase === "checking" || update?.phase === "downloading" || update?.phase === "applying"}
+                      disabled={
+                        update?.phase === "checking" || update?.phase === "downloading" || update?.phase === "applying"
+                      }
                       onClick={() => void checkUpdate()}
                     >
                       {update?.phase === "checking" ? "检查中…" : "检查更新"}
@@ -416,10 +432,16 @@ export default function SettingsView() {
             <GroupRow
               label="上报端点"
               control={
-                <span className="select-text font-data text-meta tabular-nums text-faint">{snap.runtime.ingestEndpoint}</span>
+                <span className="select-text font-data text-meta tabular-nums text-faint">
+                  {snap.runtime.ingestEndpoint}
+                </span>
               }
             />
-            <GroupRow label="接入诊断 →" desc="逐工具的数据面探针与链路自检" onClick={() => void openManager("doctor")} />
+            <GroupRow
+              label="接入诊断 →"
+              desc="逐工具的数据面探针与链路自检"
+              onClick={() => void openManager("doctor")}
+            />
           </GroupList>
         </div>
       )}

@@ -10,7 +10,7 @@ const TONE: Record<AgentStatus, string> = {
   waiting: "bg-waiting animate-attention",
   idle: "bg-idle",
   stale: "bg-stale",
-  ended: "border-[1.5px] border-ended bg-transparent",
+  ended: "border-1.5 border-ended bg-transparent",
 };
 
 const STATUS_TEXT: Record<AgentStatus, string> = {

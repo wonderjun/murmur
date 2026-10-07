@@ -86,7 +86,9 @@ describe("createRpcHandlers", () => {
     expect(handlers.hidePanel({})).toEqual({ ok: true });
     expect(deps.hidden).toBe(true);
     expect(await handlers.refreshQuotas({})).toEqual({ ok: true });
-    expect(registry.usageDailySince(since)).toEqual([{ day: "2023-11-14", agent: "kimi", model: "k2", tokens: 3, costUsd: 0.1 }]);
+    expect(registry.usageDailySince(since)).toEqual([
+      { day: "2023-11-14", agent: "kimi", model: "k2", tokens: 3, costUsd: 0.1 },
+    ]);
     expect(handlers.usageDaily({ since })).toEqual(registry.usageDailySince(since));
     expect(handlers.usageDaily({ days: 7 })).toEqual(registry.usageDailySince(NOW - 7 * 86400_000));
     expect(handlers.usageDaily({})).toEqual(registry.usageDailySince(NOW - 70 * 86400_000));
@@ -128,7 +130,9 @@ describe("createRpcHandlers", () => {
 
     const scanned = await handlers.scanSessions({});
     expect(scanned.scannedAt).toBe(NOW);
-    expect(scanned.items).toEqual([{ agent: "kimi", id: "s1", sizeBytes: 4, createdAt: 1, modifiedAt: 2, kind: "file", active: false }]);
+    expect(scanned.items).toEqual([
+      { agent: "kimi", id: "s1", sizeBytes: 4, createdAt: 1, modifiedAt: 2, kind: "file", active: false },
+    ]);
     expect(await handlers.revealSession({ agent: "kimi", id: "s1" })).toEqual({ ok: true });
     expect(deps.revealed).toEqual(["/tmp/session.jsonl"]);
 
@@ -268,7 +272,13 @@ function harness(): Harness {
     }),
     refreshQuotas: async () => {},
     usageDailySince: (sinceMs) => [
-      { day: "2023-11-14", agent: "kimi", model: sinceMs === NOW - 3 * 86400_000 ? "k2" : null, tokens: 3, costUsd: 0.1 },
+      {
+        day: "2023-11-14",
+        agent: "kimi",
+        model: sinceMs === NOW - 3 * 86400_000 ? "k2" : null,
+        tokens: 3,
+        costUsd: 0.1,
+      },
     ],
     getSettings: () => settings.settings,
     updateSettings: async (patch) => {

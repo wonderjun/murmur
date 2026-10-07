@@ -91,10 +91,7 @@ export default function UsageView() {
   const [range, setRange] = useState<UsageRange>({ kind: "preset", days: 7 });
   const { startDay, endDay } = rangeBounds(range);
 
-  const rangeRows = useMemo(
-    () => rows.filter((r) => r.day >= startDay && r.day <= endDay),
-    [rows, startDay, endDay],
-  );
+  const rangeRows = useMemo(() => rows.filter((r) => r.day >= startDay && r.day <= endDay), [rows, startDay, endDay]);
 
   const lineDays = useMemo(
     () => rangeDayList(range).map((day) => ({ day, label: day === dayStr(todayMs) ? "今天" : day.slice(5) })),
@@ -203,16 +200,13 @@ export default function UsageView() {
           {hasData ? (
             <>
               {/* ── 自然年热力图 ── */}
-              <section
-                className="animate-enter rounded-item bg-surface-1 p-4"
-                style={{ animationDelay: enterDelay() }}
-              >
+              <section className="animate-enter rounded-item bg-surface-1 p-4" style={{ animationDelay: enterDelay() }}>
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-detail font-semibold">{HEAT_YEAR} 年热力图</span>
                   <span className="flex items-center gap-1 text-micro text-faint">
                     少
                     {HEAT_LEVELS.map((c) => (
-                      <span key={c} className="h-[7px] w-[7px] rounded-[2px]" style={{ background: c }} />
+                      <span key={c} className="size-1.75 rounded-xs" style={{ background: c }} />
                     ))}
                     多
                   </span>
@@ -230,10 +224,7 @@ export default function UsageView() {
               </div>
 
               {/* ── 区间堆积柱（按 agent 分色）+ 明细图例 ── */}
-              <section
-                className="animate-enter rounded-item bg-surface-1 p-4"
-                style={{ animationDelay: enterDelay() }}
-              >
+              <section className="animate-enter rounded-item bg-surface-1 p-4" style={{ animationDelay: enterDelay() }}>
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-detail font-semibold">按工具</span>
                   <span className="font-data text-micro tabular-nums text-faint">{rangeLabel(range)}</span>
@@ -242,10 +233,7 @@ export default function UsageView() {
               </section>
 
               {/* ── 区间模型折线（准星 + 悬浮明细 + 峰值标注）── */}
-              <section
-                className="animate-enter rounded-item bg-surface-1 p-4"
-                style={{ animationDelay: enterDelay() }}
-              >
+              <section className="animate-enter rounded-item bg-surface-1 p-4" style={{ animationDelay: enterDelay() }}>
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-detail font-semibold">按模型</span>
                   <span className="font-data text-micro tabular-nums text-faint">{rangeLabel(range)}</span>
@@ -278,7 +266,7 @@ export default function UsageView() {
             <div className="animate-enter py-10 text-center" style={{ animationDelay: enterDelay() }}>
               <Murmuration size={160} className="mx-auto" />
               <p className="mt-4 text-body font-medium">还没有用量记录</p>
-              <p className="mt-1.5 text-meta leading-relaxed text-muted-foreground">
+              <p className="mt-1.5 text-meta/relaxed text-muted-foreground">
                 agent 跑起来后，这里会出现热力图与模型用量曲线
               </p>
             </div>

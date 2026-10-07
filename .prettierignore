@@ -1,0 +1,10 @@
+**/build/
+**/bun.lock
+**/dist/
+apps/desktop/.cottontail-tmp/
+apps/desktop/.hutch/
+apps/desktop/artifacts/
+apps/desktop/icon.iconset/
+apps/desktop/icons/
+apps/desktop/tsconfig.json
+node_modules/

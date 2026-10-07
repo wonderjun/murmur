@@ -61,10 +61,7 @@ if (location.search.includes("seed")) {
             sessionId: `s${i}`,
             status: (i === 0 ? "working" : i < 4 ? "waiting" : "idle") as AgentStatus,
             waitingReason: (i === 1 ? "approval" : i === 2 ? "question" : i === 3 ? "turn-end" : undefined) as
-              | "approval"
-              | "question"
-              | "turn-end"
-              | undefined,
+              "approval" | "question" | "turn-end" | undefined,
             waitingDetail:
               i === 1 ? "Bash · Running: git push --force-with-lease" : i === 2 ? "剩余范围怎么定？" : undefined,
             phase: (i === 0 ? (i % 2 === 0 ? "tool" : "thinking") : undefined) as "thinking" | "tool" | undefined,
@@ -113,7 +110,13 @@ if (location.search.includes("seed")) {
         {
           agent: "cursor",
           disabled: false,
-          install: { installed: true, version: "2.0", hasCredentials: false, homeDir: "~/.cursor", hookInstalled: false },
+          install: {
+            installed: true,
+            version: "2.0",
+            hasCredentials: false,
+            homeDir: "~/.cursor",
+            hookInstalled: false,
+          },
           sessions: Array.from({ length: 3 }, (_, i) => ({
             agent: "cursor" as const,
             sessionId: `cu${i}`,

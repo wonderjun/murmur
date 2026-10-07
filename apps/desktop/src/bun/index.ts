@@ -120,45 +120,45 @@ function makeViewRpc() {
     maxRequestTime: 15000,
     handlers: {
       requests: createRpcHandlers({
-      registry,
-      settingsSnapshot,
-      // 设置变更广播：面板与管理窗各自独立 JS context，mutation 只在发起窗
-      // 生效——推给所有窗，另一窗的 applyAppearance/开关态才跟得上。
-      pushSettings: (snap) => {
-        for (const win of [panel, managerWin]) {
-          try {
-            win?.webview.rpc?.send.settings(snap);
-          } catch {
-            // 页面尚未加载完成时忽略推送失败。
+        registry,
+        settingsSnapshot,
+        // 设置变更广播：面板与管理窗各自独立 JS context，mutation 只在发起窗
+        // 生效——推给所有窗，另一窗的 applyAppearance/开关态才跟得上。
+        pushSettings: (snap) => {
+          for (const win of [panel, managerWin]) {
+            try {
+              win?.webview.rpc?.send.settings(snap);
+            } catch {
+              // 页面尚未加载完成时忽略推送失败。
+            }
           }
-        }
-      },
-      homeDir: process.env.HOME ?? "",
-      hidePanel: () => {
-        panel.hide();
-      },
-      readClipboard: () => Utils.clipboardReadText(),
-      writeClipboard: (text) => {
-        Utils.clipboardWriteText(text);
-      },
-      applyDockIcon,
-      setLaunchAtLogin,
-      // 显式签名：否则 openManagerWindow ↔ managerWin ↔ ViewRpc 形成推断环。
-      openManager: (tab: ManagerTab): void => {
-        openManagerWindow(tab);
-      },
-      revealInFinder: (path) => {
-        Utils.showItemInFolder(path);
-      },
-      focusApp: createFocusApp(runCmd),
-      moveToTrash: (path) => Utils.moveToTrash(path),
-      openDataDir: () => {
-        Utils.showItemInFolder(MURMUR_HOME);
-      },
-      updateState: updates.state,
-      checkUpdate: updates.check,
-      applyUpdate: updates.apply,
-      quit: quitMurmur,
+        },
+        homeDir: process.env.HOME ?? "",
+        hidePanel: () => {
+          panel.hide();
+        },
+        readClipboard: () => Utils.clipboardReadText(),
+        writeClipboard: (text) => {
+          Utils.clipboardWriteText(text);
+        },
+        applyDockIcon,
+        setLaunchAtLogin,
+        // 显式签名：否则 openManagerWindow ↔ managerWin ↔ ViewRpc 形成推断环。
+        openManager: (tab: ManagerTab): void => {
+          openManagerWindow(tab);
+        },
+        revealInFinder: (path) => {
+          Utils.showItemInFolder(path);
+        },
+        focusApp: createFocusApp(runCmd),
+        moveToTrash: (path) => Utils.moveToTrash(path),
+        openDataDir: () => {
+          Utils.showItemInFolder(MURMUR_HOME);
+        },
+        updateState: updates.state,
+        checkUpdate: updates.check,
+        applyUpdate: updates.apply,
+        quit: quitMurmur,
       }),
       messages: {},
     },
@@ -339,8 +339,7 @@ function maybeNotifyWaiting(snap: AppSnapshot) {
 /** 单条通知文案：「Kimi Code · murmur：等待批准 · Bash」。 */
 function notifyLine(s: AppSnapshot["agents"][number]["sessions"][number]): string {
   const where = s.cwd?.split("/").filter(Boolean).pop() ?? s.title?.slice(0, 24) ?? "未命名任务";
-  const reason =
-    s.waitingReason === "approval" ? "等待批准" : s.waitingReason === "question" ? "等待回答" : "本轮完成";
+  const reason = s.waitingReason === "approval" ? "等待批准" : s.waitingReason === "question" ? "等待回答" : "本轮完成";
   return `${AGENT_NAMES[s.agent] ?? s.agent} · ${where}：${reason}${s.waitingDetail ? ` · ${s.waitingDetail}` : ""}`;
 }
 

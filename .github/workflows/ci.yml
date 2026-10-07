@@ -28,6 +28,10 @@ jobs:
           bun install --frozen-lockfile --cwd packages/core
           bun install --frozen-lockfile --cwd apps/desktop
 
+      # eslint + prettier 门禁：只需 JS 依赖，不等 Hutch/devkit——最早失败
+      - name: Lint desktop
+        run: bun run lint
+
       - name: Install Hutch
         run: |
           # runner context 只在 step 内可用（job 级 env 求值时没有它），用 runner 注入的 $RUNNER_TEMP

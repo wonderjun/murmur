@@ -57,7 +57,11 @@ export const DEMO_DIAG_CODEX: AgentDiagnostics = {
     targets: ["~/.codex/hooks.json", "~/.murmur/agent-hooks/codex.sh"],
     lastEventAt: Date.now() - 1800_000,
   },
-  pull: { active: true, lastScanAt: Date.now() - 60_000, sources: [{ name: "rollout-*.jsonl", at: Date.now() - 60_000 }] },
+  pull: {
+    active: true,
+    lastScanAt: Date.now() - 60_000,
+    sources: [{ name: "rollout-*.jsonl", at: Date.now() - 60_000 }],
+  },
   spool: { pendingFiles: 0, bytes: 0 },
   quota: { fetchedAt: Date.now() - 300_000 },
   hint: "hook 上报已停用——本地读取仍在工作",
@@ -69,10 +73,20 @@ export const DEMO_DIAG_CURSOR: AgentDiagnostics = {
   home: { label: "数据根", path: "~/.cursor", kind: "dir", exists: true, readable: true },
   sources: [
     { label: "会话转录", path: "~/.cursor/projects", kind: "dir", exists: true, readable: true },
-    { label: "聊天元数据", path: "~/Library/Application Support/Cursor/User", kind: "dir", exists: true, readable: true },
+    {
+      label: "聊天元数据",
+      path: "~/Library/Application Support/Cursor/User",
+      kind: "dir",
+      exists: true,
+      readable: true,
+    },
   ],
   hook: { installed: false, enabled: true, targets: [], lastEventAt: null },
-  pull: { active: true, lastScanAt: Date.now() - 120_000, sources: [{ name: "agent-transcripts", at: Date.now() - 120_000 }] },
+  pull: {
+    active: true,
+    lastScanAt: Date.now() - 120_000,
+    sources: [{ name: "agent-transcripts", at: Date.now() - 120_000 }],
+  },
   spool: { pendingFiles: 1, bytes: 14_000 },
   hint: "数据源正常——cursor 无审批/提问信号，只有相位",
 };
@@ -81,7 +95,16 @@ export const DEMO_DIAG_CURSOR: AgentDiagnostics = {
 export const DEMO_DIAG_OPENCODE: AgentDiagnostics = {
   agent: "opencode",
   home: { label: "数据根", path: "~/.local/share/opencode", kind: "dir", exists: true, readable: true },
-  sources: [{ label: "事件库", path: "~/.local/share/opencode/opencode.db", kind: "sqlite", exists: true, readable: true, openable: true }],
+  sources: [
+    {
+      label: "事件库",
+      path: "~/.local/share/opencode/opencode.db",
+      kind: "sqlite",
+      exists: true,
+      readable: true,
+      openable: true,
+    },
+  ],
   hook: { installed: true, enabled: true, targets: ["~/.config/opencode/opencode.json"], lastEventAt: null },
   pull: { active: true, lastScanAt: null, sources: [] },
   spool: { pendingFiles: 0, bytes: 0 },
@@ -115,7 +138,14 @@ export const DEMO_DIAG_MINIMAX: AgentDiagnostics = {
   agent: "minimax",
   home: { label: "数据根", path: "~/.minimax", kind: "dir", exists: true, readable: true },
   sources: [
-    { label: "状态库", path: "~/.minimax/v2/sqlite/runtime-state.sqlite", kind: "sqlite", exists: true, readable: true, openable: true },
+    {
+      label: "状态库",
+      path: "~/.minimax/v2/sqlite/runtime-state.sqlite",
+      kind: "sqlite",
+      exists: true,
+      readable: true,
+      openable: true,
+    },
   ],
   hook: { installed: false, enabled: true, targets: [], lastEventAt: null },
   pull: { active: true, lastScanAt: null, sources: [] },
@@ -129,7 +159,14 @@ export const DEMO_DIAG_OMP: AgentDiagnostics = {
   home: { label: "数据根", path: "~/.omp", kind: "dir", exists: true, readable: true },
   sources: [
     { label: "会话 journal", path: "~/.omp/agent/sessions", kind: "dir", exists: true, readable: true },
-    { label: "状态/额度库", path: "~/.omp/agent/agent.db", kind: "sqlite", exists: true, readable: true, openable: true },
+    {
+      label: "状态/额度库",
+      path: "~/.omp/agent/agent.db",
+      kind: "sqlite",
+      exists: true,
+      readable: true,
+      openable: true,
+    },
   ],
   hook: {
     installed: true,
@@ -149,7 +186,13 @@ export const DEMO_DIAG_CLAUDE: AgentDiagnostics = {
   home: { label: "数据根", path: "~/.claude", kind: "dir", exists: true, readable: true },
   sources: [
     { label: "会话 transcript", path: "~/.claude/projects", kind: "dir", exists: true, readable: true },
-    { label: "凭据文件（Linux/兜底）", path: "~/.claude/.credentials.json", kind: "file", exists: false, readable: false },
+    {
+      label: "凭据文件（Linux/兜底）",
+      path: "~/.claude/.credentials.json",
+      kind: "file",
+      exists: false,
+      readable: false,
+    },
   ],
   hook: {
     installed: true,
@@ -202,7 +245,9 @@ export function seedStoredSessions(now: number): StoredSession[] {
     ...extra,
   });
   return [
-    mk(0, "kimi", "review一下 git 未提交的改动，看有没有 bug 或者可优化的地方", 380 * 1024 * 1024, 0, "dir", { active: true }),
+    mk(0, "kimi", "review一下 git 未提交的改动，看有没有 bug 或者可优化的地方", 380 * 1024 * 1024, 0, "dir", {
+      active: true,
+    }),
     mk(1, "kimi", "修菜单栏闪烁", 12 * 1024, 1),
     mk(2, "kimi", "给状态机补 waiting 细分测试并跑全量回归", 4.6 * 1024 * 1024, 3),
     mk(3, "kimi", "暮色栖木 token 校对", 900 * 1024, 6, "db"),
@@ -210,7 +255,13 @@ export function seedStoredSessions(now: number): StoredSession[] {
     mk(5, "codex", "refactor datasource 三层架构为依赖注入", 68 * 1024 * 1024, 0),
     mk(6, "codex", "rollout jsonl tailer 半行缓存", 320 * 1024, 2),
     mk(7, "codex", "hooks.json matcher-group 形状核对", 96 * 1024, 9, "db"),
-    mk(8, "codex", "长标题挤压版面高度测试——这个会话的标题故意写得非常非常长以验证表格列截断行为", 1.4 * 1024 * 1024, 18),
+    mk(
+      8,
+      "codex",
+      "长标题挤压版面高度测试——这个会话的标题故意写得非常非常长以验证表格列截断行为",
+      1.4 * 1024 * 1024,
+      18,
+    ),
     mk(9, "cursor", "transcripts 目录监听抖动", 24 * 1024 * 1024, 1),
     mk(10, "cursor", "chats meta.json 活性启发式", 540 * 1024, 5),
     mk(11, "cursor", "subagent 归并父会话", 8.2 * 1024 * 1024, 11),

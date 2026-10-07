@@ -43,10 +43,7 @@ let instance: MurmurView | null = null;
 
 /** 离线替身：request 下任何方法都 reject，messages 空表，仅服务于无桥预览环境。 */
 function createOfflineView(): MurmurView {
-  const request = new Proxy(
-    {},
-    { get: () => () => Promise.reject(new Error("murmur: 无 electrobun 桥，离线预览")) },
-  );
+  const request = new Proxy({}, { get: () => () => Promise.reject(new Error("murmur: 无 electrobun 桥，离线预览")) });
   return { rpc: { request, messages: {} } } as unknown as MurmurView;
 }
 

@@ -17,7 +17,7 @@ function Checkbox({ className, ...props }: ComponentProps<typeof CheckboxPrimiti
       data-slot="checkbox"
       className={cn(
         // CUSTOMIZED: 底改 surface-1 叠层（raised 别名已退场）
-        "peer flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border border-hairline bg-surface-1 outline-none transition-colors duration-fast",
+        "peer flex size-3.5 shrink-0 items-center justify-center rounded-sm border border-hairline bg-surface-1 outline-none transition-colors duration-fast",
         "hover:border-foreground/60 data-[state=checked]:border-foreground data-[state=checked]:bg-foreground data-[state=indeterminate]:border-foreground data-[state=indeterminate]:bg-foreground",
         "disabled:cursor-not-allowed disabled:opacity-40",
         className,
@@ -25,11 +25,7 @@ function Checkbox({ className, ...props }: ComponentProps<typeof CheckboxPrimiti
       {...props}
     >
       <CheckboxPrimitive.Indicator className="flex items-center justify-center text-background">
-        {props.checked === "indeterminate" ? (
-          <Minus size={10} strokeWidth={3} />
-        ) : (
-          <Check size={10} strokeWidth={3} />
-        )}
+        {props.checked === "indeterminate" ? <Minus size={10} strokeWidth={3} /> : <Check size={10} strokeWidth={3} />}
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
   );

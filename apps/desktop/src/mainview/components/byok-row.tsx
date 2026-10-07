@@ -65,7 +65,7 @@ export default function ByokRow({ agent }: { agent: AgentSnapshot }) {
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-meta text-muted-foreground">额度 API Key</p>
-          <p className="mt-0.5 text-meta leading-relaxed text-faint">
+          <p className="mt-0.5 text-meta/relaxed text-faint">
             {hasKey ? (
               <>
                 已配置 <span className="font-mono">{agent.byok?.preview}</span>

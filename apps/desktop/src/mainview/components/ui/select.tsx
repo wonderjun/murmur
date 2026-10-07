@@ -61,9 +61,9 @@ function SelectItem({ className, children, ...props }: ComponentProps<typeof Sel
     <SelectPrimitive.Item
       data-slot="select-item"
       className={cn(
-        "flex cursor-pointer select-none items-center gap-1.5 rounded px-2 py-1 text-meta text-muted-foreground outline-none",
+        "flex cursor-pointer select-none items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground outline-none",
         // CUSTOMIZED: 高亮底改 surface-2 叠层（raised 别名已退场）
-        "data-[highlighted]:bg-surface-2 data-[highlighted]:text-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "data-highlighted:bg-surface-2 data-highlighted:text-foreground data-disabled:pointer-events-none data-disabled:opacity-50",
         className,
       )}
       {...props}

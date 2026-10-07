@@ -1,0 +1,10 @@
+.cottontail-tmp/
+.hutch/
+artifacts/
+build/
+bun.lock
+dist/
+icon.iconset/
+icons/
+node_modules/
+tsconfig.json

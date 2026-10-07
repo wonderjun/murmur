@@ -25,6 +25,9 @@ bun run typecheck      # core 类型检查（tsc --noEmit）
 bun run typecheck:desktop  # 桌面端类型检查（tsc --noEmit，覆盖 webview + bun 主进程；需要 .hutch/devkit）
 bun run sync:tsconfig  # 从 .hutch/devkit/tsconfig.json 重写 desktop tsconfig 的 paths
 bun run check:tsconfig # 同上，只检查 drift（非 0 即 paths 过期）
+bun run lint           # desktop eslint（canonical class + 设计禁区 + hooks + prettier 门禁，CI 有步）
+bun run lint:fix       # 同上自动修复（canonical 归一、空白）
+bun run format         # prettier --write desktop（.prettierrc 在仓库根，core/scripts 单引号走 overrides）
 ```
 
 首次：`cd apps/desktop && hutch install && hutch electrobun sync && hutch run dev`。
@@ -152,7 +155,7 @@ turn.end → waiting(turn-end)「轮到你了」    session.end → ended（grac
 - `tray.getBounds()` 返回 AppKit 主屏左下原点全局坐标，`setPosition`/`Screen.*` 是左上原点逻辑坐标：y_tl = primaryH - bounds.y + gap，x 同轴直用；多屏/全屏 Space 下以光标所在屏钳位（`Screen.getCursorScreenPoint` + `getAllDisplays`），别用 `mainScreenFrame()`（focused 屏会漂移）。菜单栏弹层要 `setVisibleOnAllWorkspaces(true)` + `setAlwaysOnTop(true)`，否则全屏 Space 点托盘会先切屏再展现。
 - `screen.ts`（osascript 探测）已不在面板路径用；屏幕信息走 `Screen`（electrobun/main 导出，FFI 直读）。
 - codex `hooks.json` 的非 managed hook 按定义 hash 记 trust——command 字符串改一个字节即失效需重新 trust；脚本文件内容重写不影响（hash 不含文件字节）。app-server 额度通道的二进制发现：`MURMUR_CODEX_BIN` env → `Bun.which('codex')`，找不到自动回落 wham。
-- `apps/desktop/tsconfig.json` 的 `paths` 是整字段覆盖（不合并 extends）：electrobun 映射从 `.hutch/devkit/tsconfig.json` 生成（值改写为 `./.hutch/devkit/` 前缀），再追加 `@/*`/`@core/*`。不要手抄条数。`hutch.config.ts` 钉着 `electrobun.version`；升级后 `cd apps/desktop && hutch electrobun sync`，再在仓库根跑 `bun run sync:tsconfig`（`bun run check:tsconfig` 查 drift）。漏生成时 tsc 的 electrobun 解析会静默退回报错。CI 用官方 install.sh 把 hutch 装进 runner 临时目录，不读开发机 `~/.hutch`。
+- `apps/desktop/tsconfig.json` 的 `paths` 是整字段覆盖（不合并 extends）：electrobun 映射从 `.hutch/devkit/tsconfig.json` 生成（值改写为 `./.hutch/devkit/` 前缀），再追加 `@/*`/`@core/*`。不要手抄条数。`hutch.config.ts` 钉着 `electrobun.version`；升级后 `cd apps/desktop && hutch electrobun sync`，再在仓库根跑 `bun run sync:tsconfig`（`bun run check:tsconfig` 查 drift）。漏生成时 tsc 的 electrobun 解析会静默退回报错。CI 用官方 install.sh 把 hutch 装进 runner 临时目录，不读开发机 `~/.hutch`。**该文件是生成物且 `check:tsconfig` 做字节级比对——已在 `.prettierignore`，prettier/eslint 不得动它。**
 - settings/uninstall 测试别信 `MURMUR_HOME` env（全测试进程共享首个固化值）：`loadSettings/saveSettings` 收 `dir` 参数注入沙箱；`hasOurHook` 按**绝对 HOOKS_DIR** 判归属，测试命令串必须经 `writeHookScript()` 产出（见 `test/hooks-uninstall.test.ts`）。
 - radix Switch 绑定是 **`checked` / `onCheckedChange`**（shadcn `components/ui/switch.tsx`）；zustand selector 只取原始字段——返回数组/对象的派生用 `lib/selectors.ts` 纯函数 + `useMemo`/`useShallow`，直接 `useMurmurStore(s => 派生)` 每次渲染产新引用会无谓重渲。
 - Radix ScrollArea 的 Viewport 给内容包装层**内联** `display:table`（max-content 布局）：长文本不换行、横向撑出 392 面板——`scroll-area.tsx` 用 `[&>div]:block!` 归一为 block；WKWebView 文档级滚动看 documentElement，`html` 必须补 `overflow:hidden + overscroll-behavior:none`（只写 body 不够）。

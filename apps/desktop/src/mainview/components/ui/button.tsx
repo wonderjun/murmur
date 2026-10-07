@@ -29,9 +29,9 @@ const buttonVariants = cva(
         destructiveSoft: "border-destructive/40 bg-surface-1 text-destructive hover:bg-destructive/10",
       },
       size: {
-        default: "h-6 px-2.5 text-meta [&_svg]:size-[11px]",
-        sm: "h-5 px-2 text-meta [&_svg]:size-[10px]",
-        icon: "h-5 w-5 p-0 [&_svg]:size-3",
+        default: "h-6 px-2.5 text-meta [&_svg]:size-2.75",
+        sm: "h-5 px-2 text-meta [&_svg]:size-2.5",
+        icon: "size-5 p-0 [&_svg]:size-3",
       },
     },
     defaultVariants: { variant: "default", size: "default" },

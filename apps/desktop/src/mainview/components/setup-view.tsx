@@ -35,7 +35,7 @@ export default function SetupView() {
             {connectedCount}/{agents.length} 已连接
           </span>
         </div>
-        <p className="mt-2 max-w-77.5 text-meta leading-relaxed text-muted-foreground">
+        <p className="mt-2 max-w-77.5 text-meta/relaxed text-muted-foreground">
           Murmur 只读取本机工具。不同工具的观察方式不同，这里会把数据来源和额度状态分开说明。
         </p>
       </section>
@@ -44,7 +44,12 @@ export default function SetupView() {
         {agents.map((agent, i) => {
           const h = health(agent);
           return (
-            <article key={agent.agent} className="setup-row animate-enter" data-agent={agent.agent} style={{ animationDelay: `${i * 45 + 40}ms` }}>
+            <article
+              key={agent.agent}
+              className="setup-row animate-enter"
+              data-agent={agent.agent}
+              style={{ animationDelay: `${i * 45 + 40}ms` }}
+            >
               <div className="flex items-center gap-3">
                 {/* 单色字形栖在叠层圆托上——工具页不收彩色品牌砖 */}
                 <span className="inline-flex size-8 items-center justify-center rounded-full bg-surface-2 text-muted-foreground">
@@ -62,7 +67,7 @@ export default function SetupView() {
                   </p>
                 </div>
                 <span className={cn("flex shrink-0 items-center gap-1.5 text-meta font-medium", h.tone)}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full", h.dot)} />
+                  <span className={cn("size-1.5 rounded-full", h.dot)} />
                   {h.label}
                 </span>
               </div>
@@ -92,14 +97,24 @@ export default function SetupView() {
                       <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">{w.label}</span>
                       <span className="relative h-0.75 w-14 shrink-0 overflow-hidden rounded-full bg-surface-3">
                         <span
-                          className={cn("absolute inset-y-0 left-0 rounded-full transition-[width]", quotaBar(w.usedPct))}
+                          className={cn(
+                            "absolute inset-y-0 left-0 rounded-full transition-[width]",
+                            quotaBar(w.usedPct),
+                          )}
                           style={{ width: `${Math.min(w.usedPct, 100)}%` }}
                         />
                       </span>
-                      <span className={cn("w-10 shrink-0 whitespace-nowrap text-right font-data text-meta tabular-nums", quotaTone(w.usedPct))}>
+                      <span
+                        className={cn(
+                          "w-10 shrink-0 whitespace-nowrap text-right font-data text-meta tabular-nums",
+                          quotaTone(w.usedPct),
+                        )}
+                      >
                         {fmtQuotaHeadline(w)}
                       </span>
-                      <span className="w-16 shrink-0 whitespace-nowrap text-right font-data text-micro text-faint">{resetText(w)}</span>
+                      <span className="w-16 shrink-0 whitespace-nowrap text-right font-data text-micro text-faint">
+                        {resetText(w)}
+                      </span>
                     </div>
                   ))}
                 </div>
