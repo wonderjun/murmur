@@ -84,25 +84,22 @@ export default function SetupView() {
               </div>
 
               {agent.quota?.windows.length ? (
-                <div className="quota-strip mt-3">
+                /* 行列表而非横排格：窗口数不设上限（omp 实测 5 窗），单行四槽
+                   「label · 细条 · pct · 重置」任意数量都保读，与 probe/图例行同构。 */
+                <div className="mt-3 flex flex-col border-t border-hairline/60 pt-1">
                   {agent.quota.windows.map((w) => (
-                    <div key={w.label} className="quota-window">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-meta font-medium text-foreground">{w.label}</span>
-                        <span className={cn("font-data text-meta tabular-nums", quotaTone(w.usedPct))}>
-                          {fmtQuotaHeadline(w)}
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-0.75 overflow-hidden rounded-full bg-surface-3">
+                    <div key={w.label} className="flex items-center gap-2 py-1" title={quotaTitle(w)}>
+                      <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">{w.label}</span>
+                      <span className="relative h-0.75 w-14 shrink-0 overflow-hidden rounded-full bg-surface-3">
                         <span
-                          className={cn("block h-full rounded-full transition-[width]", quotaBar(w.usedPct))}
+                          className={cn("absolute inset-y-0 left-0 rounded-full transition-[width]", quotaBar(w.usedPct))}
                           style={{ width: `${Math.min(w.usedPct, 100)}%` }}
                         />
-                      </div>
-                      <div className="mt-1 flex items-center justify-between gap-2 font-data text-micro text-faint">
-                        <span>{fmtQuotaAmount(w)}</span>
-                        <span>{resetText(w)}</span>
-                      </div>
+                      </span>
+                      <span className={cn("w-10 shrink-0 whitespace-nowrap text-right font-data text-meta tabular-nums", quotaTone(w.usedPct))}>
+                        {fmtQuotaHeadline(w)}
+                      </span>
+                      <span className="w-16 shrink-0 whitespace-nowrap text-right font-data text-micro text-faint">{resetText(w)}</span>
                     </div>
                   ))}
                 </div>
@@ -177,13 +174,23 @@ function quotaBar(usedPct: number) {
   return usedPct >= 90 ? "bg-stale" : usedPct >= 70 ? "bg-foreground" : "bg-foreground/50";
 }
 
+/* 行内只放得下短文案：无重置时间留空，重置中点一个点，其余 N 天/时/分后。 */
 function resetText(window: QuotaWindow) {
-  if (!window.resetsAt) return "无重置时间";
+  if (!window.resetsAt) return "";
   const ms = window.resetsAt - Date.now();
-  if (ms <= 0) return "正在重置";
+  if (ms <= 0) return "重置中";
   const hours = Math.floor(ms / 3_600_000);
   const minutes = Math.floor((ms % 3_600_000) / 60_000);
-  if (hours >= 24) return `${Math.floor(hours / 24)}天后重置`;
-  if (hours) return `${hours}小时后重置`;
-  return `${minutes}分钟后重置`;
+  if (hours >= 24) return `${Math.floor(hours / 24)}天后`;
+  if (hours) return `${hours}小时后`;
+  return `${minutes}分钟后`;
+}
+
+/* 悬浮细目：行内被密度省掉的 u/l 与绝对重置时间在这里补齐（probe 行 title 先例）。 */
+function quotaTitle(w: QuotaWindow) {
+  const parts = [w.label];
+  const amount = fmtQuotaAmount(w);
+  if (amount) parts.push(amount);
+  if (w.resetsAt) parts.push(`重置 ${new Date(w.resetsAt).toLocaleString()}`);
+  return parts.join(" · ");
 }

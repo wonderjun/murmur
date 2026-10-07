@@ -399,18 +399,6 @@ a:focus-visible {
   padding: 14px 16px;
 }
 
-.quota-strip {
-  display: flex;
-  gap: 18px;
-  border-top: 1px solid var(--hairline);
-  padding-top: 10px;
-}
-
-.quota-window {
-  min-width: 0;
-  flex: 1;
-}
-
 /* 中文栏目头：uppercase/宽 tracking 是西文词汇，对汉字只是「小灰字」——
    层级交给字重(600)+灰度+间距，tracking 收敛到 0.05em 仅松行气。 */
 .eyebrow {
