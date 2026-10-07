@@ -4,9 +4,21 @@
 
 ## [未发布]
 
+## [0.1.3] - 2026-10-07
+
 ### Added
 
+- 收编 **claude-code** adapter（Claude Code）：push 面 merge `~/.claude/settings.json` matcher-group hooks（22 事件 + `async:true` + 10s timeout，覆盖生命周期/工具/审批/Elicitation，Notification 按 `notification_type` 分诊 waiting）；pull 面 tail `projects/<slug>/*.jsonl`（orphaned/superseded 变体按文件名 uuid 归并同会话，`message.usage` 全量 token 是唯一计量源，`summary`/`custom-title` 行给标题）；quota 面 OAuth token 走 Keychain 只读、绝不代刷；perch 时代死 hook 条目走换词根收编无缝续用；品牌砖 + 赭橙 accent 接入
 - 收编 **omp** adapter（oh-my-pi / omp CLI，Stencil Labs）：push 面是首家「TS 扩展模块」而非 shell hook——生成的 `murmur-agent.ts` 落 `~/.omp/agent/extensions/` 官方自动发现目录（独占文件按 marker 判归属、命名 profile 一并覆盖），扩展内经 endpoint+token POST `/hook/omp`、非 202/超时写 spool、单在途队列不积压；覆盖生命周期/工具/审批事件（`agent_end.willContinue` 续跑不误收尾、`session_switch/branch` 反解旧 id 补 end）。pull 面 tail `sessions/<slug>/<ts>_<uuid>.jsonl` v3 journal（assistant 行全量 usage/stopReason 是唯一计量源、`custom/tool_execution_start` 给 toolName+intent、`ask` 工具→waiting(question)），subagent 目录归并父会话；quota 面本地只读 `agent.db` 的 `usage_history` 额度窗快照（零网络零凭据）；清理页 journal+subagent 目录整组进废纸篓
+
+### Changed
+
+- 工具页额度窗改竖排行列表——横排 flex 均分在 5 窗 ~62px 格宽下长标签竖向挤压，改「label·细条·pct·重置」四槽行列表（图例行同构句式），任意窗口数保读；u/l 与绝对重置时间退 hover title
+- desktop eslint/prettier 规范门禁落地（`bun run lint`/`lint:fix`/`format`）：tailwind canonical class 归一（任意 px → spacing 刻度、h/w → `size-*`）、ui-design 设计禁区落成 no-restricted-classes 正则门禁、webview 桥边界 lint 化；CI 加 Lint 步
+
+### Fixed
+
+- 会话文件工具筛选胶囊溢出画出轨道外直顶窗缘（agent 增多/窗窄时）——Segmented 轨道改轨内横滚（`overflow-x-auto` + `scrollbar-none`），可滚方向缘按滚动位 mask 渐隐；不溢出时视觉零变化
 
 ## [0.1.2] - 2026-10-06
 
@@ -68,6 +80,7 @@
 - 用量台账 `~/.murmur/murmur.db`（WAL）：events 审计 + usage_daily 日聚合 + quota 快照 + pull 游标
 - 两级 per-agent 开关（监听总闸 / hook 上报）、perch→murmur 一次性迁移
 
+[0.1.3]: https://github.com/chen-wang-jun/murmur/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/chen-wang-jun/murmur/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/chen-wang-jun/murmur/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/chen-wang-jun/murmur/releases/tag/v0.1.0

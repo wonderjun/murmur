@@ -3,7 +3,7 @@
 菜单栏 AI Agent 状态伴侣 · A menu-bar status companion for AI coding agents
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
-![Version](https://img.shields.io/badge/version-0.1.2-green.svg)
+![Version](https://img.shields.io/badge/version-0.1.3-green.svg)
 ![Platform](https://img.shields.io/badge/platform-macOS-lightgrey.svg)
 
 <img src="docs/screenshot.png" width="392" />
