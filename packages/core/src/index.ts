@@ -48,3 +48,8 @@ export {
 export { DEFAULT_SETTINGS, flagEnabled, loadSettings, saveSettings, type MurmurSettings } from './settings';
 export { loadCredentials, saveCredentials, maskKey, type ByokCredential, type ByokStore } from './credentials';
 export type { AgentAdapter } from './agents/base';
+export { SyncService } from './sync/engine';
+export { allSyncTargets, syncTargets, type McpTarget, type SyncTarget } from './sync/targets';
+export { importSkills, listSourceSkills, readSourceMcp, type SourceSkill } from './sync/source';
+export { sourceMcpEntry, saveSourceMcp } from './sync/source';
+export { probeMcpServer } from './sync/probe';

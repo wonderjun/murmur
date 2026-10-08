@@ -8,6 +8,13 @@
  */
 
 import type { AgentId, ManagerTab } from "../../../../packages/core/src/index";
+import type {
+  McpSaveResult,
+  McpTestResult,
+  SkillDeleteResult,
+  SkillImportResult,
+  SyncOverview,
+} from "../../../../packages/core/src/types";
 import type { MurmurSettings } from "../../../../packages/core/src/settings";
 import type { MurmurRPC, SettingsSnapshot, UpdateSnapshot } from "../shared/rpc";
 import type { FocusAppResult } from "./focus-app";
@@ -76,13 +83,30 @@ export interface RpcHandlerDeps {
   /** 文件类会话产物进废纸篓。 */
   moveToTrash: (path: string) => boolean;
   openDataDir: () => void;
+  /** 弹系统目录选择框（index.ts 接 electrobun Utils.openFileDialog；取消回 null）。 */
+  pickDirectory: () => Promise<string | null>;
   /** 更新相位实况（updates.ts 维护；晚开的管理窗挂载补读）。 */
   updateState: () => Promise<UpdateSnapshot>;
   /** 触发远端 update.json 比对。 */
   checkUpdate: () => Promise<UpdateSnapshot>;
   /** 受理更新：下载+换包异步推进，结果走 updateStatus 推送。 */
   applyUpdate: () => Promise<{ ok: boolean; error?: string }>;
+  /** 技能/MCP 同步服务切面（handler 只调用这几个方法；SyncService 在 index.ts 装配）。 */
+  sync: RpcSync;
   quit: () => void;
+}
+
+/** RpcHandlerDeps 的同步服务切片：与 registry 同款收窄惯例，测试可替身。 */
+export interface RpcSync {
+  overview(): SyncOverview;
+  syncAll(): Promise<SyncOverview>;
+  importSkills(path: string): Promise<SkillImportResult & { overview: SyncOverview }>;
+  deleteSkill(name: string, trash: (path: string) => boolean): Promise<SkillDeleteResult>;
+  setSkillEnabled(name: string, enabled: boolean): Promise<SyncOverview>;
+  setMcpEnabled(name: string, enabled: boolean): Promise<SyncOverview>;
+  mcpDef(name: string): Record<string, unknown> | null;
+  saveMcp(origName: string | null, defText: string): Promise<McpSaveResult>;
+  testMcp(name?: string, defText?: string): Promise<McpTestResult[]>;
 }
 
 /** 组装全部 bun request handler。 */
@@ -117,6 +141,9 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
         const actual = deps.setLaunchAtLogin(patch.launchAtLogin);
         // 实际态与意图不符（如 dev 无 bundle）时回写，设置存储与系统实况保持自洽。
         if (actual !== patch.launchAtLogin) await registry.updateSettings({ launchAtLogin: actual });
+      }
+      if (patch.sync !== undefined || patch.disabledSkills !== undefined || patch.disabledMcp !== undefined) {
+        await deps.sync.syncAll();
       }
       return pushSettings();
     },
@@ -183,6 +210,16 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
     getUpdateState: () => deps.updateState(),
     checkUpdate: () => deps.checkUpdate(),
     applyUpdate: () => deps.applyUpdate(),
+    getSyncStatus: () => deps.sync.overview(),
+    syncAll: () => deps.sync.syncAll(),
+    importSkills: ({ path }) => deps.sync.importSkills(path),
+    deleteSkill: ({ name }) => deps.sync.deleteSkill(name, deps.moveToTrash),
+    setSkillEnabled: ({ name, enabled }) => deps.sync.setSkillEnabled(name, enabled),
+    setMcpEnabled: ({ name, enabled }) => deps.sync.setMcpEnabled(name, enabled),
+    pickDirectory: async () => ({ path: await deps.pickDirectory() }),
+    saveMcp: ({ origName, def }) => deps.sync.saveMcp(origName, def),
+    testMcp: ({ name, def }) => deps.sync.testMcp(name, def),
+    getMcpDef: ({ name }) => ({ def: deps.sync.mcpDef(name) }),
     quitApp: () => {
       deps.quit();
       return { ok: true };

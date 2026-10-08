@@ -8,6 +8,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./app";
 import "./app.css";
+import { AGENT_ORDER } from "./lib/agent-meta";
 import { SEED_DIAG_AGENTS, seedStoredSessions } from "./design/demo-data";
 import { useMurmurStore } from "./store/murmur";
 
@@ -177,6 +178,78 @@ if (location.search.includes("seed")) {
     scanSessionFiles: async () => {
       useMurmurStore.setState({ sessionFiles: seedStoredSessions(now), sessionFilesAt: now });
     },
+    // 技能页离线桩：六技能×10 agent 混合状态 + 一条 MCP；getMcpDef 回真值验证回填。
+    getSyncStatus: async () => {
+      const cells = AGENT_ORDER.map((a, i) => ({
+        agent: a,
+        state: (
+          ["synced", "absent", "off", "stale", "external", "absent", "synced", "off", "absent", "synced"] as const
+        )[i],
+      }));
+      useMurmurStore.setState({
+        syncOverview: {
+          scannedAt: now,
+          skills: [
+            {
+              name: "frontend-design",
+              description: "Create distinctive, production-grade frontend interfaces with high design quality.",
+              hasSkillMd: true,
+              disabled: false,
+              cells,
+            },
+            {
+              name: "typescript-standards",
+              description: "TypeScript 开发规范，与 ESLint 配置保持一致。包含类型定义、数组语法…",
+              hasSkillMd: true,
+              disabled: false,
+              cells,
+            },
+            {
+              name: "unocss",
+              description: "UnoCSS instant atomic CSS engine, superset of Tailwind CSS. Use when conf…",
+              hasSkillMd: true,
+              disabled: false,
+              cells,
+            },
+            {
+              name: "vue",
+              description: "Vue 3 Composition API, script setup macros, reactivity system, and built-…",
+              hasSkillMd: true,
+              disabled: false,
+              cells,
+            },
+            {
+              name: "vue-router-best-practices",
+              description: "Vue Router 4 patterns, navigation guards, route params, and route-compone…",
+              hasSkillMd: true,
+              disabled: true,
+              cells,
+            },
+            {
+              name: "kami",
+              description: "Typeset professional documents and product landing pages.",
+              hasSkillMd: true,
+              disabled: false,
+              cells,
+            },
+          ],
+          mcps: [{ name: "name", disabled: false, cells }],
+        },
+      });
+    },
+    syncAll: async () => {},
+    pickDirectory: async () => null,
+    getMcpDef: async (name: string) => ({
+      command: "npx",
+      args: ["-y", `${name}-server`],
+      env: { API_KEY: "sk-…do-not-leak" },
+    }),
+    saveMcp: async () => ({ ok: true }),
+    testMcp: async () => [{ ok: true, latencyMs: 42, name: "name", server: "stub@1.0" }],
+    setSkillEnabled: async () => {},
+    setMcpEnabled: async () => {},
+    importSkills: async () => ({ imported: [], skipped: [], overview: useMurmurStore.getState().syncOverview! }),
+    deleteSkill: async () => ({ ok: true }),
   });
 }
 

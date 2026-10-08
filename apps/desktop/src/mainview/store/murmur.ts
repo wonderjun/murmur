@@ -14,16 +14,19 @@ import { AGENT_ORDER } from "@/lib/agent-meta";
 import { useRpc } from "@/lib/rpc";
 
 import type { SettingsSnapshot, UpdateSnapshot, UsageDailyRow } from "../../shared/rpc";
-import type { MurmurSettings } from "@core/settings";
 import type {
   AgentId,
   AppSnapshot,
   DiagnosticsSnapshot,
   HookTestResult,
   ManagerTab,
+  McpTestResult,
   SessionDeleteResult,
+  SkillImportResult,
   StoredSession,
+  SyncOverview,
 } from "@core/types";
+import type { MurmurSettings } from "@core/settings";
 
 interface MurmurStore {
   snapshot: AppSnapshot | null;
@@ -82,6 +85,28 @@ interface MurmurStore {
   /** 唤起会话宿主 app 到台前；app 为被激活的 .app 名。 */
   focusSessionApp(agent: AgentId, id: string): Promise<{ ok: boolean; app?: string }>;
   openDataDir(): Promise<void>;
+  /** 技能/MCP 盘点矩阵（skills 页数据源；null=尚未拉取）。 */
+  syncOverview: SyncOverview | null;
+  /** 盘点矩阵：纯读（不写盘），各操作响应也回写本字段。 */
+  getSyncStatus(): Promise<void>;
+  /** 全量同步：源 → 各 agent 目标写一遍。 */
+  syncAll(): Promise<void>;
+  /** 导入本地目录为源技能包。 */
+  importSkills(path: string): Promise<SkillImportResult>;
+  /** 删除源技能包（废纸篓）。 */
+  deleteSkill(name: string): Promise<{ ok: boolean; error?: string }>;
+  /** 条目级启停（技能）。 */
+  setSkillEnabled(name: string, enabled: boolean): Promise<void>;
+  /** 条目级启停（MCP）。 */
+  setMcpEnabled(name: string, enabled: boolean): Promise<void>;
+  /** 弹系统目录选择框（技能导入用；取消回 null）。 */
+  pickDirectory(): Promise<string | null>;
+  /** 读单条源 MCP 定义（编辑回填）。 */
+  getMcpDef(name: string): Promise<Record<string, unknown> | null>;
+  /** 新建/更新源 MCP 条目（origName=编辑前键名/新建 null，def=含 mcpServers 整段 JSON）。 */
+  saveMcp(origName: string | null, def: string): Promise<{ ok: boolean; error?: string }>;
+  /** MCP 探测：name=已存条目，def=草稿 JSON 原文（多键逐条出结果）。 */
+  testMcp(params: { name?: string; def?: string }): Promise<McpTestResult[]>;
   /** 设置页挂载补读更新相位（管理窗晚开，可能错过推送）。 */
   loadUpdateState(): Promise<void>;
   /** 设置页「检查更新」按钮。 */
@@ -246,6 +271,54 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     await rpc.rpc!.request.openDataDir({});
   }
 
+  async function getSyncStatus() {
+    set({ syncOverview: await rpc.rpc!.request.getSyncStatus({}) });
+  }
+
+  async function syncAll() {
+    set({ syncOverview: await rpc.rpc!.request.syncAll({}) });
+  }
+
+  async function importSkills(path: string) {
+    const r = await rpc.rpc!.request.importSkills({ path });
+    set({ syncOverview: r.overview });
+    return r;
+  }
+
+  async function deleteSkill(name: string) {
+    const r = await rpc.rpc!.request.deleteSkill({ name });
+    if (r.overview) set({ syncOverview: r.overview });
+    return { ok: r.ok, error: r.error };
+  }
+
+  async function setSkillEnabled(name: string, enabled: boolean) {
+    set({ syncOverview: await rpc.rpc!.request.setSkillEnabled({ name, enabled }) });
+  }
+
+  async function setMcpEnabled(name: string, enabled: boolean) {
+    set({ syncOverview: await rpc.rpc!.request.setMcpEnabled({ name, enabled }) });
+  }
+
+  async function pickDirectory() {
+    const r = await rpc.rpc!.request.pickDirectory({});
+    return r.path;
+  }
+
+  async function getMcpDef(name: string) {
+    const r = await rpc.rpc!.request.getMcpDef({ name });
+    return r.def;
+  }
+
+  async function saveMcp(origName: string | null, def: string) {
+    const r = await rpc.rpc!.request.saveMcp({ origName, def });
+    if (r.overview) set({ syncOverview: r.overview });
+    return { ok: r.ok, error: r.error };
+  }
+
+  async function testMcp(params: { name?: string; def?: string }) {
+    return rpc.rpc!.request.testMcp(params);
+  }
+
   async function loadUpdateState() {
     try {
       set({ update: await rpc.rpc!.request.getUpdateState({}) });
@@ -318,6 +391,17 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     revealSession,
     focusSessionApp,
     openDataDir,
+    syncOverview: null,
+    getSyncStatus,
+    syncAll,
+    importSkills,
+    deleteSkill,
+    setSkillEnabled,
+    setMcpEnabled,
+    pickDirectory,
+    getMcpDef,
+    saveMcp,
+    testMcp,
     loadUpdateState,
     checkUpdate,
     applyUpdate,

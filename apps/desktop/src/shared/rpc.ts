@@ -10,8 +10,13 @@ import type {
   DiagnosticsSnapshot,
   HookTestResult,
   ManagerTab,
+  McpSaveResult,
+  McpTestResult,
   SessionDeleteResult,
+  SkillDeleteResult,
+  SkillImportResult,
   StoredSession,
+  SyncOverview,
 } from "@core/types";
 import type { MurmurSettings } from "@core/settings";
 
@@ -122,6 +127,26 @@ export type MurmurRPC = {
       checkUpdate: { params: {}; response: UpdateSnapshot };
       /** 受理更新：下载+换包异步推进（相位走 updateStatus 推送），换包后进程由更新助手重启。 */
       applyUpdate: { params: {}; response: { ok: boolean; error?: string } };
+      /** 技能/MCP 盘点矩阵（管理台「技能」页挂载补读）。 */
+      getSyncStatus: { params: {}; response: SyncOverview };
+      /** 全量同步：源 → 各 agent 目标写一遍，返回最新盘点。 */
+      syncAll: { params: {}; response: SyncOverview };
+      /** 导入本地目录为源技能包（≤3 层扫 SKILL.md），返回导入回执 + 新盘点。 */
+      importSkills: { params: { path: string }; response: SkillImportResult & { overview: SyncOverview } };
+      /** 删除源技能包：进废纸篓，目标侧我方拷贝随 syncAll 清理。 */
+      deleteSkill: { params: { name: string }; response: SkillDeleteResult };
+      /** 条目级启停：技能（关=同步剔除 + 清理在场拷贝）。 */
+      setSkillEnabled: { params: { name: string; enabled: boolean }; response: SyncOverview };
+      /** 条目级启停：MCP（关=不写 + 剔除曾写入的我方 key）。 */
+      setMcpEnabled: { params: { name: string; enabled: boolean }; response: SyncOverview };
+      /** 弹系统目录选择框（electrobun Utils.openFileDialog；取消回 null）。 */
+      pickDirectory: { params: {}; response: { path: string | null } };
+      /** 读单条源 MCP 定义（编辑回填；含 env/headers 凭据故按需逐条取，不进盘点快照）。 */
+      getMcpDef: { params: { name: string }; response: { def: Record<string, unknown> | null } };
+      /** 新建/更新源 MCP 条目：origName=编辑前键名（新建 null），def=含 mcpServers 的整段 JSON。 */
+      saveMcp: { params: { origName: string | null; def: string }; response: McpSaveResult };
+      /** MCP 探测：name 探已存条目 / def 探草稿（多键逐条出结果）。 */
+      testMcp: { params: { name?: string; def?: string }; response: McpTestResult[] };
       quitApp: { params: {}; response: { ok: true } };
     };
     messages: {};

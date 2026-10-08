@@ -376,6 +376,7 @@ function harness(): Harness {
     openDataDir: () => {
       deps.openedDataDir = true;
     },
+    pickDirectory: async () => null,
     updateState: async () => ({ phase: "idle", current: "test", channel: "dev" }),
     checkUpdate: async () => {
       deps.updated.checked += 1;
@@ -384,6 +385,17 @@ function harness(): Harness {
     applyUpdate: async () => {
       deps.updated.applied += 1;
       return { ok: true };
+    },
+    sync: {
+      overview: () => ({ skills: [], mcps: [], scannedAt: NOW }),
+      syncAll: async () => ({ skills: [], mcps: [], scannedAt: NOW }),
+      importSkills: async () => ({ imported: [], skipped: [], overview: { skills: [], mcps: [], scannedAt: NOW } }),
+      deleteSkill: async () => ({ ok: true, overview: { skills: [], mcps: [], scannedAt: NOW } }),
+      setSkillEnabled: async () => ({ skills: [], mcps: [], scannedAt: NOW }),
+      setMcpEnabled: async () => ({ skills: [], mcps: [], scannedAt: NOW }),
+      mcpDef: () => null,
+      saveMcp: async () => ({ ok: true }),
+      testMcp: async () => ({ ok: true, latencyMs: 1 }),
     },
     quit: () => {
       deps.quit = true;

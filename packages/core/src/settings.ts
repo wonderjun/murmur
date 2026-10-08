@@ -7,7 +7,9 @@
  *             重开监听时按 hooks[] 回装）。
  *   hooks  —— push 平面上报开关。关闭即卸载我方 hook 条目（他人条目保留），
  *             观察退回 pull 轮询；开回即重装（merge 幂等）。
- *   两张表缺省值都是 true——「没写过」等于「要」。
+ *   sync   —— 技能/MCP 同步闸（sync/engine.ts）：关闭即不往该 agent 目录写，
+ *             但已写入的我方拷贝保持不动（用户目录不留孤儿）。
+ *   三张表缺省值都是 true——「没写过」等于「要」。
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
@@ -36,6 +38,12 @@ export interface MurmurSettings {
   agents: Partial<Record<AgentId, boolean>>;
   /** per-agent hook 上报开关；缺省 true。 */
   hooks: Partial<Record<AgentId, boolean>>;
+  /** per-agent 技能/MCP 同步闸；缺省 true（关闭不写新条目，已写的我方拷贝保持不动）。 */
+  sync: Partial<Record<AgentId, boolean>>;
+  /** 条目级排除的 skill 名（源保留，不同步；在场我方拷贝被清理）。 */
+  disabledSkills: string[];
+  /** 条目级排除的 MCP server 名（不同步；曾写入的我方 key 被剔除）。 */
+  disabledMcp: string[];
 }
 
 export const DEFAULT_SETTINGS: MurmurSettings = {
@@ -47,6 +55,9 @@ export const DEFAULT_SETTINGS: MurmurSettings = {
   font: '',
   agents: {},
   hooks: {},
+  sync: {},
+  disabledSkills: [],
+  disabledMcp: [],
 };
 
 /** 读设置：文件缺失/损坏回默认，逐键缺省合并（未来加键不用迁移）。dir 供测试注入。 */
@@ -60,6 +71,9 @@ export function loadSettings(dir = MURMUR_HOME): MurmurSettings {
       ...raw,
       agents: { ...raw.agents },
       hooks: { ...raw.hooks },
+      sync: { ...raw.sync },
+      disabledSkills: [...(raw.disabledSkills ?? [])],
+      disabledMcp: [...(raw.disabledMcp ?? [])],
     };
   } catch {
     // 损坏文件不当真源，也不覆写——用户可能正在手改，下次保存自然修复。

@@ -8,16 +8,7 @@
 
 /** 支持的编码 agent 标识。 */
 export type AgentId =
-  | 'kimi'
-  | 'zcode'
-  | 'opencode'
-  | 'codex'
-  | 'cursor'
-  | 'devin'
-  | 'qoder'
-  | 'minimax'
-  | 'omp'
-  | 'claude-code';
+  'kimi' | 'zcode' | 'opencode' | 'codex' | 'cursor' | 'devin' | 'qoder' | 'minimax' | 'omp' | 'claude-code';
 
 /** 会话状态：working=干活中 waiting=轮到你了/等批准 idle=空闲 stale=疑似卡住 ended=已结束。 */
 export type AgentStatus = 'working' | 'waiting' | 'idle' | 'stale' | 'ended';
@@ -208,7 +199,80 @@ export interface SessionDeleteResult {
 }
 
 /** 管理台窗口 tab（RPC openManager 与 webview managerNav 共用）。 */
-export type ManagerTab = 'doctor' | 'usage' | 'files' | 'settings';
+export type ManagerTab = 'doctor' | 'usage' | 'files' | 'skills' | 'settings';
+
+/**
+ * 技能/MCP 同步单元格状态（sync/engine.ts 盘点产出）：
+ * synced=目标在且是我方拷贝（sig 一致）、stale=我方拷贝但源已改、
+ * absent=目标缺席（下次同步会补）、conflict=同名但非我方写入（他人产物不碰）、
+ * external=目标目录归 skillshare 等外部工具管辖、off=开关/无目标/缺 SKILL.md 跳过、
+ * error=本轮读写失败。
+ */
+export type SyncItemState = 'synced' | 'stale' | 'absent' | 'conflict' | 'external' | 'off' | 'error';
+
+/** 单个条目 × 单个 agent 的同步状态格。 */
+export interface SkillSyncCell {
+  agent: AgentId;
+  state: SyncItemState;
+  /** 失败原因/冲突说明/被跳过的目标路径等补充信息。 */
+  detail?: string;
+}
+
+/** 同步盘点的一行 skill（源目录的一个包 × 各 agent 状态）。 */
+export interface SyncSkillRow {
+  name: string;
+  description?: string;
+  /** 源目录缺 SKILL.md 时列出但同步跳过。 */
+  hasSkillMd: boolean;
+  /** settings.disabledSkills 命中——保留源但不同步、清理在场拷贝。 */
+  disabled: boolean;
+  cells: SkillSyncCell[];
+}
+
+/** 同步盘点的一行 MCP server（~/.murmur/mcp.json 的一个条目 × 各 agent 状态）。 */
+export interface McpSyncRow {
+  name: string;
+  disabled: boolean;
+  cells: SkillSyncCell[];
+}
+
+/** 技能与 MCP 同步盘点快照（getSyncStatus/syncAll 响应）。 */
+export interface SyncOverview {
+  skills: SyncSkillRow[];
+  mcps: McpSyncRow[];
+  scannedAt: number;
+}
+
+/** 导入技能结果：imported=新进源的包名，skipped=跳过原因（同名已存在/目录不可读）。 */
+export interface SkillImportResult {
+  imported: string[];
+  skipped: { name: string; reason: string }[];
+}
+
+/** 删除源技能的响应：废纸篓失败时 ok=false 且 overview 缺席。 */
+export interface SkillDeleteResult {
+  ok: boolean;
+  error?: string;
+  overview?: SyncOverview;
+}
+
+/** MCP 探测结果（testMcp RPC）：ok=initialize 握手拿到 JSON-RPC 回包（stdio 一行 / remote 2xx）。 */
+export interface McpTestResult {
+  ok: boolean;
+  latencyMs: number;
+  /** 条目键名（mcpServers 多键探测时区分结果归属；单条探测可为空）。 */
+  name?: string;
+  /** 远端/子进程自报的 serverInfo.name-version（有则回显）。 */
+  server?: string;
+  error?: string;
+}
+
+/** 新建/更新源 MCP 条目的响应（saveMcp RPC）。 */
+export interface McpSaveResult {
+  ok: boolean;
+  error?: string;
+  overview?: SyncOverview;
+}
 
 /** 单个路径探针结果：数据源/配置文件的存在性、可读性与 sqlite 可开性。 */
 export interface PathProbe {

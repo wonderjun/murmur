@@ -19,7 +19,18 @@ import { fallbackQuota, unavailable } from '../quota/common';
 import { flagEnabled, loadSettings, saveSettings, type MurmurSettings } from '../settings';
 import type { AgentAdapter } from '../agents/base';
 import { defaultAdapters } from '../agents/default';
-import type { AgentEvent, AgentId, AgentSnapshot, AppSnapshot, DiagnosticsSnapshot, HookTestResult, InstallInfo, QuotaSnapshot, SessionDeleteResult, StoredSession } from '../types';
+import type {
+  AgentEvent,
+  AgentId,
+  AgentSnapshot,
+  AppSnapshot,
+  DiagnosticsSnapshot,
+  HookTestResult,
+  InstallInfo,
+  QuotaSnapshot,
+  SessionDeleteResult,
+  StoredSession,
+} from '../types';
 import { SELFTEST_PREFIX, assembleDiagnostics, runHookTest } from './diagnostics';
 import { STALE_AFTER_MS, StatusEngine } from './status-engine';
 
@@ -237,7 +248,10 @@ export class AgentRegistry {
         try {
           const q = await a.quota(this.byok[a.id]);
           if (q.error && q.windows.length === 0) {
-            this.quotas.set(a.id, fallbackQuota(this.quotas.get(a.id), () => this.ledger.lastQuota(a.id), q));
+            this.quotas.set(
+              a.id,
+              fallbackQuota(this.quotas.get(a.id), () => this.ledger.lastQuota(a.id), q),
+            );
           } else {
             this.quotas.set(a.id, q);
             try {
@@ -299,9 +313,7 @@ export class AgentRegistry {
     const fresh = Date.now() - STALE_AFTER_MS;
     for (const s of items) {
       s.active =
-        live.has(`${s.agent}:${s.id}`) ||
-        live.has(`${s.agent}:${s.id.replace(/^chat:/, '')}`) ||
-        s.modifiedAt > fresh;
+        live.has(`${s.agent}:${s.id}`) || live.has(`${s.agent}:${s.id.replace(/^chat:/, '')}`) || s.modifiedAt > fresh;
     }
     this.lastSessionScan.set(agent, items);
     return items;
@@ -372,10 +384,7 @@ export class AgentRegistry {
   }
 
   /** agent 安装态读口（SyncService 注入用；detect 缓存直读）。 */
-  isInstalled(agent: AgentId): boolean {
-    return this.installs.get(agent)?.installed ?? false;
-  }
-
+  isInstalled = (agent: AgentId): boolean => this.installs.get(agent)?.installed ?? false;
   /** 应用设置补丁：持久化 + 引擎侧生效（agent/hook 开关有实时副作用）。 */
   async updateSettings(patch: Partial<MurmurSettings>): Promise<MurmurSettings> {
     const prev = this.settings;
@@ -588,7 +597,9 @@ export class AgentRegistry {
     for (const r of this.ledger.usageSince(null, dayStart) as Array<Record<string, number | string>>) {
       bump(todayByAgent, r);
     }
-    for (const r of this.ledger.usageSince(null, Date.now() - 7 * 86400_000) as Array<Record<string, number | string>>) {
+    for (const r of this.ledger.usageSince(null, Date.now() - 7 * 86400_000) as Array<
+      Record<string, number | string>
+    >) {
       bump(weekByAgent, r);
     }
     const agents: AgentSnapshot[] = this.adapters.map((a) => {
@@ -604,9 +615,7 @@ export class AgentRegistry {
         },
         disabled,
         // 自检 marker 会话不出快照——链路自检零污染约定。
-        sessions: disabled
-          ? []
-          : sessions.filter((s) => s.agent === a.id && !s.sessionId.startsWith(SELFTEST_PREFIX)),
+        sessions: disabled ? [] : sessions.filter((s) => s.agent === a.id && !s.sessionId.startsWith(SELFTEST_PREFIX)),
         quota: disabled ? undefined : this.quotas.get(a.id),
         // BYOK 已配置状态（掩码预览）：停监听也保留——key 存在与否是事实陈述。
         byok:
