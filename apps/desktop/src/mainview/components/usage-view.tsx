@@ -104,7 +104,8 @@ export default function UsageView() {
     [range],
   );
   /* ── 「按模型」工具多选：下拉只列当前区间有量的 agent（AGENT_ORDER 稳定序，
-     与会话文件页同规）；空选 = 全部；单 agent 时不出筛选行——无可筛即无控件。 ── */
+     与会话文件页同规）；空选 = 全选（归一为空集、各项均勾）；不允许清空到 0
+     项——空本来就是「全部」的呈现，最后一项的 uncheck 忽略。单 agent 不出钮。 ── */
   const [modelSel, setModelSel] = useState<Set<AgentId>>(new Set());
 
   const modelAgents = useMemo(() => {
@@ -112,7 +113,7 @@ export default function UsageView() {
     return AGENT_ORDER.filter((a) => seen.has(a));
   }, [rangeRows]);
 
-  /* 区间切换后已选工具可能出集——剔除失效项而非留死选项。 */
+  /* 区间切换后已选工具可能出集——剔除失效项而非留死选项（剔空=回到全选）。 */
   useEffect(() => {
     setModelSel((prev) => {
       const next = new Set([...prev].filter((a) => modelAgents.includes(a)));
@@ -285,7 +286,7 @@ export default function UsageView() {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-48 p-1" align="start">
-                          {/* 「全部」重置行：半选态提示当前是子集 */}
+                          {/* 「全部」行即全选语义：勾=全选；半选态提示当前是子集，点击回全选 */}
                           <label className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">
                             <Checkbox
                               checked={
@@ -302,13 +303,16 @@ export default function UsageView() {
                               className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                             >
                               <Checkbox
-                                checked={modelSel.has(a)}
+                                checked={modelSel.size === 0 || modelSel.has(a)}
                                 onCheckedChange={(v) =>
                                   setModelSel((prev) => {
-                                    const next = new Set(prev);
+                                    /* 空集是全选的归一态：先展开成全集再增删，
+                                       否则从未选基线删项=集合没变、勾选态不回弹。 */
+                                    const next = prev.size === 0 ? new Set<AgentId>(modelAgents) : new Set(prev);
                                     if (v === true) next.add(a);
-                                    else next.delete(a);
-                                    return next;
+                                    else if (next.size > 1) next.delete(a);
+                                    /* 删到最后一项不放手（空=全部）；手动点齐全部归一回空集。 */
+                                    return next.size === modelAgents.length ? new Set() : next;
                                   })
                                 }
                               />
