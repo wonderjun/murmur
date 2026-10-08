@@ -103,8 +103,8 @@ export type MurmurRPC = {
       installAgentHooks: { params: { agent: AgentId }; response: { changed: boolean; files: string[] } };
       /** Finder 定位任意诊断出的路径（限 home 内）。 */
       revealPath: { params: { path: string }; response: { ok: boolean } };
-      /** 盘点全部 agent 的磁盘会话产物。 */
-      scanSessions: { params: {}; response: { items: StoredSession[]; scannedAt: number } };
+      /** 盘点单个 agent 的磁盘会话产物（清理页分页用：首屏不等全量）。 */
+      scanAgentSessions: { params: { agent: AgentId }; response: { items: StoredSession[] } };
       /** 批量删除：fs 产物进废纸篓、库内行永久删；per-item 回报。 */
       deleteSessions: {
         params: { items: { agent: AgentId; id: string }[] };

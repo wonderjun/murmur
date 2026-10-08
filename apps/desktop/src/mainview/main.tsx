@@ -150,6 +150,9 @@ if (location.search.includes("seed")) {
         font: "",
         agents: { kimi: true },
         hooks: { codex: false },
+        sync: {},
+        disabledSkills: [],
+        disabledMcp: [],
       },
       runtime: {
         dockIconVisible: false,
@@ -171,7 +174,9 @@ if (location.search.includes("seed")) {
       ingest: { endpoint: "127.0.0.1:54321", ok: true },
       agents: SEED_DIAG_AGENTS,
     }),
-    scanSessions: async () => ({ items: seedStoredSessions(now), scannedAt: now }),
+    scanSessionFiles: async () => {
+      useMurmurStore.setState({ sessionFiles: seedStoredSessions(now), sessionFilesAt: now });
+    },
   });
 }
 

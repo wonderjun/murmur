@@ -288,29 +288,23 @@ export class AgentRegistry {
     }
   }
 
-  /** 上次会话盘点的结果缓存（revealSession 查路径用，免二次全盘扫描）。 */
-  private lastSessionScan: StoredSession[] | null = null;
+  /** 按 agent 的最近盘点缓存（revealSession 查路径用，免重扫）。 */
+  private lastSessionScan = new Map<AgentId, StoredSession[]>();
 
-  /** 会话产物盘点（清理页）：并发扫各 adapter；快照命中或 mtime 新鲜的标 active 禁删。 */
-  async scanSessions(): Promise<StoredSession[]> {
+  /** 单 agent 会话产物盘点（清理页渐进加载）：扫一家标一家，快照命中或 mtime 新鲜的标 active 禁删。 */
+  async scanAgentSessions(agent: AgentId): Promise<StoredSession[]> {
+    const a = this.adapters.find((x) => x.id === agent);
+    const items = a?.scanSessions ? await a.scanSessions() : [];
     const live = new Set(this.engine.snapshot().map((s) => `${s.agent}:${s.sessionId}`));
     const fresh = Date.now() - STALE_AFTER_MS;
-    const results = await Promise.allSettled(
-      this.adapters.map((a) => a.scanSessions?.() ?? Promise.resolve([] as StoredSession[])),
-    );
-    const out: StoredSession[] = [];
-    for (const r of results) {
-      if (r.status !== 'fulfilled') continue;
-      for (const s of r.value) {
-        s.active =
-          live.has(`${s.agent}:${s.id}`) ||
-          live.has(`${s.agent}:${s.id.replace(/^chat:/, '')}`) ||
-          s.modifiedAt > fresh;
-        out.push(s);
-      }
+    for (const s of items) {
+      s.active =
+        live.has(`${s.agent}:${s.id}`) ||
+        live.has(`${s.agent}:${s.id.replace(/^chat:/, '')}`) ||
+        s.modifiedAt > fresh;
     }
-    this.lastSessionScan = out;
-    return out;
+    this.lastSessionScan.set(agent, items);
+    return items;
   }
 
   /**
@@ -356,10 +350,11 @@ export class AgentRegistry {
     return results;
   }
 
-  /** 会话产物的磁盘路径（Finder 定位用）：优先上次扫描缓存，没扫过现扫。 */
+  /** 会话产物的磁盘路径（Finder 定位用）：优先该 agent 的盘点缓存，没扫过只扫这一家；
+   *  兜底扫描失败按查无路径降级（revealSession 回 {ok:false}，不该让 adapter 异常穿透成 RPC reject）。 */
   async sessionPaths(agent: AgentId, id: string): Promise<string[]> {
-    const scan = this.lastSessionScan ?? (await this.scanSessions());
-    return scan.find((s) => s.agent === agent && s.id === id)?.paths ?? [];
+    const scan = this.lastSessionScan.get(agent) ?? (await this.scanAgentSessions(agent).catch(() => []));
+    return scan.find((s) => s.id === id)?.paths ?? [];
   }
 
   /** 台账保留清扫——失败静默（DB 被占等场景下轮再来）。 */
@@ -376,10 +371,21 @@ export class AgentRegistry {
     return this.settings;
   }
 
+  /** agent 安装态读口（SyncService 注入用；detect 缓存直读）。 */
+  isInstalled(agent: AgentId): boolean {
+    return this.installs.get(agent)?.installed ?? false;
+  }
+
   /** 应用设置补丁：持久化 + 引擎侧生效（agent/hook 开关有实时副作用）。 */
   async updateSettings(patch: Partial<MurmurSettings>): Promise<MurmurSettings> {
     const prev = this.settings;
-    this.settings = { ...prev, ...patch, agents: { ...prev.agents, ...patch.agents }, hooks: { ...prev.hooks, ...patch.hooks } };
+    this.settings = {
+      ...prev,
+      ...patch,
+      agents: { ...prev.agents, ...patch.agents },
+      hooks: { ...prev.hooks, ...patch.hooks },
+      sync: { ...prev.sync, ...patch.sync },
+    };
     saveSettings(this.settings, this.dataDir);
     // agents/hooks 两张表的增删通过专用入口（setAgentObserved/setAgentHook）走副作用；
     // 这里仅兜底：被改成 false 的 agent 立即停观察，改成 true 的恢复观察。

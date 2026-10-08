@@ -10,6 +10,7 @@
 
 import { create } from "zustand";
 
+import { AGENT_ORDER } from "@/lib/agent-meta";
 import { useRpc } from "@/lib/rpc";
 
 import type { SettingsSnapshot, UpdateSnapshot, UsageDailyRow } from "../../shared/rpc";
@@ -65,8 +66,15 @@ interface MurmurStore {
   installAgentHooks(agent: AgentId): Promise<{ changed: boolean; files: string[] }>;
   /** Finder 定位诊断路径。 */
   revealPath(path: string): Promise<boolean>;
-  /** 盘点全部 agent 的磁盘会话产物（清理页数据源）。 */
-  scanSessions(): Promise<{ items: StoredSession[]; scannedAt: number }>;
+  /** 会话盘点结果（首扫前 null；之后跨页持久化，重进先出缓存再热更新）。 */
+  sessionFiles: StoredSession[] | null;
+  /** 全量一轮收敛时刻；pending>0 期间保留上轮的。 */
+  sessionFilesAt: number;
+  /** 本轮还在途的 agent 数（>0 即扫描中）。 */
+  sessionScanPending: number;
+  /** 会话文件盘点：每 agent 一条 RPC 先到先出，全量并发、增量回填。
+   *  fresh=true 保证结果出自调用之后起跑的轮次（删除后用：在途轮数据先于删除，不算数）。 */
+  scanSessionFiles(fresh?: boolean): Promise<void>;
   /** 批量删除：fs 产物进废纸篓、库内行永久删，per-item 回报。 */
   deleteSessions(items: { agent: AgentId; id: string }[]): Promise<SessionDeleteResult[]>;
   /** Finder 定位会话首个磁盘产物。 */
@@ -184,8 +192,40 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     return r.ok;
   }
 
-  async function scanSessions() {
-    return rpc.rpc!.request.scanSessions({});
+  /** 一轮扫描的在途句柄：非 fresh 重入（双击刷新/effect 双触发）并入同轮；fresh 落在途轮后另起。 */
+  let scanInflight: Promise<void> | null = null;
+
+  async function scanSessionFiles(fresh = false) {
+    if (scanInflight) {
+      const cur = scanInflight;
+      await cur;
+      // 等待中他人另起的新轮已在调用之后起跑、数据足够新，fresh 也可直接共享它。
+      if (!fresh || scanInflight !== null) return;
+    }
+    set({ sessionScanPending: AGENT_ORDER.length });
+    scanInflight = Promise.all(
+      AGENT_ORDER.map((agent) =>
+        rpc
+          .rpc!.request.scanAgentSessions({ agent })
+          .then((r) =>
+            set((s) => ({
+              sessionFiles: (s.sessionFiles ?? []).filter((i) => i.agent !== agent).concat(r.items),
+            })),
+          )
+          .catch(() =>
+            // 单家扫描失败按「本轮无数据」剔除其旧行（与聚合版失败即剔除等价），下轮重扫自动恢复。
+            set((s) => ({ sessionFiles: (s.sessionFiles ?? []).filter((i) => i.agent !== agent) })),
+          )
+          .finally(() => set((s) => ({ sessionScanPending: Math.max(0, s.sessionScanPending - 1) }))),
+      ),
+    )
+      .then(() => {
+        set({ sessionFilesAt: Date.now() });
+      })
+      .finally(() => {
+        scanInflight = null;
+      });
+    return scanInflight;
   }
 
   async function deleteSessions(items: { agent: AgentId; id: string }[]) {
@@ -270,7 +310,10 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     rescanAgent,
     installAgentHooks,
     revealPath,
-    scanSessions,
+    sessionFiles: null,
+    sessionFilesAt: 0,
+    sessionScanPending: 0,
+    scanSessionFiles,
     deleteSessions,
     revealSession,
     focusSessionApp,

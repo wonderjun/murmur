@@ -128,11 +128,14 @@ describe("createRpcHandlers", () => {
       files: ["/tmp/devin.json"],
     });
 
-    const scanned = await handlers.scanSessions({});
-    expect(scanned.scannedAt).toBe(NOW);
+    const scanned = await handlers.scanAgentSessions({ agent: "kimi" });
     expect(scanned.items).toEqual([
       { agent: "kimi", id: "s1", sizeBytes: 4, createdAt: 1, modifiedAt: 2, kind: "file", active: false },
     ]);
+    expect(registry.scannedAgents).toEqual(["kimi"]);
+    // 无此 agent 会话产物 → 空组语义（渐进回填的「这家没有」结果）。
+    expect(await handlers.scanAgentSessions({ agent: "zcode" })).toEqual({ items: [] });
+    expect(registry.scannedAgents).toEqual(["kimi", "zcode"]);
     expect(await handlers.revealSession({ agent: "kimi", id: "s1" })).toEqual({ ok: true });
     expect(deps.revealed).toEqual(["/tmp/session.jsonl"]);
 
@@ -246,6 +249,7 @@ interface FakeRegistry extends RpcRegistry {
   tested: string[];
   rescanned: string[];
   trashedWith: Array<((path: string) => boolean) | undefined>;
+  scannedAgents: string[];
 }
 
 function harness(): Harness {
@@ -259,6 +263,7 @@ function harness(): Harness {
     tested: [],
     rescanned: [],
     trashedWith: [],
+    scannedAgents: [],
     snapshot: () => appSnapshot(),
     installAllHooks: () => ({
       kimi: { changed: true, files: ["/tmp/kimi.toml"] },
@@ -309,9 +314,22 @@ function harness(): Harness {
       registry.rescanned.push(agent);
     },
     installAgentHooks: async (agent) => ({ changed: agent === "devin", files: ["/tmp/devin.json"] }),
-    scanSessions: async () => [
-      { agent: "kimi", id: "s1", sizeBytes: 4, createdAt: 1, modifiedAt: 2, kind: "file", active: false },
-    ],
+    scanAgentSessions: async (agent) => {
+      registry.scannedAgents.push(agent);
+      return agent === "kimi"
+        ? [
+            {
+              agent: "kimi" as const,
+              id: "s1",
+              sizeBytes: 4,
+              createdAt: 1,
+              modifiedAt: 2,
+              kind: "file" as const,
+              active: false,
+            },
+          ]
+        : [];
+    },
     deleteSessions: async (items, trash) => {
       registry.trashedWith.push(trash);
       return items.map((item) => ({ agent: item.agent, id: item.id, ok: true, freedBytes: 4 }));

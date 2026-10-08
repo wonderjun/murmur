@@ -79,13 +79,13 @@ function SortHead({
 const GRID = "grid grid-cols-[28px_24px_minmax(0,1fr)_96px_64px_80px_28px] items-center gap-x-1.5";
 
 export default function SessionsView({ embedded }: { embedded?: boolean }) {
-  const scanSessions = useMurmurStore((s) => s.scanSessions);
+  const sessionFiles = useMurmurStore((s) => s.sessionFiles);
+  const scannedAt = useMurmurStore((s) => s.sessionFilesAt);
+  const pending = useMurmurStore((s) => s.sessionScanPending);
+  const scanSessionFiles = useMurmurStore((s) => s.scanSessionFiles);
   const deleteSessions = useMurmurStore((s) => s.deleteSessions);
   const revealSession = useMurmurStore((s) => s.revealSession);
 
-  const [items, setItems] = useState<StoredSession[] | null>(null);
-  const [scannedAt, setScannedAt] = useState(0);
-  const [scanning, setScanning] = useState(true);
   const [agentFilter, setAgentFilter] = useState<"all" | AgentId>("all");
   const [projectFilter, setProjectFilter] = useState<string>("all");
   const [sortKey, setSortKey] = useState<SortKey>("modifiedAt");
@@ -96,30 +96,27 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
 
   /* armed 删除：沿用设置页 rebuild 的 3s 二次确认模式。 */
   const [armed, setArmed] = useState(false);
-  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const armTimer = useRef<number | null>(null);
 
-  const rescan = useCallback(async () => {
-    setScanning(true);
-    try {
-      const r = await scanSessions();
-      setItems(r.items);
-      setScannedAt(r.scannedAt);
+  /* 整轮收敛后清选择（store 层 per-agent 失败已吸收，不会抛）。
+     fresh 保证重扫出自调用之后起跑的轮次——删除/手动刷新要的就是干净数据，
+     否则并入删除前起跑的在途轮会把已删行以旧数据回填。 */
+  const rescan = useCallback(
+    async (fresh = false) => {
+      await scanSessionFiles(fresh);
       setSelected(new Set());
-    } catch {
-      setItems((prev) => prev ?? []);
-    } finally {
-      setScanning(false);
-    }
-  }, [scanSessions]);
+    },
+    [scanSessionFiles],
+  );
 
-  /* 进页即扫。 */
+  /* 进页即扫：store 有缓存先渲染，逐 agent 增量回填。 */
   useEffect(() => {
     void rescan();
   }, [rescan]);
 
   useEffect(
     () => () => {
-      if (armTimer.current) clearTimeout(armTimer.current);
+      if (armTimer.current) window.clearTimeout(armTimer.current);
     },
     [],
   );
@@ -127,20 +124,20 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
   /* 联动过滤：工具段只列当前项目下产过会话的工具，项目下拉只列当前工具下的项目。 */
   const agents = useMemo(() => {
     const seen = new Set(
-      (items ?? []).filter((i) => projectFilter === "all" || i.project === projectFilter).map((i) => i.agent),
+      (sessionFiles ?? []).filter((i) => projectFilter === "all" || i.project === projectFilter).map((i) => i.agent),
     );
     return AGENT_ORDER.filter((a) => seen.has(a));
-  }, [items, projectFilter]);
+  }, [sessionFiles, projectFilter]);
 
   const projects = useMemo(() => {
     const set = new Map<string, number>();
-    for (const i of items ?? []) {
+    for (const i of sessionFiles ?? []) {
       if (agentFilter !== "all" && i.agent !== agentFilter) continue;
       if (!i.project) continue;
       set.set(i.project, (set.get(i.project) ?? 0) + 1);
     }
     return [...set.entries()].sort((a, b) => b[1] - a[1]);
-  }, [items, agentFilter]);
+  }, [sessionFiles, agentFilter]);
 
   /* 一侧选中收窄后，另一侧的已选项可能失效——回落「全部」而非留死选项。 */
   useEffect(() => {
@@ -149,7 +146,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
   }, [projectFilter, projects, agentFilter, agents]);
 
   const filtered = useMemo(() => {
-    let list = items ?? [];
+    let list = sessionFiles ?? [];
     if (agentFilter !== "all") list = list.filter((i) => i.agent === agentFilter);
     if (projectFilter !== "all") list = list.filter((i) => i.project === projectFilter);
     const dir = sortDir === "desc" ? -1 : 1;
@@ -159,7 +156,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
       if (typeof av === "string" && typeof bv === "string") return av.localeCompare(bv) * dir;
       return ((av as number) - (bv as number)) * dir;
     });
-  }, [items, agentFilter, projectFilter, sortKey, sortDir]);
+  }, [sessionFiles, agentFilter, projectFilter, sortKey, sortDir]);
 
   const selectable = filtered.filter((i) => !i.active);
   const allSelected = selectable.length > 0 && selectable.every((i) => selected.has(rowKey(i)));
@@ -202,10 +199,10 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
   async function doDelete() {
     if (!armed) {
       setArmed(true);
-      armTimer.current = setTimeout(() => setArmed(false), 3000);
+      armTimer.current = window.setTimeout(() => setArmed(false), 3000);
       return;
     }
-    if (armTimer.current) clearTimeout(armTimer.current);
+    if (armTimer.current) window.clearTimeout(armTimer.current);
     setArmed(false);
     setDeleting(true);
     setNotice(null);
@@ -224,7 +221,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
       setNotice(`删除失败：${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setDeleting(false);
-      await rescan();
+      await rescan(true);
     }
   }
 
@@ -238,7 +235,9 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
       <PageHead
         title="会话文件"
         meta={
-          items ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)} · 扫描于 ${fmtFileTime(scannedAt)}` : "扫描中…"
+          sessionFiles
+            ? `${filtered.length} 项 · 共 ${fmtBytes(filteredBytes)}${pending ? ` · 扫描中 ${pending}` : scannedAt ? ` · 扫描于 ${fmtFileTime(scannedAt)}` : ""}`
+            : "扫描中…"
         }
         actions={
           <>
@@ -247,8 +246,8 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
               size="icon"
               title="重新扫描"
               aria-label="重新扫描"
-              disabled={scanning}
-              onClick={() => void rescan()}
+              disabled={pending > 0}
+              onClick={() => void rescan(true)}
             >
               <RefreshCw size={14} />
             </Button>
@@ -299,7 +298,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
         <div className="flex min-h-0 flex-1 flex-col overflow-x-auto">
           <div className="flex h-full min-w-130 flex-col">
             <ScrollArea className="min-h-0 flex-1">
-              {items === null && scanning ? (
+              {sessionFiles === null ? (
                 <div className="flex flex-col gap-2 p-4">
                   {[0, 1, 2, 3].map((i) => (
                     <div key={i} className="h-9 animate-pulse rounded-item bg-surface-2" />

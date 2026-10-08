@@ -42,7 +42,7 @@ export interface RpcRegistry {
   installAgentHooks(
     agent: AgentId,
   ): Promise<RpcRequests["installAgentHooks"]["response"]> | RpcRequests["installAgentHooks"]["response"];
-  scanSessions(): Promise<RpcRequests["scanSessions"]["response"]["items"]>;
+  scanAgentSessions(agent: AgentId): Promise<RpcRequests["scanAgentSessions"]["response"]["items"]>;
   deleteSessions(
     items: RpcRequests["deleteSessions"]["params"]["items"],
     trash: (path: string) => boolean,
@@ -158,7 +158,7 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
       if (ok) deps.revealInFinder(path);
       return { ok };
     },
-    scanSessions: async () => ({ items: await registry.scanSessions(), scannedAt: now() }),
+    scanAgentSessions: async ({ agent }) => ({ items: await registry.scanAgentSessions(agent) }),
     deleteSessions: async ({ items }) => ({
       // 文件类产物一律进废纸篓（可恢复）；库内行由 adapter 自行事务删。
       results: await registry.deleteSessions(items, deps.moveToTrash),
