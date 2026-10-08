@@ -1,24 +1,26 @@
 /**
  * 用量视图（管理台 usage tab）：PageHead → display hero（今日令牌数字当家，
  * 右列近 7 日/今年/活跃天数陪跑）→ 年热力图 → 区间行 → 按工具堆积柱 →
- * 按模型折线（带工具筛选胶囊，区间内重算模型序列）。三个图表块统一
+ * 按模型折线（工具多选下拉联动模型序列）。三个图表块统一
  * surface-1 容器（p-4 + 块头），叠层不占描边。
  * 图表实现拆在 usage-heatmap（年热力图 + heatYearStats 口径）与
  * usage-bars（区间堆积柱 + 图例）；本页留数据拉取、三态、hero、区间 state、
  * 模型折线组装（MODEL_LINE_STYLES 是 design-board 注释里指的线型真源）。
  */
 
+import { ChevronDown } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import AnimatedNumber from "@/components/animated-number";
 import ModelLineChart from "@/components/model-line-chart";
 import Murmuration from "@/components/murmuration";
 import PageHead from "@/components/page-head";
-import Segmented from "@/components/segmented";
 import UsageBars from "@/components/usage-bars";
 import UsageHeatmap, { FETCH_DAYS, HEAT_LEVELS, HEAT_YEAR, heatYearStats } from "@/components/usage-heatmap";
 import UsageRangePicker, { rangeBounds, rangeDayList, rangeLabel } from "@/components/usage-range";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { AGENT_META, AGENT_ORDER } from "@/lib/agent-meta";
 import { dayStr, fmtTokens } from "@/lib/format";
 import { useMurmurStore } from "@/store/murmur";
@@ -101,26 +103,36 @@ export default function UsageView() {
     () => rangeDayList(range).map((day) => ({ day, label: day === dayStr(todayMs) ? "今天" : day.slice(5) })),
     [range],
   );
-
-  /* ── 「按模型」工具筛选：胶囊只列当前区间有量的 agent（AGENT_ORDER 稳定序，
-     与会话文件页同规）；单 agent 时不出筛选行——无可筛即无控件。 ── */
-  const [modelAgent, setModelAgent] = useState<"all" | AgentId>("all");
+  /* ── 「按模型」工具多选：下拉只列当前区间有量的 agent（AGENT_ORDER 稳定序，
+     与会话文件页同规）；空选 = 全部；单 agent 时不出筛选行——无可筛即无控件。 ── */
+  const [modelSel, setModelSel] = useState<Set<AgentId>>(new Set());
 
   const modelAgents = useMemo(() => {
     const seen = new Set(rangeRows.filter((r) => r.tokens > 0).map((r) => r.agent));
     return AGENT_ORDER.filter((a) => seen.has(a));
   }, [rangeRows]);
 
-  /* 区间切换后已选工具可能出集——回落「全部」而非留死选项。 */
+  /* 区间切换后已选工具可能出集——剔除失效项而非留死选项。 */
   useEffect(() => {
-    if (modelAgent !== "all" && !modelAgents.includes(modelAgent)) setModelAgent("all");
-  }, [modelAgent, modelAgents]);
+    setModelSel((prev) => {
+      const next = new Set([...prev].filter((a) => modelAgents.includes(a)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [modelAgents]);
 
   /* 筛选只收窄折线数据：「按工具」堆积柱自身就是工具维度，不响应。 */
   const modelRows = useMemo(
-    () => (modelAgent === "all" ? rangeRows : rangeRows.filter((r) => r.agent === modelAgent)),
-    [rangeRows, modelAgent],
+    () => (modelSel.size === 0 ? rangeRows : rangeRows.filter((r) => modelSel.has(r.agent as AgentId))),
+    [rangeRows, modelSel],
   );
+
+  /* 触发钮文案：未选「全部」；≤2 直列名；≥3 折叠「n 项」防挤压。 */
+  const modelSelLabel =
+    modelSel.size === 0
+      ? "全部"
+      : modelSel.size <= 2
+        ? [...modelSel].map((a) => AGENT_META[a].name).join("、")
+        : `${modelSel.size} 项`;
 
   /* ── 区间按模型折线（top6 + 其他），数据整形后交给 ModelLineChart ── */
   const lineSeries = useMemo(() => {
@@ -258,22 +270,57 @@ export default function UsageView() {
               {/* ── 区间模型折线（准星 + 悬浮明细 + 峰值标注）── */}
               <section className="animate-enter rounded-item bg-surface-1 p-4" style={{ animationDelay: enterDelay() }}>
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="text-detail font-semibold">按模型</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-detail font-semibold">按模型</span>
+                    {modelAgents.length > 1 && (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="按工具过滤"
+                            className="flex max-w-full items-center gap-1.5 rounded-md border border-hairline bg-surface-1 px-2 py-0.5 text-micro text-muted-foreground outline-none transition-colors duration-fast hover:text-foreground data-[state=open]:border-foreground/30"
+                          >
+                            <span className="truncate">{modelSelLabel}</span>
+                            <ChevronDown size={10} className="shrink-0 text-faint" />
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-48 p-1" align="start">
+                          {/* 「全部」重置行：半选态提示当前是子集 */}
+                          <label className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">
+                            <Checkbox
+                              checked={
+                                modelSel.size === 0 || modelSel.size === modelAgents.length ? true : "indeterminate"
+                              }
+                              onCheckedChange={() => setModelSel(new Set())}
+                            />
+                            全部
+                          </label>
+                          <div className="mx-1 my-0.5 border-t border-hairline" />
+                          {modelAgents.map((a) => (
+                            <label
+                              key={a}
+                              className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
+                            >
+                              <Checkbox
+                                checked={modelSel.has(a)}
+                                onCheckedChange={(v) =>
+                                  setModelSel((prev) => {
+                                    const next = new Set(prev);
+                                    if (v === true) next.add(a);
+                                    else next.delete(a);
+                                    return next;
+                                  })
+                                }
+                              />
+                              {AGENT_META[a].name}
+                            </label>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+                    )}
+                  </span>
                   <span className="font-data text-micro tabular-nums text-faint">{rangeLabel(range)}</span>
                 </div>
-                {modelAgents.length > 1 && (
-                  <div className="mb-3 flex">
-                    <Segmented
-                      options={[
-                        { value: "all" as const, label: "全部" },
-                        ...modelAgents.map((a) => ({ value: a, label: AGENT_META[a].name })),
-                      ]}
-                      value={modelAgent}
-                      onChange={setModelAgent}
-                      label="按工具过滤模型折线"
-                    />
-                  </div>
-                )}
                 <ModelLineChart days={lineDays} series={lineSeries} />
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                   {lineSeries.map((m) => (
