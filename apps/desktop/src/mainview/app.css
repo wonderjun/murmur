@@ -383,11 +383,11 @@ a:focus-visible {
   outline-offset: 2px;
 }
 
-/* 圆角与阴影由系统对标准窗口（Titled + FullSizeContentView）裁切，webview 铺满即可 */
+/* 圆角与阴影由系统对标准窗口（Titled + FullSizeContentView）裁切，webview 铺满即可；
+   不画内描边——方角边框会被系统圆角裁出缺口 */
 #app {
   position: relative;
   overflow: hidden;
-  border: 1px solid var(--hairline);
   background: var(--background);
 }
 

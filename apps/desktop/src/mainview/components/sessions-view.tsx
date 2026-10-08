@@ -8,7 +8,7 @@
  * 行可 Tab 聚焦（role=checkbox，空格/回车勾选），Finder 按钮随行聚焦显形。
  */
 
-import { ArrowDown, ArrowUp, FolderSearch, RefreshCw, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, FolderSearch, RefreshCw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
@@ -158,6 +158,19 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
     });
   }, [sessionFiles, agentFilter, projectFilter, sortKey, sortDir]);
 
+  /* 分页：筛选/排序/换档回第一页；渐进回填或删除导致页数收缩时钳位末页。 */
+  const [pageSize, setPageSize] = useState(50);
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = useMemo(
+    () => filtered.slice((safePage - 1) * pageSize, safePage * pageSize),
+    [filtered, safePage, pageSize],
+  );
+  useEffect(() => {
+    setPage(1);
+  }, [agentFilter, projectFilter, sortKey, sortDir, pageSize]);
+
   const selectable = filtered.filter((i) => !i.active);
   const allSelected = selectable.length > 0 && selectable.every((i) => selected.has(rowKey(i)));
   const someSelected = selectable.some((i) => selected.has(rowKey(i)));
@@ -306,8 +319,9 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
                 </div>
               ) : (
                 <>
-                  {/* 表头（sticky）：激活列前景色 + 方向箭头 */}
-                  <div className={cn(GRID, "sticky top-0 z-10 h-9 bg-surface-2 px-3")}>
+                  {/* 表头（sticky）：激活列前景色 + 方向箭头。glass-chrome 毛玻璃——
+                      surface-* 全是半透明叠层，滚行会透上来与表头叠字 */}
+                  <div className={cn(GRID, "glass-chrome sticky top-0 z-10 h-9 px-3")}>
                     <Checkbox
                       checked={allSelected ? true : someSelected ? "indeterminate" : false}
                       onCheckedChange={toggleAll}
@@ -346,7 +360,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
                     </div>
                   ) : (
                     <div className="divide-y divide-hairline/60">
-                      {filtered.map((i) => {
+                      {pageItems.map((i) => {
                         const k = rowKey(i);
                         const checked = selected.has(k);
                         return (
@@ -422,13 +436,48 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
         </div>
       </div>
 
-      {/* 尾行：选择汇总 / 操作回报（删除按钮已上提至 PageHead actions） */}
-      <p className="pt-2.5 text-meta text-muted-foreground">
-        {selectedItems.length
-          ? `已选 ${selectedItems.length} 项 · ${fmtBytes(selectedBytes)}${selectedDb ? ` · 含 ${selectedDb} 项库内记录（永久删）` : ""}`
-          : (notice ?? "勾选会话后可批量删除，文件类进废纸篓")}
-        {notice && selectedItems.length > 0 && <span className="ml-2 text-faint">{notice}</span>}
-      </p>
+      {/* 尾行：左选择汇总/操作回报，右分页控件（页码 mono + 翻页钮 + 每页档） */}
+      <div className="flex items-center gap-3 pt-2.5">
+        <p className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
+          {selectedItems.length
+            ? `已选 ${selectedItems.length} 项 · ${fmtBytes(selectedBytes)}${selectedDb ? ` · 含 ${selectedDb} 项库内记录（永久删）` : ""}`
+            : (notice ?? "勾选会话后可批量删除，文件类进废纸篓")}
+          {notice && selectedItems.length > 0 && <span className="ml-2 text-faint">{notice}</span>}
+        </p>
+        <span className="shrink-0 font-data text-meta tabular-nums text-faint">
+          {safePage} / {totalPages}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="上一页"
+          disabled={safePage <= 1}
+          onClick={() => setPage(safePage - 1)}
+        >
+          <ChevronLeft size={14} />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="下一页"
+          disabled={safePage >= totalPages}
+          onClick={() => setPage(safePage + 1)}
+        >
+          <ChevronRight size={14} />
+        </Button>
+        <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
+          <SelectTrigger className="w-18" aria-label="每页条数">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[25, 50, 100].map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n} 条/页
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

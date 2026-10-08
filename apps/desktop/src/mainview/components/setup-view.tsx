@@ -89,13 +89,22 @@ export default function SetupView() {
               </div>
 
               {agent.quota?.windows.length ? (
-                /* 行列表而非横排格：窗口数不设上限（omp 实测 5 窗），单行四槽
-                   「label · 细条 · pct · 重置」任意数量都保读，与 probe/图例行同构。 */
-                <div className="mt-3 flex flex-col border-t border-hairline/60 pt-1">
+                /* 行列表而非横排格：窗口数不设限（omp 实测 5 窗）。四槽对齐走 grid：
+                   label 列 fit-content(55%)=内容宽封顶截断（minmax 的 definite max
+                   会被 maximize 顶满，fit-content 不吃剩余空间——omp 的
+                   provider·window 前缀 ~20 字符照吃不误），细条 1fr 吃掉留白自适应
+                   行宽，pct/重置 auto 列右缘同轴——行间细条起点终点对齐。行用
+                   col-span-full + grid-cols-subgrid 继承父轨道保住单元素行壳
+                   （title/hover 语义不散进四格）。 */
+                <div className="mt-3 grid grid-cols-[fit-content(55%)_minmax(2.5rem,1fr)_auto_auto] gap-x-2 border-t border-hairline/60 pt-1">
                   {agent.quota.windows.map((w) => (
-                    <div key={w.label} className="flex items-center gap-2 py-1" title={quotaTitle(w)}>
-                      <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">{w.label}</span>
-                      <span className="relative h-0.75 w-14 shrink-0 overflow-hidden rounded-full bg-surface-3">
+                    <div
+                      key={w.label}
+                      className="col-span-full grid grid-cols-subgrid items-center py-1"
+                      title={quotaTitle(w)}
+                    >
+                      <span className="min-w-0 truncate text-meta text-muted-foreground">{w.label}</span>
+                      <span className="relative h-0.75 min-w-0 overflow-hidden rounded-full bg-surface-3">
                         <span
                           className={cn(
                             "absolute inset-y-0 left-0 rounded-full transition-[width]",
@@ -106,13 +115,13 @@ export default function SetupView() {
                       </span>
                       <span
                         className={cn(
-                          "w-10 shrink-0 whitespace-nowrap text-right font-data text-meta tabular-nums",
+                          "whitespace-nowrap text-right font-data text-meta tabular-nums",
                           quotaTone(w.usedPct),
                         )}
                       >
                         {fmtQuotaHeadline(w)}
                       </span>
-                      <span className="w-16 shrink-0 whitespace-nowrap text-right font-data text-micro text-faint">
+                      <span className="whitespace-nowrap text-right font-data text-micro text-faint">
                         {resetText(w)}
                       </span>
                     </div>

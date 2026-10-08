@@ -1,8 +1,9 @@
 /**
  * 管理台外壳（标准窗口 #/manage/<tab>）：左侧 200px 边栏导航 + 右侧内容区
  * 流体铺满（不限宽居中，宽窗全用）。首子元素 Dawn quiet 垫底（管理台天光不呼吸）。
- * 内容列顶条是 hiddenInset 红绿灯同高的拖拽栏，兼作 PageHead title/actions
- * 的 portal 宿主（PageHeadTargetContext）——meta 留在各页内容顶部。
+ * 内容列顶条是 hiddenInset 红绿灯对应高度的拖拽栏（36px 贴灯区，更高只余死空），
+ * 兼作 PageHead title/actions 的 portal 宿主（PageHeadTargetContext）——meta 留在
+ * 各页内容顶部。顶条与侧栏之间不画 hairline：分面全靠 bg-surface-1 半透明叠层。
  *
  * 初始 tab 由 URL hash 决定（bun 侧 managerViewUrl 生成）；openManager 对已开
  * 窗口不重建，主进程推 managerNav 消息 → store.managerTab 覆盖当前 tab。
@@ -69,10 +70,7 @@ export default function ManagerApp() {
       <Dawn className="z-0" />
       <ManagerSidebar tab={tab} onChange={setTab} />
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <div
-          className="flex h-13 shrink-0 items-center border-b border-hairline px-8 mid:px-5 tight:px-4"
-          style={DRAG_STYLE}
-        >
+        <div className="flex h-9 shrink-0 items-center px-8 mid:px-5 tight:px-4" style={DRAG_STYLE}>
           <div ref={setHeadEl} className="flex min-w-0 flex-1 items-center" />
         </div>
         <PageHeadTargetContext.Provider value={headEl}>
