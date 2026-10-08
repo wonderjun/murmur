@@ -155,12 +155,14 @@ function tomlBlockMatches(body: string, def: Record<string, unknown>): boolean {
 /**
  * 纯文本 TOML 合并（无 fs 副作用，便于单测）：我方 key 重写段体、缺失段追加、
  * mcpKeys 差集删整段（含 env/headers 子表）；他人段与其他内容原样保留。
+ * take 点名的冲突键按我方处理（宿主显式裁决才传）。
  * 重建手法：mcp_servers 区域整体由「保留段 + 重写段 + 追加段」替换，其余行透传。
  */
 export function mergeMcpTomlText(
   text: string,
   desired: Record<string, unknown>,
   ours: ReadonlySet<string>,
+  take?: ReadonlySet<string>,
 ): { text: string; result: McpMergeResult } {
   const result: McpMergeResult = { changed: false, written: [], conflicts: [], removed: [] };
   const blocks = tomlMcpBlocks(text);
@@ -179,8 +181,8 @@ export function mergeMcpTomlText(
     if (desiredNames.has(b.name)) {
       const def = canonicalDef(desired[b.name]);
       if (def) {
-        if (!ours.has(b.name) && !tomlBlockMatches(b.body, def)) {
-          // 同名他人段且内容不合我方期望——不碰，记 conflict。
+        if (!ours.has(b.name) && !take?.has(b.name) && !tomlBlockMatches(b.body, def)) {
+          // 同名他人段且内容不合我方期望——不碰，记 conflict（take 点名则放行重写）。
           result.conflicts.push(b.name);
           bodies.push(b);
           continue;
@@ -260,7 +262,8 @@ function mcpContainer(
 
 /**
  * 纯 JSON 合并（无 fs 副作用）：我方 key 覆盖更新、源删则剔除（ours 差集）、
- * 他人 key 不碰。返回改动后的 cfg（对入参浅变异地嵌套容器）与回执。
+ * 他人 key 不碰——take 点名的冲突键除外（宿主显式裁决，改写并烙归属）。
+ * 返回改动后的 cfg（对入参浅变异地嵌套容器）与回执。
  */
 export function mergeMcpJson(
   cfg: Record<string, unknown>,
@@ -268,6 +271,7 @@ export function mergeMcpJson(
   agent: AgentId,
   desired: Record<string, unknown>,
   ours: ReadonlySet<string>,
+  take?: ReadonlySet<string>,
 ): { cfg: Record<string, unknown>; result: McpMergeResult } {
   const result: McpMergeResult = { changed: false, written: [], conflicts: [], removed: [] };
   const { parent, key } = mcpContainer(cfg, schema);
@@ -290,7 +294,7 @@ export function mergeMcpJson(
       servers[name] = entry;
       result.written.push(name);
       result.changed = true;
-    } else if (ours.has(name)) {
+    } else if (ours.has(name) || take?.has(name)) {
       if (!deepEqual(existing, entry)) {
         servers[name] = entry;
         result.changed = true;
@@ -306,7 +310,7 @@ export function mergeMcpJson(
   return { cfg, result };
 }
 
-/** 目标配置里我方 key 的当前状态（盘点用，不写）：absent/synced/conflict。 */
+/** 目标配置里我方 key 的当前状态（盘点用，不写）：absent/synced/stale（我方漂移待重写）/conflict。 */
 export function mcpEntryState(
   cfgText: string | null,
   target: { path: string; schema: McpSchema },
@@ -314,13 +318,14 @@ export function mcpEntryState(
   name: string,
   rawDef: unknown,
   ours: ReadonlySet<string>,
-): 'absent' | 'synced' | 'conflict' {
+): 'absent' | 'synced' | 'stale' | 'conflict' {
   const def = canonicalDef(rawDef);
   if (!def) return 'absent';
   if (target.schema === 'toml') {
     const block = tomlMcpBlocks(cfgText ?? '').find((b) => b.name === name);
     if (!block) return 'absent';
-    return ours.has(name) || tomlBlockMatches(block.body, def) ? 'synced' : 'conflict';
+    if (ours.has(name)) return tomlBlockMatches(block.body, def) ? 'synced' : 'stale';
+    return tomlBlockMatches(block.body, def) ? 'synced' : 'conflict';
   }
   let cfg: Record<string, unknown> = {};
   try {
@@ -335,5 +340,5 @@ export function mcpEntryState(
   const existing = map[name];
   if (existing === undefined) return 'absent';
   const expected = target.schema === 'opencode' ? opencodeEntry(def) : patchDefForAgent(agent, def);
-  return deepEqual(existing, expected) ? 'synced' : 'conflict';
+  return deepEqual(existing, expected) ? 'synced' : ours.has(name) ? 'stale' : 'conflict';
 }

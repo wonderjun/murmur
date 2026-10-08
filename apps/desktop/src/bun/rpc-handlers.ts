@@ -13,6 +13,7 @@ import type {
   McpTestResult,
   SkillDeleteResult,
   SkillImportResult,
+  SyncConflict,
   SyncOverview,
 } from "../../../../packages/core/src/types";
 import type { MurmurSettings } from "../../../../packages/core/src/settings";
@@ -98,8 +99,9 @@ export interface RpcHandlerDeps {
 
 /** RpcHandlerDeps 的同步服务切片：与 registry 同款收窄惯例，测试可替身。 */
 export interface RpcSync {
+  /** overwrite=同名冲突裁决（用户批准覆盖的目标清单）。 */
+  syncAll(overwrite?: SyncConflict[]): Promise<SyncOverview>;
   overview(): SyncOverview;
-  syncAll(): Promise<SyncOverview>;
   importSkills(path: string): Promise<SkillImportResult & { overview: SyncOverview }>;
   deleteSkill(name: string, trash: (path: string) => boolean): Promise<SkillDeleteResult>;
   setSkillEnabled(name: string, enabled: boolean): Promise<SyncOverview>;
@@ -211,7 +213,7 @@ export function createRpcHandlers(deps: RpcHandlerDeps): MurmurRequestHandlers {
     checkUpdate: () => deps.checkUpdate(),
     applyUpdate: () => deps.applyUpdate(),
     getSyncStatus: () => deps.sync.overview(),
-    syncAll: () => deps.sync.syncAll(),
+    syncAll: ({ overwrite }) => deps.sync.syncAll(overwrite ?? []),
     importSkills: ({ path }) => deps.sync.importSkills(path),
     deleteSkill: ({ name }) => deps.sync.deleteSkill(name, deps.moveToTrash),
     setSkillEnabled: ({ name, enabled }) => deps.sync.setSkillEnabled(name, enabled),

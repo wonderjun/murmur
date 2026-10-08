@@ -3,8 +3,8 @@
  *
  * 记「我方往各 MCP 配置文件写过哪些 server key」——剔除只删曾是我方写的 key，
  * 同名他人 key 永不删（归属凭证，等价 hook 的脚本路径判归属）。
- * skill 侧的归属不靠本文件：目标目录里的 .murmur-managed marker 行尾烙着源 sig，
- * 读 marker 即知「是不是我方拷贝、拷的是哪一版」。
+ * skill 侧的归属不靠本文件：目标目录是软链即判我方（链目标解析后落在
+ * ~/.murmur/skills 内）；旧版 .murmur-managed 实体拷贝检出即待迁移。
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';

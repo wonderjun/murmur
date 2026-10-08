@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SyncService } from '../src/sync/engine';
@@ -58,7 +58,11 @@ function target(agent: 'kimi' | 'zcode' | 'cursor' | 'codex' | 'opencode', file:
   return join(roots[agent], file);
 }
 
-function makeService(over?: { installed?: (a: AgentId) => boolean; settings?: MurmurSettings }): {
+function makeService(over?: {
+  installed?: (a: AgentId) => boolean;
+  settings?: MurmurSettings;
+  trash?: (p: string) => boolean;
+}): {
   svc: SyncService;
   settings: () => MurmurSettings;
 } {
@@ -67,6 +71,7 @@ function makeService(over?: { installed?: (a: AgentId) => boolean; settings?: Mu
     home: sandbox,
     settings: () => settings,
     installed: over?.installed ?? (() => true),
+    trash: over?.trash,
     save: (next) => {
       settings = next;
     },
@@ -110,14 +115,20 @@ afterEach(() => {
 });
 
 describe('SyncService 技能写面', () => {
-  test('syncAll 把源技能拷进各 agent 目录并落 marker', async () => {
+  /** 断言 dest 是指向源包的软链。 */
+  const expectLink = (dest: string, srcName: string) => {
+    expect(lstatSync(dest).isSymbolicLink()).toBe(true);
+    expect(readlinkSync(dest)).toBe(join(sandbox, 'skills', srcName));
+  };
+
+  test('syncAll 把源技能软链进各 agent 目录', async () => {
     writeSkill(join(sandbox, 'skills'), 'demo');
     const { svc } = makeService();
     const ov = await svc.syncAll();
-    expect(existsSync(join(sandbox, 'kimi', 'skills', 'demo', SKILL_MARKER))).toBe(true);
-    expect(existsSync(join(sandbox, 'kimi', 'skills', 'demo', 'SKILL.md'))).toBe(true);
+    expectLink(join(sandbox, 'kimi', 'skills', 'demo'), 'demo');
+    expect(existsSync(join(sandbox, 'kimi', 'skills', 'demo', 'SKILL.md'))).toBe(true); // 穿透链读真文件。
     // 共享目录 ~/.agents/skills（kimi+cursor 同引用）只写一次即各自 synced。
-    expect(existsSync(join(sandbox, 'agents-skills', 'demo', SKILL_MARKER))).toBe(true);
+    expectLink(join(sandbox, 'agents-skills', 'demo'), 'demo');
     const row = ov.skills.find((r) => r.name === 'demo');
     expect(row?.cells.find((c) => c.agent === 'kimi')?.state).toBe('synced');
     expect(row?.cells.find((c) => c.agent === 'cursor')?.state).toBe('synced');
@@ -125,29 +136,58 @@ describe('SyncService 技能写面', () => {
     expect(row?.cells.find((c) => c.agent === 'minimax')?.state).toBe('off');
   });
 
-  test('源变更后重同步：marker 签名更新（stale → synced）', async () => {
-    const dir = writeSkill(join(sandbox, 'skills'), 'demo');
+  test('旧版 marker 实体拷贝检出 stale，下一轮迁移成软链', async () => {
+    writeSkill(join(sandbox, 'skills'), 'demo');
+    const legacy = join(sandbox, 'kimi', 'skills', 'demo');
+    mkdirSync(legacy, { recursive: true });
+    writeFileSync(join(legacy, SKILL_MARKER), 'murmur-sync v1 abc\n');
     const { svc } = makeService();
+    expect(svc.overview().skills[0]?.cells.find((c) => c.agent === 'kimi')?.state).toBe('stale');
     await svc.syncAll();
-    writeFileSync(join(dir, 'SKILL.md'), '---\nname: demo\n---\n# changed\n');
-    const stale = svc.overview().skills.find((r) => r.name === 'demo');
-    expect(stale?.cells.find((c) => c.agent === 'kimi')?.state).toBe('stale');
-    await svc.syncAll();
-    const fresh = svc.overview().skills.find((r) => r.name === 'demo');
-    expect(fresh?.cells.find((c) => c.agent === 'kimi')?.state).toBe('synced');
+    expectLink(legacy, 'demo');
+    expect(svc.overview().skills[0]?.cells.find((c) => c.agent === 'kimi')?.state).toBe('synced');
   });
 
-  test('他人同名目录不覆盖：盘点记 conflict，目录内容原样', async () => {
+  test('指向源根的链指偏也按我方处理静默重挂（不提示）；指向外部才是真冲突', async () => {
+    writeSkill(join(sandbox, 'skills'), 'demo');
+    writeSkill(join(sandbox, 'skills'), 'sibling');
+    // kimi：我方链但指错兄弟目录 → 重挂不提示。
+    mkdirSync(join(sandbox, 'kimi', 'skills'), { recursive: true });
+    symlinkSync(join(sandbox, 'skills', 'sibling'), join(sandbox, 'kimi', 'skills', 'demo'));
+    // cursor：软链指向 murmur 外 → conflict。
+    const foreignDir = join(sandbox, 'outside');
+    mkdirSync(foreignDir, { recursive: true });
+    mkdirSync(join(sandbox, 'cursor', 'skills'), { recursive: true });
+    symlinkSync(foreignDir, join(sandbox, 'cursor', 'skills', 'demo'));
+    const { svc } = makeService();
+    const ov = await svc.syncAll();
+    const row = ov.skills.find((r) => r.name === 'demo');
+    expectLink(join(sandbox, 'kimi', 'skills', 'demo'), 'demo');
+    expect(row?.cells.find((c) => c.agent === 'kimi')?.state).toBe('synced');
+    expect(row?.cells.find((c) => c.agent === 'cursor')?.state).toBe('conflict');
+    // 裁决清单只收外部链，不含我方指偏链。
+    expect(ov.conflicts.filter((c) => c.name === 'demo').map((c) => c.agent).sort()).toEqual(['cursor']);
+  });
+
+  test('他人同名实体目录默认不碰记 conflict；裁决覆盖后废纸篓+挂链', async () => {
     writeSkill(join(sandbox, 'skills'), 'demo');
     const foreign = join(sandbox, 'cursor', 'skills', 'demo');
     mkdirSync(foreign, { recursive: true });
     writeFileSync(join(foreign, 'theirs.txt'), 'not ours');
-    const { svc } = makeService();
+    const trashed: string[] = [];
+    const { svc } = makeService({ trash: (p) => (trashed.push(p), rmSync(p, { recursive: true }), true) });
     const ov = await svc.syncAll();
-    expect(existsSync(join(foreign, SKILL_MARKER))).toBe(false);
     expect(readFileSync(join(foreign, 'theirs.txt'), 'utf8')).toBe('not ours');
     const cell = ov.skills.find((r) => r.name === 'demo')?.cells.find((c) => c.agent === 'cursor');
     expect(cell?.state).toBe('conflict');
+    expect(ov.conflicts).toContainEqual({ kind: 'skill', name: 'demo', agent: 'cursor', path: foreign });
+
+    // 用户批「覆盖」：他人目录进废纸篓、挂我方链、冲突消化。
+    const ov2 = await svc.syncAll([{ kind: 'skill', name: 'demo', agent: 'cursor', path: foreign }]);
+    expect(trashed).toEqual([foreign]);
+    expectLink(foreign, 'demo');
+    expect(ov2.conflicts.filter((c) => c.name === 'demo')).toEqual([]);
+    expect(ov2.skills.find((r) => r.name === 'demo')?.cells.find((c) => c.agent === 'cursor')?.state).toBe('synced');
   });
 
   test('skillshare 管辖目录（.skillshare-manifest.json）整体跳过记 external', async () => {
@@ -161,21 +201,25 @@ describe('SyncService 技能写面', () => {
     expect(cell?.state).toBe('external');
   });
 
-  test('源删除后重同步清理我方拷贝；他人目录不动', async () => {
+  test('源删除后重同步摘除我方软链；他人目录/他人链不动', async () => {
     writeSkill(join(sandbox, 'skills'), 'demo');
     const foreign = join(sandbox, 'zcode', 'skills', 'demo');
     mkdirSync(foreign, { recursive: true });
     writeFileSync(join(foreign, 'theirs.txt'), 'not ours');
+    // cursor 放一个指向外部的他人软链（非我方），验证清理不越界。
+    mkdirSync(join(sandbox, 'cursor', 'skills'), { recursive: true });
+    symlinkSync(join(sandbox, 'outside'), join(sandbox, 'cursor', 'skills', 'demo'));
     const { svc } = makeService();
     await svc.syncAll();
     rmSync(join(sandbox, 'skills', 'demo'), { recursive: true });
     await svc.syncAll();
-    expect(existsSync(join(sandbox, 'kimi', 'skills', 'demo'))).toBe(false);
-    // 他人同名目录（无 marker）不受清理影响。
+    expect(lstatSync(join(sandbox, 'kimi', 'skills', 'demo'), { throwIfNoEntry: false })).toBeUndefined();
+    // 他人同名目录与他人外链都不受清理影响。
     expect(existsSync(join(foreign, 'theirs.txt'))).toBe(true);
+    expect(lstatSync(join(sandbox, 'cursor', 'skills', 'demo')).isSymbolicLink()).toBe(true);
   });
 
-  test('禁用条目：清理在场我方拷贝，重开恢复', async () => {
+  test('禁用条目：摘除在场我方软链，重开恢复', async () => {
     writeSkill(join(sandbox, 'skills'), 'demo');
     const { svc, settings } = makeService();
     await svc.syncAll();
@@ -183,7 +227,7 @@ describe('SyncService 技能写面', () => {
     expect(existsSync(join(sandbox, 'kimi', 'skills', 'demo'))).toBe(false);
     expect(settings().disabledSkills).toEqual(['demo']);
     await svc.setSkillEnabled('demo', true);
-    expect(existsSync(join(sandbox, 'kimi', 'skills', 'demo', SKILL_MARKER))).toBe(true);
+    expectLink(join(sandbox, 'kimi', 'skills', 'demo'), 'demo');
   });
 
   test('未安装 agent 跳过写面且盘点标 off', async () => {
@@ -258,6 +302,33 @@ describe('SyncService MCP 写面', () => {
     const cfg = JSON.parse(readFileSync(join(sandbox, 'qoder', 'mcp.json'), 'utf8'));
     expect(cfg.mcpServers.mine).toEqual({ command: 'their-cmd' });
     expect(ov.mcps.find((r) => r.name === 'mine')?.cells.find((c) => c.agent === 'qoder')?.state).toBe('conflict');
+  });
+
+  test('同名异值冲突带 overwrite 裁决后被覆盖并烙归属', async () => {
+    writeMcpSource({ mine: { command: 'run-it' } });
+    mkdirSync(join(sandbox, 'qoder'), { recursive: true });
+    writeFileSync(
+      join(sandbox, 'qoder', 'mcp.json'),
+      JSON.stringify({ mcpServers: { mine: { command: 'their-cmd' } } }),
+    );
+    const { svc } = makeService();
+    const ov = await svc.syncAll();
+    expect(ov.conflicts).toContainEqual({
+      kind: 'mcp',
+      name: 'mine',
+      agent: 'qoder',
+      path: join(sandbox, 'qoder', 'mcp.json'),
+    });
+
+    const ov2 = await svc.syncAll(ov.conflicts);
+    const cfg = JSON.parse(readFileSync(join(sandbox, 'qoder', 'mcp.json'), 'utf8'));
+    expect(cfg.mcpServers.mine).toEqual({ command: 'run-it' });
+    expect(ov2.mcps.find((r) => r.name === 'mine')?.cells.find((c) => c.agent === 'qoder')?.state).toBe('synced');
+    // 归属已烙：源删后被剔除（曾经他人条目现在按我方论）。
+    writeMcpSource({});
+    await svc.syncAll();
+    const after = JSON.parse(readFileSync(join(sandbox, 'qoder', 'mcp.json'), 'utf8'));
+    expect(after.mcpServers.mine).toBeUndefined();
   });
 
   test('codex TOML：表段写入与剔除，他人段原样', async () => {

@@ -10,13 +10,13 @@
  * 盘点是只读刷新，「全部同步」才写目标。
  */
 
-import { FolderInput, Pencil, Plus, RefreshCw, Trash2, Zap } from "lucide-react";
+import { FolderInput, Pencil, Plus, RefreshCw, Trash2, TriangleAlert, Zap } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-
 import { GroupList, GroupRow } from "@/components/group-list";
 import Murmuration from "@/components/murmuration";
 import PageHead from "@/components/page-head";
 import Segmented from "@/components/segmented";
+import SyncConflicts, { dedupeConflicts } from "@/components/sync-conflicts";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,7 +26,7 @@ import { fmtFileTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useMurmurStore } from "@/store/murmur";
 
-import type { McpTestResult, SkillSyncCell, SyncItemState } from "@core/types";
+import type { McpTestResult, SkillSyncCell, SyncConflict, SyncItemState } from "@core/types";
 
 /** 状态格圆点色：synced 用 working 绿表示「已就位」（状态色唯一合法彩色通道）。 */
 const STATE_DOT: Record<SyncItemState, string> = {
@@ -210,6 +210,8 @@ export default function SkillsView({ embedded }: { embedded?: boolean }) {
   /** armed 删除：沿用会话文件页的 3s 二次确认模式（行级，per-skill）。 */
   const [armed, setArmed] = useState<string | null>(null);
   const armTimer = useRef<number | undefined>(undefined);
+  /** 同名冲突裁决弹层：显式同步后盘点有冲突即拉起（path 去重后的裁决清单）。 */
+  const [conflicts, setConflicts] = useState<SyncConflict[]>([]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -239,6 +241,9 @@ export default function SkillsView({ embedded }: { embedded?: boolean }) {
     setNotice(null);
     try {
       await syncAll();
+      // 同名不默认覆盖：盘点出的冲突由弹层逐条裁决，未批的保持跳过。
+      const list = dedupeConflicts(useMurmurStore.getState().syncOverview?.conflicts ?? []);
+      if (list.length) setConflicts(list);
     } catch (e) {
       setNotice(`同步失败：${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -311,6 +316,18 @@ export default function SkillsView({ embedded }: { embedded?: boolean }) {
             >
               <RefreshCw size={14} className={cn(loading && "animate-spin")} />
             </Button>
+            {(overview?.conflicts.length ?? 0) > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                title="同名冲突待裁决"
+                className="text-waiting"
+                onClick={() => setConflicts(dedupeConflicts(overview!.conflicts))}
+              >
+                <TriangleAlert size={13} />
+                {dedupeConflicts(overview!.conflicts).length} 冲突
+              </Button>
+            )}
             {pane === "skills" && (
               <Button
                 variant="ghost"
@@ -495,6 +512,9 @@ export default function SkillsView({ embedded }: { embedded?: boolean }) {
           </GroupList>
         )}
       </ScrollArea>
+
+      {/* 同名冲突裁决弹层：显式同步或冲突按钮拉起，全部裁决后才放应用。 */}
+      {conflicts.length > 0 && <SyncConflicts conflicts={conflicts} onClose={() => setConflicts([])} />}
 
       <p className="pt-2.5 text-meta text-muted-foreground">
         {notice ?? "状态格：绿=已同步 · 琥珀=待更新 · 灰=未同步 · 红=冲突/错误 · 半透明=已停用或外部管辖"}

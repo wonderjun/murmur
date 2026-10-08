@@ -58,7 +58,7 @@ packages/core/src/
   credentials.ts    BYOK 凭据（~/.murmur/credentials.json，0600）：用户自填 API Key，永不进 settings/RPC（对外只有 maskKey 掩码）
   migrate.ts        perch→murmur 一次性迁移（家目录搬迁 + 旧制品清扫，幂等，主进程启动时调用）
   quota/            kimi.ts / codex.ts / zcode.ts / cursor.ts / devin.ts / claude.ts（官方用量端点 client）+ common.ts（超时 fetch / 降级件）
-  sync/             技能/MCP 同步引擎（管理台「技能」页）：源 ~/.murmur/skills + mcp.json → targets.ts 真值表枚举各 agent 目录/配置；技能拷目录 + .murmur-managed marker 烙 sig 判归属，MCP 走 mcp.ts 按 schema merge（sync-state.json 记 key 归属防误删他人条目）；skillshare manifest 目录整目录只读
+  sync/             技能/MCP 同步引擎（管理台「技能」页）：源 ~/.murmur/skills + mcp.json → targets.ts 真值表枚举各 agent 目录/配置；技能挂软链（链目标落源根内即我方，v1 .murmur-managed 实体拷贝检出即迁移），MCP 走 mcp.ts 按 schema merge（sync-state.json 记 key 归属防误删他人条目）；同名他人产物/外链不默认动——overview.conflicts 出裁决清单，syncAll(overwrite) 按批准覆盖（技能先废纸篓再挂链）；skillshare manifest 目录整目录只读
 apps/desktop/
   src/bun/index.ts  主进程：tray + 透明面板 + registry 组装 + RPC 推送（唯一桌面 API 入口）
   src/bun/system.ts Dock 显隐（Utils.setDockIconVisible）+ 自启（~/Library/LaunchAgents plist）

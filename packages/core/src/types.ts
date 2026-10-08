@@ -203,12 +203,22 @@ export type ManagerTab = 'doctor' | 'usage' | 'files' | 'skills' | 'settings';
 
 /**
  * 技能/MCP 同步单元格状态（sync/engine.ts 盘点产出）：
- * synced=目标在且是我方拷贝（sig 一致）、stale=我方拷贝但源已改、
+ * synced=目标在且归我方（技能=软链指向源目录，MCP=sync-state 归属集内/同值）、
+ * stale=旧版 .murmur-managed 实体拷贝待迁移成软链、
  * absent=目标缺席（下次同步会补）、conflict=同名但非我方写入（他人产物不碰）、
  * external=目标目录归 skillshare 等外部工具管辖、off=开关/无目标/缺 SKILL.md 跳过、
  * error=本轮读写失败。
  */
 export type SyncItemState = 'synced' | 'stale' | 'absent' | 'conflict' | 'external' | 'off' | 'error';
+
+/** 一处待裁决的同名冲突：syncAll(overwrite) 按此引用执行「覆盖」决定（默认跳过失位）。 */
+export interface SyncConflict {
+  kind: 'skill' | 'mcp';
+  name: string;
+  agent: AgentId;
+  /** 冲突落点：技能=目标目录全路径，MCP=配置文件路径。 */
+  path: string;
+}
 
 /** 单个条目 × 单个 agent 的同步状态格。 */
 export interface SkillSyncCell {
@@ -240,6 +250,8 @@ export interface McpSyncRow {
 export interface SyncOverview {
   skills: SyncSkillRow[];
   mcps: McpSyncRow[];
+  /** 本轮盘点出的全部同名冲突（与 cells 的 conflict 格同源，去重前逐目标枚举）。 */
+  conflicts: SyncConflict[];
   scannedAt: number;
 }
 

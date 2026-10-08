@@ -66,6 +66,8 @@ const registry = new AgentRegistry();
 const syncService = new SyncService({
   settings: () => registry.getSettings(),
   installed: (agent) => registry.isInstalled(agent),
+  // 同名冲突「覆盖」裁决把在位他人产物进废纸篓（可回滚），引擎兜底 rmSync。
+  trash: (path) => Utils.moveToTrash(path),
   save: (next) => void registry.updateSettings(next),
 });
 

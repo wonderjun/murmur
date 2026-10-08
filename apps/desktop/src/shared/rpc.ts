@@ -16,6 +16,7 @@ import type {
   SkillDeleteResult,
   SkillImportResult,
   StoredSession,
+  SyncConflict,
   SyncOverview,
 } from "@core/types";
 import type { MurmurSettings } from "@core/settings";
@@ -129,9 +130,8 @@ export type MurmurRPC = {
       applyUpdate: { params: {}; response: { ok: boolean; error?: string } };
       /** 技能/MCP 盘点矩阵（管理台「技能」页挂载补读）。 */
       getSyncStatus: { params: {}; response: SyncOverview };
-      /** 全量同步：源 → 各 agent 目标写一遍，返回最新盘点。 */
-      syncAll: { params: {}; response: SyncOverview };
-      /** 导入本地目录为源技能包（≤3 层扫 SKILL.md），返回导入回执 + 新盘点。 */
+      /** 全量同步（源 → 各 agent 目标）；overwrite 是用户对同名冲突的裁决清单。 */
+      syncAll: { params: { overwrite?: SyncConflict[] }; response: SyncOverview };
       importSkills: { params: { path: string }; response: SkillImportResult & { overview: SyncOverview } };
       /** 删除源技能包：进废纸篓，目标侧我方拷贝随 syncAll 清理。 */
       deleteSkill: { params: { name: string }; response: SkillDeleteResult };

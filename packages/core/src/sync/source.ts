@@ -1,10 +1,10 @@
 /**
  * 同步源盘点：~/.murmur/skills/<name>/ 技能包与 ~/.murmur/mcp.json 的 mcpServers 条目。
  *
- * 这里是「同步模块的唯一源」：目标侧永远以本目录为准做复制/合并，不做从
- * agent 目录回收入源（决策已定，外部工具管辖目录也只读不写）。
+ * 这里是「同步模块的唯一源」：目标侧永远以本目录为准做同步（技能挂软链、MCP
+ * merge），不做从 agent 目录回收入源（决策已定，外部工具管辖目录也只读不写）。
  * sig 是轻量签名（SKILL.md 字节 + 相对文件清单的 FNV-1a）——不做全文件树 hash，
- * 够表达「源改没改」；写目标时才把它烙进 .murmur-managed marker 行尾。
+ * 够表达「源改没改」；软链模式下 sig 只作导入去重与盘点参考，归属看链目标。
  */
 
 import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -13,7 +13,7 @@ import { join, relative } from 'node:path';
 import { MURMUR_HOME } from '../paths';
 import type { SkillImportResult } from '../types';
 
-/** 我方拷贝的归属标记文件名（写在 skillsDir/<name>/ 根部）。 */
+/** 旧版 v1 实体拷贝的归属标记文件名（检出即待迁移软链，不再写入）。 */
 export const SKILL_MARKER = '.murmur-managed';
 /** skillshare 管辖目录的标记文件名（目录根存在即整目录只读）。 */
 export const SKILLSHARE_MANIFEST = '.skillshare-manifest.json';

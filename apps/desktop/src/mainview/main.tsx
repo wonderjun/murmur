@@ -189,6 +189,20 @@ if (location.search.includes("seed")) {
       useMurmurStore.setState({
         syncOverview: {
           scannedAt: now,
+          conflicts: [
+            {
+              kind: "skill" as const,
+              name: "vue",
+              agent: "cursor" as const,
+              path: "~/.cursor/skills/vue",
+            },
+            {
+              kind: "mcp" as const,
+              name: "name",
+              agent: "qoder" as const,
+              path: "~/.qoder/mcp.json",
+            },
+          ],
           skills: [
             {
               name: "frontend-design",

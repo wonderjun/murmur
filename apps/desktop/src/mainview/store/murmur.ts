@@ -24,6 +24,7 @@ import type {
   SessionDeleteResult,
   SkillImportResult,
   StoredSession,
+  SyncConflict,
   SyncOverview,
 } from "@core/types";
 import type { MurmurSettings } from "@core/settings";
@@ -89,8 +90,8 @@ interface MurmurStore {
   syncOverview: SyncOverview | null;
   /** 盘点矩阵：纯读（不写盘），各操作响应也回写本字段。 */
   getSyncStatus(): Promise<void>;
-  /** 全量同步：源 → 各 agent 目标写一遍。 */
-  syncAll(): Promise<void>;
+  /** 全量同步：源 → 各 agent 目标写一遍；overwrite=同名冲突裁决清单。 */
+  syncAll(overwrite?: SyncConflict[]): Promise<void>;
   /** 导入本地目录为源技能包。 */
   importSkills(path: string): Promise<SkillImportResult>;
   /** 删除源技能包（废纸篓）。 */
@@ -275,8 +276,8 @@ export const useMurmurStore = create<MurmurStore>()((set) => {
     set({ syncOverview: await rpc.rpc!.request.getSyncStatus({}) });
   }
 
-  async function syncAll() {
-    set({ syncOverview: await rpc.rpc!.request.syncAll({}) });
+  async function syncAll(overwrite?: SyncConflict[]) {
+    set({ syncOverview: await rpc.rpc!.request.syncAll({ overwrite }) });
   }
 
   async function importSkills(path: string) {

@@ -387,15 +387,19 @@ function harness(): Harness {
       return { ok: true };
     },
     sync: {
-      overview: () => ({ skills: [], mcps: [], scannedAt: NOW }),
-      syncAll: async () => ({ skills: [], mcps: [], scannedAt: NOW }),
-      importSkills: async () => ({ imported: [], skipped: [], overview: { skills: [], mcps: [], scannedAt: NOW } }),
-      deleteSkill: async () => ({ ok: true, overview: { skills: [], mcps: [], scannedAt: NOW } }),
-      setSkillEnabled: async () => ({ skills: [], mcps: [], scannedAt: NOW }),
-      setMcpEnabled: async () => ({ skills: [], mcps: [], scannedAt: NOW }),
+      overview: () => ({ skills: [], mcps: [], conflicts: [], scannedAt: NOW }),
+      syncAll: async () => ({ skills: [], mcps: [], conflicts: [], scannedAt: NOW }),
+      importSkills: async () => ({
+        imported: [],
+        skipped: [],
+        overview: { skills: [], mcps: [], conflicts: [], scannedAt: NOW },
+      }),
+      deleteSkill: async () => ({ ok: true, overview: { skills: [], mcps: [], conflicts: [], scannedAt: NOW } }),
+      setSkillEnabled: async () => ({ skills: [], mcps: [], conflicts: [], scannedAt: NOW }),
+      setMcpEnabled: async () => ({ skills: [], mcps: [], conflicts: [], scannedAt: NOW }),
       mcpDef: () => null,
       saveMcp: async () => ({ ok: true }),
-      testMcp: async () => ({ ok: true, latencyMs: 1 }),
+      testMcp: async () => [{ ok: true, latencyMs: 1 }],
     },
     quit: () => {
       deps.quit = true;
