@@ -103,37 +103,44 @@ export default function UsageView() {
     () => rangeDayList(range).map((day) => ({ day, label: day === dayStr(todayMs) ? "今天" : day.slice(5) })),
     [range],
   );
-  /* ── 「按模型」工具多选：下拉只列当前区间有量的 agent（AGENT_ORDER 稳定序，
-     与会话文件页同规）；空选 = 全选（归一为空集、各项均勾）；不允许清空到 0
-     项——空本来就是「全部」的呈现，最后一项的 uncheck 忽略。单 agent 不出钮。 ── */
-  const [modelSel, setModelSel] = useState<Set<AgentId>>(new Set());
+  /* ── 「按模型」工具多选：三态过滤集（all 全选 / none 全不选 / some 子集），
+     「全部」行是总开关——全选时点它清空、空时点它回全选。下拉只列当前区间
+     有量的 agent（AGENT_ORDER 序，与会话文件页同规）；单 agent 不出钮。 ── */
+  const [modelFilter, setModelFilter] = useState<
+    { mode: "all" } | { mode: "none" } | { mode: "some"; set: Set<AgentId> }
+  >({ mode: "all" });
 
   const modelAgents = useMemo(() => {
     const seen = new Set(rangeRows.filter((r) => r.tokens > 0).map((r) => r.agent));
     return AGENT_ORDER.filter((a) => seen.has(a));
   }, [rangeRows]);
 
-  /* 区间切换后已选工具可能出集——剔除失效项而非留死选项（剔空=回到全选）。 */
+  /* 区间切换后 some 集可能含失效项——剔除；剔空落 none（用户曾主动收窄）。 */
   useEffect(() => {
-    setModelSel((prev) => {
-      const next = new Set([...prev].filter((a) => modelAgents.includes(a)));
-      return next.size === prev.size ? prev : next;
+    setModelFilter((prev) => {
+      if (prev.mode !== "some") return prev;
+      const next = new Set([...prev.set].filter((a) => modelAgents.includes(a)));
+      if (next.size === prev.set.size) return prev;
+      return next.size === 0 ? { mode: "none" } : { mode: "some", set: next };
     });
   }, [modelAgents]);
 
   /* 筛选只收窄折线数据：「按工具」堆积柱自身就是工具维度，不响应。 */
-  const modelRows = useMemo(
-    () => (modelSel.size === 0 ? rangeRows : rangeRows.filter((r) => modelSel.has(r.agent as AgentId))),
-    [rangeRows, modelSel],
-  );
+  const modelRows = useMemo(() => {
+    if (modelFilter.mode === "all") return rangeRows;
+    if (modelFilter.mode === "none") return [] as UsageDailyRow[];
+    return rangeRows.filter((r) => modelFilter.set.has(r.agent as AgentId));
+  }, [rangeRows, modelFilter]);
 
-  /* 触发钮文案：未选「全部」；≤2 直列名；≥3 折叠「n 项」防挤压。 */
+  /* 触发钮文案：all「全部」、none「无」；some ≤2 直列名、≥3 折叠「n 项」。 */
   const modelSelLabel =
-    modelSel.size === 0
+    modelFilter.mode === "all"
       ? "全部"
-      : modelSel.size <= 2
-        ? [...modelSel].map((a) => AGENT_META[a].name).join("、")
-        : `${modelSel.size} 项`;
+      : modelFilter.mode === "none"
+        ? "无"
+        : modelFilter.set.size <= 2
+          ? [...modelFilter.set].map((a) => AGENT_META[a].name).join("、")
+          : `${modelFilter.set.size} 项`;
 
   /* ── 区间按模型折线（top6 + 其他），数据整形后交给 ModelLineChart ── */
   const lineSeries = useMemo(() => {
@@ -287,13 +294,19 @@ export default function UsageView() {
                           </button>
                         </PopoverTrigger>
                         <PopoverContent className="w-48 p-1" align="end">
-                          {/* 「全部」行即全选语义：勾=全选；半选态提示当前是子集，点击回全选 */}
+                          {/* 「全部」行是总开关：checked 点击 → 清空（none）；其余态点击 → 回全选 */}
                           <label className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">
                             <Checkbox
                               checked={
-                                modelSel.size === 0 || modelSel.size === modelAgents.length ? true : "indeterminate"
+                                modelFilter.mode === "all"
+                                  ? true
+                                  : modelFilter.mode === "some"
+                                    ? "indeterminate"
+                                    : false
                               }
-                              onCheckedChange={() => setModelSel(new Set())}
+                              onCheckedChange={() =>
+                                setModelFilter(modelFilter.mode === "all" ? { mode: "none" } : { mode: "all" })
+                              }
                             />
                             全部
                           </label>
@@ -304,16 +317,22 @@ export default function UsageView() {
                               className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground"
                             >
                               <Checkbox
-                                checked={modelSel.size === 0 || modelSel.has(a)}
+                                checked={
+                                  modelFilter.mode === "all" || (modelFilter.mode === "some" && modelFilter.set.has(a))
+                                }
                                 onCheckedChange={(v) =>
-                                  setModelSel((prev) => {
-                                    /* 空集是全选的归一态：先展开成全集再增删，
-                                     否则从未选基线删项=集合没变、勾选态不回弹。 */
-                                    const next = prev.size === 0 ? new Set<AgentId>(modelAgents) : new Set(prev);
+                                  setModelFilter((prev) => {
+                                    /* all/none 先展开成具体全集/空集再增删。 */
+                                    const next =
+                                      prev.mode === "some"
+                                        ? new Set(prev.set)
+                                        : new Set<AgentId>(prev.mode === "all" ? modelAgents : []);
                                     if (v === true) next.add(a);
-                                    else if (next.size > 1) next.delete(a);
-                                    /* 删到最后一项不放手（空=全部）；手动点齐全部归一回空集。 */
-                                    return next.size === modelAgents.length ? new Set() : next;
+                                    else next.delete(a);
+                                    if (next.size === 0) return { mode: "none" };
+                                    return next.size === modelAgents.length
+                                      ? { mode: "all" }
+                                      : { mode: "some", set: next };
                                   })
                                 }
                               />
