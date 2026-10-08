@@ -9,7 +9,7 @@
  */
 
 import { ArrowDown, ArrowUp, FolderSearch, RefreshCw, Trash2 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import AgentIcon from "@/components/agent-icon";
 import Murmuration from "@/components/murmuration";
@@ -98,7 +98,7 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
   const [armed, setArmed] = useState(false);
   const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function rescan() {
+  const rescan = useCallback(async () => {
     setScanning(true);
     try {
       const r = await scanSessions();
@@ -110,12 +110,12 @@ export default function SessionsView({ embedded }: { embedded?: boolean }) {
     } finally {
       setScanning(false);
     }
-  }
+  }, [scanSessions]);
 
   /* 进页即扫。 */
   useEffect(() => {
     void rescan();
-  }, []);
+  }, [rescan]);
 
   useEffect(
     () => () => {

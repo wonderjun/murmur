@@ -5,7 +5,7 @@
  *  图表贴窗底、卡放不下时锚到基线向上展开（tipBelowFits）。
  *  键盘/读屏：SVG 不做键盘交互，另出一组 sr-only 文本明细（每系列名称 + 区间合计）。 */
 
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import ChartTip from "@/components/chart-tip";
 import { tipBelowFits } from "@/lib/chart-tip";
@@ -62,17 +62,16 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
   const max = Math.max(1, ...series.flatMap((s) => s.values));
   const gridYs = [0.25, 0.5, 0.75].map((f) => PAD_Y + f * (H - PAD_Y * 2));
 
-  const x = (i: number) => PAD_X + (i * (w - PAD_X * 2)) / Math.max(1, days.length - 1);
-  const y = (v: number) => H - PAD_Y - (v / max) * (H - PAD_Y * 2);
+  const x = useCallback((i: number) => PAD_X + (i * (w - PAD_X * 2)) / Math.max(1, days.length - 1), [w, days.length]);
+  const y = useCallback((v: number) => H - PAD_Y - (v / max) * (H - PAD_Y * 2), [max]);
 
-  // x/y 是纯函数（闭包 days/max/w），依赖表已覆盖。
   const drawn = useMemo(
     () =>
       series.map((s) => {
         const coords = s.values.map((v, i) => ({ x: x(i), y: y(v) }));
         return { ...s, coords, points: coords.map((c) => `${c.x},${c.y}`).join(" ") };
       }),
-    [series, days, max, w],
+    [series, x, y],
   );
 
   /* 轴字抽稀：按可绘图宽均匀取点，末日必出；与前点中心距不足时末日让前点退位。
@@ -88,8 +87,7 @@ export default function ModelLineChart({ days, series }: { days: ModelLineDay[];
       idx.push(last);
     }
     return idx;
-    // x 是纯函数（闭包 days/w），依赖表已覆盖。
-  }, [days, w]);
+  }, [days, w, x]);
 
   function onMove(event: ReactMouseEvent<SVGSVGElement>) {
     const el = svgEl.current;
