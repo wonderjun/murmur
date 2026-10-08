@@ -12,8 +12,9 @@ import type { CSSProperties, ReactNode } from "react";
 /** 外壳顶条的 portal 宿主：ManagerApp 提供，为 null 时 PageHead 走 legacy 内联形态。 */
 export const PageHeadTargetContext = createContext<HTMLElement | null>(null);
 
-/** 顶条 actions 不参与窗口拖拽（drag 区会吞掉点击）。 */
-const NO_DRAG_STYLE = { WebkitAppRegion: "no-drag" } as CSSProperties;
+/** 顶条 actions 不参与窗口拖拽（drag 区会吞掉点击）。--electrobun-app-region：
+    React 的 WebkitAppRegion 内联写法在 WKWebView 会被静默丢弃。 */
+const NO_DRAG_STYLE = { "--electrobun-app-region": "no-drag" } as CSSProperties;
 
 /** 页面标题区；actions 放右上（按钮组/筛选件）。 */
 export default function PageHead({ title, meta, actions }: { title: string; meta?: string; actions?: ReactNode }) {

@@ -374,7 +374,9 @@ body {
 
 button,
 a {
-  -webkit-app-region: no-drag;
+  /* 拖拽标记必须直写自定义属性：WKWebView 不认 -webkit-app-region（静默丢弃），
+     preload dragRegions 探针第一优先读 --electrobun-app-region */
+  --electrobun-app-region: no-drag;
 }
 
 button:focus-visible,

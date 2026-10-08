@@ -1,6 +1,6 @@
 /** 管理台左侧边栏：五 tab 导航（诊断/用量/会话文件/技能/设置）+ 底部接入计数与版本行。
- *  顶部 36px 是 hiddenInset 红绿灯落位的拖拽区（WebkitAppRegion drag）——不画描边，
- *  侧栏分面只靠 bg-surface-1 半透明叠层，红绿灯区与内容列顶条融成一整条工具栏。
+ *  顶部 52px 是 hiddenInset 红绿灯落位的拖拽区（WebkitAppRegion drag，整条可拖）——
+ *  不画描边，侧栏分面只靠 bg-surface-1 半透明叠层，红绿灯区与内容列顶条融成一整条工具栏。
  *  尾巴信号：诊断项有 stale 会话时点红点；用量项挂今日令牌 font-data 计数。 */
 
 import { ChartColumn, FolderOpen, Puzzle, Settings2, Stethoscope } from "lucide-react";
@@ -23,8 +23,9 @@ const ITEMS: { id: ManagerTab; label: string; icon: ComponentType<{ size?: numbe
   { id: "settings", label: "设置", icon: Settings2 },
 ];
 
-/** 红绿灯让位条：整条可拖拽。 */
-const DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
+/** 红绿灯让位条：整条可拖拽。必须用 --electrobun-app-region——React 的
+    WebkitAppRegion 内联写法在 WKWebView 被静默丢弃，拖拽此前从未生效。 */
+const DRAG_STYLE = { "--electrobun-app-region": "drag" } as CSSProperties;
 
 export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onChange: (tab: ManagerTab) => void }) {
   const snapshot = useMurmurStore((s) => s.snapshot);
@@ -38,7 +39,7 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
 
   return (
     <aside className="relative z-10 flex w-50 shrink-0 flex-col bg-surface-1 mid:w-14">
-      <div className="h-9 shrink-0" style={DRAG_STYLE} />
+      <div className="h-13 shrink-0" style={DRAG_STYLE} />
       <nav className="flex flex-col gap-0.5 px-2" aria-label="管理台视图">
         {ITEMS.map((item) => {
           const Icon = item.icon;

@@ -1,9 +1,10 @@
 /**
  * 管理台外壳（标准窗口 #/manage/<tab>）：左侧 200px 边栏导航 + 右侧内容区
  * 流体铺满（不限宽居中，宽窗全用）。首子元素 Dawn quiet 垫底（管理台天光不呼吸）。
- * 内容列顶条是 hiddenInset 红绿灯对应高度的拖拽栏（36px 贴灯区，更高只余死空），
- * 兼作 PageHead title/actions 的 portal 宿主（PageHeadTargetContext）——meta 留在
- * 各页内容顶部。顶条与侧栏之间不画 hairline：分面全靠 bg-surface-1 半透明叠层。
+ * 内容列顶条是 hiddenInset 红绿灯对应高度的拖拽栏（52px——灯区以下的余量
+ * 就是窗口拖拽面，压矮会让可拖区域太窄），兼作 PageHead title/actions 的
+ * portal 宿主（PageHeadTargetContext）——meta 留在各页内容顶部。顶条与侧栏
+ * 之间不画 hairline：分面全靠 bg-surface-1 半透明叠层。
  *
  * 初始 tab 由 URL hash 决定（bun 侧 managerViewUrl 生成）；openManager 对已开
  * 窗口不重建，主进程推 managerNav 消息 → store.managerTab 覆盖当前 tab。
@@ -30,8 +31,11 @@ import type { ManagerTab } from "@core/types";
 
 const VALID_TABS: ManagerTab[] = ["doctor", "usage", "files", "skills", "settings"];
 
-/** 内容列顶条：hiddenInset 红绿灯对应高度的拖拽栏 + PageHead title/actions 的 portal 宿主。 */
-const DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
+/** 内容列顶条：hiddenInset 红绿灯对应高度的拖拽栏 + PageHead title/actions 的 portal 宿主。
+    拖拽标记必须写自定义属性 --electrobun-app-region——WKWebView 不认 -webkit-app-region，
+    React 的 WebkitAppRegion 内联赋值被引擎静默丢弃（实测 attr/computed 全空），
+    只有自定义属性能进 computed style 被 preload 的 dragRegions 探针读到。 */
+const DRAG_STYLE = { "--electrobun-app-region": "drag" } as CSSProperties;
 
 /** URL hash 初始 tab（#/manage/<tab>，非法值回落 doctor）。 */
 function hashTab(): ManagerTab {
@@ -70,7 +74,7 @@ export default function ManagerApp() {
       <Dawn className="z-0" />
       <ManagerSidebar tab={tab} onChange={setTab} />
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <div className="flex h-9 shrink-0 items-center px-8 mid:px-5 tight:px-4" style={DRAG_STYLE}>
+        <div className="flex h-13 shrink-0 items-center px-8 mid:px-5 tight:px-4" style={DRAG_STYLE}>
           <div ref={setHeadEl} className="flex min-w-0 flex-1 items-center" />
         </div>
         <PageHeadTargetContext.Provider value={headEl}>
