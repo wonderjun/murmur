@@ -271,8 +271,9 @@ export default function UsageView() {
               {/* ── 区间模型折线（准星 + 悬浮明细 + 峰值标注）── */}
               <section className="animate-enter rounded-item bg-surface-1 p-4" style={{ animationDelay: enterDelay() }}>
                 <div className="mb-3 flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <span className="text-detail font-semibold">按模型</span>
+                  <span className="text-detail font-semibold">按模型</span>
+                  <span className="flex items-center gap-2.5">
+                    <span className="font-data text-micro tabular-nums text-faint">{rangeLabel(range)}</span>
                     {modelAgents.length > 1 && (
                       <Popover>
                         <PopoverTrigger asChild>
@@ -285,7 +286,7 @@ export default function UsageView() {
                             <ChevronDown size={10} className="shrink-0 text-faint" />
                           </button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-48 p-1" align="start">
+                        <PopoverContent className="w-48 p-1" align="end">
                           {/* 「全部」行即全选语义：勾=全选；半选态提示当前是子集，点击回全选 */}
                           <label className="flex cursor-pointer items-center gap-1.5 rounded-sm px-2 py-1 text-meta text-muted-foreground transition-colors hover:bg-surface-2 hover:text-foreground">
                             <Checkbox
@@ -307,7 +308,7 @@ export default function UsageView() {
                                 onCheckedChange={(v) =>
                                   setModelSel((prev) => {
                                     /* 空集是全选的归一态：先展开成全集再增删，
-                                       否则从未选基线删项=集合没变、勾选态不回弹。 */
+                                     否则从未选基线删项=集合没变、勾选态不回弹。 */
                                     const next = prev.size === 0 ? new Set<AgentId>(modelAgents) : new Set(prev);
                                     if (v === true) next.add(a);
                                     else if (next.size > 1) next.delete(a);
@@ -323,7 +324,6 @@ export default function UsageView() {
                       </Popover>
                     )}
                   </span>
-                  <span className="font-data text-micro tabular-nums text-faint">{rangeLabel(range)}</span>
                 </div>
                 <ModelLineChart days={lineDays} series={lineSeries} />
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
