@@ -1,8 +1,9 @@
-/** 管理台左侧边栏：四 tab 导航（诊断/用量/会话文件/设置）+ 底部接入计数与版本行。
- *  顶部 52px 是 hiddenInset 红绿灯落位的拖拽区（WebkitAppRegion drag）。
+/** 管理台左侧边栏：五 tab 导航（诊断/用量/会话文件/技能/设置）+ 底部接入计数与版本行。
+ *  顶部 52px 是 hiddenInset 红绿灯落位的拖拽区（WebkitAppRegion drag），底缘
+ *  hairline 与内容列顶条连成通栏分隔线。
  *  尾巴信号：诊断项有 stale 会话时点红点；用量项挂今日令牌 font-data 计数。 */
 
-import { ChartColumn, FolderOpen, Settings2, Stethoscope } from "lucide-react";
+import { ChartColumn, FolderOpen, Puzzle, Settings2, Stethoscope } from "lucide-react";
 import { useMemo } from "react";
 
 import { AGENT_ORDER } from "@/lib/agent-meta";
@@ -18,6 +19,7 @@ const ITEMS: { id: ManagerTab; label: string; icon: ComponentType<{ size?: numbe
   { id: "doctor", label: "接入诊断", icon: Stethoscope },
   { id: "usage", label: "用量", icon: ChartColumn },
   { id: "files", label: "会话文件", icon: FolderOpen },
+  { id: "skills", label: "技能", icon: Puzzle },
   { id: "settings", label: "设置", icon: Settings2 },
 ];
 
@@ -27,6 +29,7 @@ const DRAG_STYLE = { WebkitAppRegion: "drag" } as CSSProperties;
 export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onChange: (tab: ManagerTab) => void }) {
   const snapshot = useMurmurStore((s) => s.snapshot);
   const snap = useMurmurStore((s) => s.settingsSnap);
+  const update = useMurmurStore((s) => s.update);
 
   const agents = snapshot?.agents ?? [];
   const connected = agents.filter((a) => a.install.installed && !a.disabled).length;
@@ -35,7 +38,7 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
 
   return (
     <aside className="relative z-10 flex w-50 shrink-0 flex-col border-r border-hairline bg-surface-1 mid:w-14">
-      <div className="h-13 shrink-0" style={DRAG_STYLE} />
+      <div className="h-13 shrink-0 border-b border-hairline" style={DRAG_STYLE} />
       <nav className="flex flex-col gap-0.5 px-2" aria-label="管理台视图">
         {ITEMS.map((item) => {
           const Icon = item.icon;
@@ -47,7 +50,7 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
               aria-current={active ? "page" : undefined}
               aria-label={item.label}
               className={cn(
-                "flex h-8 w-full items-center gap-2.5 rounded-row px-2.5 text-detail font-medium transition-colors duration-fast mid:justify-center mid:px-0",
+                "relative flex h-8 w-full items-center gap-2.5 rounded-row px-2.5 text-detail font-medium transition-colors duration-fast mid:justify-center mid:px-0",
                 active
                   ? "bg-surface-3 text-foreground"
                   : "text-muted-foreground hover:bg-surface-2 hover:text-foreground",
@@ -64,6 +67,10 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
                   {fmtTokens(tokens)}
                 </span>
               )}
+              {/* 有可更新版本：设置项挂前景角标（中性色，非 status 语义）；mid 折叠态贴图标右上角。 */}
+              {item.id === "settings" && update?.phase === "available" && (
+                <span className="ml-auto size-1.5 rounded-full bg-foreground mid:absolute mid:top-1.5 mid:right-1.5 mid:ml-0" />
+              )}
             </button>
           );
         })}
@@ -72,11 +79,20 @@ export default function ManagerSidebar({ tab, onChange }: { tab: ManagerTab; onC
         <span>
           已接入 {connected}/{agents.length || AGENT_ORDER.length}
         </span>
-        {snap && (
-          <span className="font-data tabular-nums">
-            v{snap.runtime.version} · {snap.runtime.channel}
-          </span>
-        )}
+        {snap &&
+          (update?.phase === "available" ? (
+            <button
+              type="button"
+              className="text-left font-data tabular-nums text-muted-foreground transition-colors duration-fast hover:text-foreground"
+              onClick={() => onChange("settings")}
+            >
+              v{snap.runtime.version} → v{update.latest ?? ""} · 更新
+            </button>
+          ) : (
+            <span className="font-data tabular-nums">
+              v{snap.runtime.version} · {snap.runtime.channel}
+            </span>
+          ))}
       </div>
     </aside>
   );

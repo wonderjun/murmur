@@ -48,6 +48,8 @@ export default function App() {
   const quit = useMurmurStore((s) => s.quit);
   const openManager = useMurmurStore((s) => s.openManager);
   const loadSettings = useMurmurStore((s) => s.loadSettings);
+  const loadUpdateState = useMurmurStore((s) => s.loadUpdateState);
+  const update = useMurmurStore((s) => s.update);
   const theme = useMurmurStore((s) => s.settingsSnap?.settings.theme ?? "system");
   const font = useMurmurStore((s) => s.settingsSnap?.settings.font ?? "");
   const waiting = waitingCount(snapshot);
@@ -56,9 +58,11 @@ export default function App() {
   useEffect(() => {
     void refresh();
     void loadSettings();
+    // 面板晚开可能错过启动检查的 updateStatus 推送，挂载补读相位。
+    void loadUpdateState();
     // 面板/管理台/设计板同吃首启初焦点问题（WKWebView 变 key 自动聚焦首个可聚焦元素）
     installAutoFocusGuard();
-  }, [refresh, loadSettings]);
+  }, [refresh, loadSettings, loadUpdateState]);
 
   /* 外观在首帧应用：settings 未到时按 system 渲染，到达后纠正——面板隐藏加载，
      全程不可见。effect 必须早于 #/design 早退，设计板同样吃主题。 */
@@ -151,13 +155,17 @@ export default function App() {
               {tokens ? fmtTokens(tokens) : "·"}
             </span>
           </button>
+          {/* 有可更新版本时管理台钮挂前景角标（非 status 语义走中性色），点击直达设置页更新行。 */}
           <button
             type="button"
-            className="ml-2 flex size-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-surface-2 hover:text-muted-foreground"
-            title="管理台"
-            onClick={() => void openManager("doctor")}
+            className="relative ml-2 flex size-7 items-center justify-center rounded-md text-faint transition-colors duration-fast hover:bg-surface-2 hover:text-muted-foreground"
+            title={update?.phase === "available" ? `有新版本 v${update.latest ?? ""} · 打开设置` : "管理台"}
+            onClick={() => void openManager(update?.phase === "available" ? "settings" : "doctor")}
           >
             <AppWindow size={13} />
+            {update?.phase === "available" && (
+              <span className="absolute top-1 right-1 size-1.5 rounded-full bg-foreground" />
+            )}
           </button>
           <button
             type="button"

@@ -16,7 +16,7 @@
 import { BrowserView, BrowserWindow, Screen, Tray, Updater, Utils } from "electrobun/main";
 import { setApplicationMenu } from "electrobun/main/app-menu";
 
-import { AgentRegistry, migrateLegacyHome, MURMUR_HOME } from "../../../../packages/core/src/index";
+import { AgentRegistry, migrateLegacyHome, MURMUR_HOME, SyncService } from "../../../../packages/core/src/index";
 
 import type { AppSnapshot, ManagerTab } from "../../../../packages/core/src/index";
 import type { MurmurRPC, SettingsSnapshot } from "../shared/rpc";
@@ -60,6 +60,14 @@ async function resolveMainViewUrl(): Promise<string> {
 if (migrateLegacyHome()) console.log("[murmur] legacy ~/.perch migrated → ~/.murmur");
 
 const registry = new AgentRegistry();
+
+// 技能/MCP 同步引擎：设置读写走 registry（updateSettings 已含 sync 键 merge +
+// 持久化 + 广播）；installed 直读 detect 缓存。SyncService 自身不参与 settings 加载。
+const syncService = new SyncService({
+  settings: () => registry.getSettings(),
+  installed: (agent) => registry.isInstalled(agent),
+  save: (next) => void registry.updateSettings(next),
+});
 
 /** 外部命令执行器：ps/lsof/open 只读 stdout + exit code，8s 兜底防子进程挂住 RPC。 */
 async function runCmd(argv: string[]): Promise<{ code: number; stdout: string }> {
@@ -155,9 +163,18 @@ function makeViewRpc() {
         openDataDir: () => {
           Utils.showItemInFolder(MURMUR_HOME);
         },
+        pickDirectory: async () =>
+          (
+            await Utils.openFileDialog({
+              canChooseFiles: false,
+              canChooseDirectory: true,
+              allowsMultipleSelection: false,
+            })
+          )[0] ?? null,
         updateState: updates.state,
         checkUpdate: updates.check,
         applyUpdate: updates.apply,
+        sync: syncService,
         quit: quitMurmur,
       }),
       messages: {},
@@ -408,9 +425,13 @@ registry.onChange(() => {
 applyDockIcon(registry.getSettings().showDockIcon);
 
 await registry.start();
-// 启动静默检查一次更新：dev/裸跑不触网（updates.check 内 gate），
-// stable 拉 update.json 比对——结果走 updateStatus 推送，设置页打开即见。
+// 启动静默同步一次技能/MCP：源目录缺席即空跑；失败不阻断启动（observer 立场）。
+void syncService.syncAll().catch(() => {});
+// 启动静默检查一次更新 + 每 6h 复检：dev/裸跑不触网（updates.check 内 gate），
+// stable 拉 update.json 比对——结果走 updateStatus 推送；有新版时底栏管理台钮
+// 与管理台侧栏设置项挂角标，点进设置页受理。
 void updates.check();
+setInterval(() => void updates.check().catch(() => {}), 6 * 3600_000);
 updateTrayTitle(registry.snapshot());
 if (appBundlePath()) console.log("[murmur] bundle:", appBundlePath());
 console.log("[murmur] started — ingest endpoint:", registry.ingestEndpoint());

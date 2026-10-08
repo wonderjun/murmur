@@ -47,7 +47,7 @@ if (location.search.includes("seed")) {
   }).filter((r) => r.tokens > 0);
 
   useMurmurStore.setState({
-    loading: false,
+    update: { phase: "available", current: "0.4.0", channel: "stable", latest: "0.5.0" },
     snapshot: {
       generatedAt: now,
       overall: "working",
