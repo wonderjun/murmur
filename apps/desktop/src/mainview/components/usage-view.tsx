@@ -1,7 +1,8 @@
 /**
  * 用量视图（管理台 usage tab）：PageHead → display hero（今日令牌数字当家，
  * 右列近 7 日/今年/活跃天数陪跑）→ 年热力图 → 区间行 → 按工具堆积柱 →
- * 按模型折线。三个图表块统一 surface-1 容器（p-4 + 块头），叠层不占描边。
+ * 按模型折线（带工具筛选胶囊，区间内重算模型序列）。三个图表块统一
+ * surface-1 容器（p-4 + 块头），叠层不占描边。
  * 图表实现拆在 usage-heatmap（年热力图 + heatYearStats 口径）与
  * usage-bars（区间堆积柱 + 图例）；本页留数据拉取、三态、hero、区间 state、
  * 模型折线组装（MODEL_LINE_STYLES 是 design-board 注释里指的线型真源）。
@@ -13,14 +14,17 @@ import AnimatedNumber from "@/components/animated-number";
 import ModelLineChart from "@/components/model-line-chart";
 import Murmuration from "@/components/murmuration";
 import PageHead from "@/components/page-head";
+import Segmented from "@/components/segmented";
 import UsageBars from "@/components/usage-bars";
 import UsageHeatmap, { FETCH_DAYS, HEAT_LEVELS, HEAT_YEAR, heatYearStats } from "@/components/usage-heatmap";
 import UsageRangePicker, { rangeBounds, rangeDayList, rangeLabel } from "@/components/usage-range";
 import { Button } from "@/components/ui/button";
+import { AGENT_META, AGENT_ORDER } from "@/lib/agent-meta";
 import { dayStr, fmtTokens } from "@/lib/format";
 import { useMurmurStore } from "@/store/murmur";
 
 import type { UsageRange } from "@/components/usage-range";
+import type { AgentId } from "@core/types";
 import type { UsageDailyRow } from "../../shared/rpc";
 
 const dayMs = 86400_000;
@@ -98,13 +102,33 @@ export default function UsageView() {
     [range],
   );
 
+  /* ── 「按模型」工具筛选：胶囊只列当前区间有量的 agent（AGENT_ORDER 稳定序，
+     与会话文件页同规）；单 agent 时不出筛选行——无可筛即无控件。 ── */
+  const [modelAgent, setModelAgent] = useState<"all" | AgentId>("all");
+
+  const modelAgents = useMemo(() => {
+    const seen = new Set(rangeRows.filter((r) => r.tokens > 0).map((r) => r.agent));
+    return AGENT_ORDER.filter((a) => seen.has(a));
+  }, [rangeRows]);
+
+  /* 区间切换后已选工具可能出集——回落「全部」而非留死选项。 */
+  useEffect(() => {
+    if (modelAgent !== "all" && !modelAgents.includes(modelAgent)) setModelAgent("all");
+  }, [modelAgent, modelAgents]);
+
+  /* 筛选只收窄折线数据：「按工具」堆积柱自身就是工具维度，不响应。 */
+  const modelRows = useMemo(
+    () => (modelAgent === "all" ? rangeRows : rangeRows.filter((r) => r.agent === modelAgent)),
+    [rangeRows, modelAgent],
+  );
+
   /* ── 区间按模型折线（top6 + 其他），数据整形后交给 ModelLineChart ── */
   const lineSeries = useMemo(() => {
     const dayKeys = lineDays.map((d) => d.day);
     /* 模型名大小写不敏感归并（glm-5.3-flash / GLM-5.3-Flash 是同一模型）：
        key 取小写，展示名取组内累计量最大的原始变体。 */
     const byModel = new Map<string, { variants: Map<string, number>; days: Map<string, number> }>();
-    for (const r of rangeRows) {
+    for (const r of modelRows) {
       if (!dayKeys.includes(r.day)) continue;
       const raw = (r.model ?? "unknown").split("/").pop()!;
       const key = raw.toLowerCase();
@@ -138,9 +162,8 @@ export default function UsageView() {
       ...MODEL_LINE_STYLES[i % MODEL_LINE_STYLES.length],
       values: dayKeys.map((d) => t.m.get(d) ?? 0),
     }));
-  }, [rangeRows, lineDays]);
+  }, [modelRows, lineDays]);
 
-  /* 入场序位：渲染顺序即 stagger 顺序 */
   let slot = 0;
   const enterDelay = () => `${slot++ * 40}ms`;
 
@@ -238,6 +261,19 @@ export default function UsageView() {
                   <span className="text-detail font-semibold">按模型</span>
                   <span className="font-data text-micro tabular-nums text-faint">{rangeLabel(range)}</span>
                 </div>
+                {modelAgents.length > 1 && (
+                  <div className="mb-3 flex">
+                    <Segmented
+                      options={[
+                        { value: "all" as const, label: "全部" },
+                        ...modelAgents.map((a) => ({ value: a, label: AGENT_META[a].name })),
+                      ]}
+                      value={modelAgent}
+                      onChange={setModelAgent}
+                      label="按工具过滤模型折线"
+                    />
+                  </div>
+                )}
                 <ModelLineChart days={lineDays} series={lineSeries} />
                 <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
                   {lineSeries.map((m) => (
