@@ -2,15 +2,24 @@
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
-## [未发布]
+## [0.1.4] - 2026-10-09
 
 ### Added
 
+- **管理台「技能」页**：`~/.murmur/skills` + `mcp.json` 为唯一源的技能/MCP 同步引擎——行内逐 agent 状态格盘点（synced/absent/off/stale/external）、条目级启停与删除、目录导入（系统选择框）、MCP 新建·编辑·探测，「全部同步」写各 agent 目录与配置文件
 - 用量页「按模型」折线支持按工具筛选：块头右侧多选下拉（只列当前区间有量的 agent、AGENT_ORDER 序、「全部」行是全选/清空总开关、none 态图清空），区间内动态重算 top6+其他 模型序列；区间切换剔除失效选项
+- 有可更新版本时底栏管理台钮与管理台设置项挂角标，主进程每 6h 复检
 
 ### Changed
 
+- 技能同步改软链：指 ~/.murmur 源根的链即我方静默重挂，同名他人产物默认不碰——overview.conflicts 出裁决清单，`syncAll(overwrite)` 按批准覆盖（技能先废纸篓再挂链），MCP 冲突键 merge 时烙归属防误删
 - 栖枝与工具页只栖「已安装且监听开启」的 agent（与已连接计数同口径）：停用/未装不占位，栖位随鸟数均分替换写死 7 槽（agent 增至 10 后末位错位一并修复）；全停用时栖枝整根隐去、工具页给空态回设置页出口
+- 会话文件盘点改按 agent 渐进加载，删除后强制新轮重扫
+- 管理台 chrome 抛光：PageHead 顶条 portal + 拆描边融整栏、会话文件分页、工具页额度窗 grid 四槽对齐
+
+### Fixed
+
+- 管理台窗口拖拽区从未生效：React 的 WebkitAppRegion 内联值被 WKWebView 静默丢弃——三处改写 `--electrobun-app-region` 自定义属性供 preload 探针读，顶条恢复拖面
 
 ## [0.1.3] - 2026-10-07
 
@@ -88,6 +97,7 @@
 - 用量台账 `~/.murmur/murmur.db`（WAL）：events 审计 + usage_daily 日聚合 + quota 快照 + pull 游标
 - 两级 per-agent 开关（监听总闸 / hook 上报）、perch→murmur 一次性迁移
 
+[0.1.4]: https://github.com/chen-wang-jun/murmur/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/chen-wang-jun/murmur/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/chen-wang-jun/murmur/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/chen-wang-jun/murmur/compare/v0.1.0...v0.1.1
