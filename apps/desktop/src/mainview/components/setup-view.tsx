@@ -14,14 +14,15 @@ export default function SetupView() {
   const snapshot = useMurmurStore((s) => s.snapshot);
   const openManager = useMurmurStore((s) => s.openManager);
 
+  /* 列表只纳「已安装且监听开启」的工具：停用/未装的上管理台 doctor/设置页，
+     弹窗面不撑位（AGENT_ORDER 序，agent 增多后只排实际在管的）。 */
   const agents = useMemo(
     () =>
       AGENT_ORDER.map((id) => snapshot?.agents.find((agent) => agent.agent === id)).filter(
-        (agent): agent is AgentSnapshot => Boolean(agent),
+        (agent): agent is AgentSnapshot => Boolean(agent?.install.installed && !agent.disabled),
       ),
     [snapshot],
   );
-  const connectedCount = agents.filter((agent) => agent.install.installed && !agent.disabled).length;
 
   return (
     <div className="flex flex-col gap-4">
@@ -32,7 +33,7 @@ export default function SetupView() {
             <h1 className="mt-1 text-title font-semibold">工具状态</h1>
           </div>
           <span className="font-mono text-micro tabular-nums text-faint">
-            {connectedCount}/{agents.length} 已连接
+            {agents.length}/{AGENT_ORDER.length} 已连接
           </span>
         </div>
         <p className="mt-2 max-w-77.5 text-meta/relaxed text-muted-foreground">
@@ -41,6 +42,19 @@ export default function SetupView() {
       </section>
 
       <div className="space-y-2">
+        {agents.length === 0 && snapshot ? (
+          /* 极客清空态：无在管工具时不铺空列表，给一句实话 + 回设置页的出口。 */
+          <section className="setup-row animate-enter">
+            <p className="text-meta text-muted-foreground">没有在监听的工具，监听开关都在设置页。</p>
+            <button
+              type="button"
+              onClick={() => void openManager("settings")}
+              className="mt-2 text-meta text-faint transition-colors duration-fast hover:text-foreground"
+            >
+              去设置页开启 →
+            </button>
+          </section>
+        ) : null}
         {agents.map((agent, i) => {
           const h = health(agent);
           return (
@@ -63,7 +77,7 @@ export default function SetupView() {
                     )}
                   </div>
                   <p className="mt-1 truncate text-meta text-muted-foreground">
-                    {agent.install.note || homeLabel(agent)}
+                    {agent.install.note || agent.install.homeDir}
                   </p>
                 </div>
                 <span className={cn("flex shrink-0 items-center gap-1.5 text-meta font-medium", h.tone)}>
@@ -75,11 +89,13 @@ export default function SetupView() {
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 border-t border-hairline/60 pt-2.5">
                 <div>
                   <p className="text-micro text-faint">安装</p>
-                  <p className="mt-0.5 text-meta text-foreground">{agent.install.installed ? "已发现" : "未发现"}</p>
+                  <p className="mt-0.5 text-meta text-foreground">已发现</p>
                 </div>
                 <div>
                   <p className="text-micro text-faint">来源</p>
-                  <p className="mt-0.5 text-meta text-foreground">{sourceLabel(agent)}</p>
+                  <p className="mt-0.5 text-meta text-foreground">
+                    {agent.install.hookInstalled ? "上报 + 本地读取" : "本地读取"}
+                  </p>
                 </div>
                 {/* 额度文案可能带错误细节，长文本跨两列 */}
                 <div className="col-span-2">
@@ -156,17 +172,6 @@ export default function SetupView() {
   );
 }
 
-function homeLabel(agent: AgentSnapshot) {
-  return agent.install.installed ? agent.install.homeDir : "未检测到本地数据";
-}
-
-function sourceLabel(agent: AgentSnapshot) {
-  if (!agent.install.installed) return "等待安装";
-  if (agent.disabled) return "已停用（设置页可开回）";
-  if (agent.install.hookInstalled) return "上报 + 本地读取";
-  return "本地读取";
-}
-
 function quotaLabel(agent: AgentSnapshot) {
   if (agent.quota?.windows.length) return `${agent.quota.windows.length} 个窗口`;
   if (agent.quota?.error) return agent.quota.error;
@@ -178,8 +183,6 @@ function quotaLabel(agent: AgentSnapshot) {
 }
 
 function health(agent: AgentSnapshot) {
-  if (!agent.install.installed) return { label: "未安装", tone: "text-faint", dot: "bg-faint" };
-  if (agent.disabled) return { label: "已停用", tone: "text-faint", dot: "bg-ended" };
   if (agent.sessions.some((session) => session.status === "stale"))
     return { label: "需检查", tone: "text-stale", dot: "bg-stale" };
   if (agent.sessions.length || agent.install.hookInstalled)

@@ -1,8 +1,10 @@
-/** 栖枝：一根两端渐隐的微弧细枝承起 7 只「鸟」（agent 状态点），签名元素。
+/** 栖枝：一根两端渐隐的微弧细枝承起若干只「鸟」（agent 状态点），签名元素。
  *  珠宝化规格：SVG 微弧枝（中间略抬 3 单位，linearGradient 两端渐隐）+
  *  11px StatusDot（working 呼吸 / waiting 脉冲 + 琥珀晕环）+ bg-background
  *  晕环压枝；状态切换播 land 落枝（key remount，入场错峰 80ms + i*45ms，
  *  跟在刊头 animate-enter 之后依次落枝）。
+ *  只栖「已安装且监听开启」的鸟（与「已连接」计数同口径）：停用/未装不占位，
+ *  栖位随鸟数动态均分——agent 全集扩张与极客清空两边都不塌。
  *  hover/focus 出玻璃小标签（group-hover + tip-in，不引 ChartTip）。 */
 
 import { useId, useMemo } from "react";
@@ -22,32 +24,45 @@ const STATUS_TEXT: Record<AgentStatus, string> = {
   ended: "已结束",
 };
 
-/** 栖位 y 偏移：跟随枝弧（中点略高），7 只按序写死。 */
-const BIRD_Y = [0, -0.9, -1.4, -1.5, -1.4, -0.9, 0];
+/** 栖位 y 偏移：鸟心沿枝弧悬浮，弧方程 y=11.5-6t(1-t) 恒在鸟心下 1.5px，
+ *  lift = -6t(1-t)。t 为栖位（均分枝长，单鸟独占中点 apex）。 */
+function birdLift(i: number, n: number) {
+  const t = n <= 1 ? 0.5 : i / (n - 1);
+  return -6 * t * (1 - t);
+}
 
 export default function PerchStrip({ className }: { className?: string }) {
   const snapshot = useMurmurStore((s) => s.snapshot);
   /* 渐变 id 用 useId 生成——同页多个 PerchStrip（刊头 + 设计板展件）不写死 id。 */
   const fadeId = useId();
 
-  /** 每个 agent 取会话最高优先级状态，无会话/未安装一律灰寂。 */
-  const birds = useMemo(
-    () =>
-      AGENT_ORDER.map((agent) => {
-        const sessions = snapshot?.agents.find((a) => a.agent === agent)?.sessions ?? [];
-        const status: AgentStatus =
-          (["waiting", "working", "stale"] as AgentStatus[]).find((t) => sessions.some((s) => s.status === t)) ??
-          "idle";
-        return { agent, status };
-      }),
-    [snapshot],
-  );
+  /** 每只在栖鸟取会话最高优先级状态，无会话一律灰寂；
+      栖位只给「已安装且监听开启」的 agent（观测面=弹窗面，与已连接计数同口径）。 */
+  const birds = useMemo(() => {
+    const list: { agent: (typeof AGENT_ORDER)[number]; status: AgentStatus }[] = [];
+    for (const agent of AGENT_ORDER) {
+      const snap = snapshot?.agents.find((a) => a.agent === agent);
+      if (!snap?.install.installed || snap.disabled) continue;
+      const status: AgentStatus =
+        (["waiting", "working", "stale"] as AgentStatus[]).find((t) => snap.sessions.some((s) => s.status === t)) ??
+        "idle";
+      list.push({ agent, status });
+    }
+    return list;
+  }, [snapshot]);
+
+  /* 全停用时栖枝整根隐去，不留无鸟裸线当谜面。 */
+  if (!birds.length) return null;
 
   const label = birds.map((b) => `${AGENT_META[b.agent].name} ${STATUS_TEXT[b.status]}`).join("，");
 
   return (
     <div
-      className={cn("relative flex h-5 items-center justify-between px-1", className)}
+      className={cn(
+        "relative flex h-5 items-center px-1",
+        birds.length === 1 ? "justify-center" : "justify-between",
+        className,
+      )}
       role="group"
       aria-label={label}
     >
@@ -81,7 +96,7 @@ export default function PerchStrip({ className }: { className?: string }) {
           data-agent={bird.agent}
           aria-label={`${AGENT_META[bird.agent].name} ${STATUS_TEXT[bird.status]}`}
           className="group relative flex items-center justify-center"
-          style={{ transform: `translateY(${BIRD_Y[i]}px)` }}
+          style={{ transform: `translateY(${birdLift(i, birds.length)}px)` }}
         >
           {/* hover/focus 小标签：纯 CSS 显形，玻璃浮层材料 */}
           <span

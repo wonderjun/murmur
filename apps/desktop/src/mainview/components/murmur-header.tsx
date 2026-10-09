@@ -25,7 +25,7 @@ export default function MurmurHeader() {
   const connected = agents.filter((a) => a.install.installed && !a.disabled).length;
 
   /* 面板失焦即关，日期取挂载时刻即可（不随时间刷新），计数跟随快照。
-     分母是 agent 全集（快照未到时也按 7 口径），不写死字面量。 */
+     分母是 agent 全集（快照未到时也按 AGENT_ORDER 口径），不写死字面量。 */
   const folio = useMemo(() => {
     const d = new Date();
     return `${WEEKDAYS[d.getDay()]} ${d.getMonth() + 1}月${d.getDate()}日 · 已接入 ${connected}/${agents.length || AGENT_ORDER.length}`;
